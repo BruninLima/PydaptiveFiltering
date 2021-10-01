@@ -1,3 +1,5 @@
 .ipynb_checkpoints
 test.ipynb
 __pycache__
+*.gz
+MANIFEST
