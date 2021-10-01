@@ -60,6 +60,8 @@ class AdaptiveFilter():
 
         return y
 
+    # Maybe define a more general adapt method
+    # Maybe adaplt_LMS should have a parameter kind='standard', that could have values ['Normalized', 'Newton', ... ]
     def adapt_LMS(self, desired_signal: np.ndarray, input_signal: np.ndarray, step: float = 1e-2, max_runs: int = 25,  tolerance=0, verbose=(True, 5)) -> dict:
         """
         Fit filter parameters to considering desired vector and inp
