@@ -1,0 +1,1 @@
+from pydaptivefiltering.main import AdaptiveFilter
