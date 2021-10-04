@@ -1,6 +1,5 @@
 import numpy as np
 import pydaptivefiltering as pdf
-import matplotlib.pyplot as plt
 
 
 def LMS_example():
@@ -9,36 +8,60 @@ def LMS_example():
     ------
     None -> '(Filter, dictionary["outputs", "errors", "coefficients"])'
 
-    Example for the LMS algorithm
+    Example for the LMS algorithm, SignData and SignError. 
 
     """
     # Parameters
-    K = 50  # Number of iterations
+    # Number of iterations
+    K = 500
     H = np.array([0.32+0.21*1j, -0.3+0.7*1j, 0.5-0.8*1j, 0.2+0.5*1j]).T
-    Wo = H  # Uknown System
-    sigman2 = 0.04  # Noise Power
-    N = 4    # Number of coefficients of the adaptative filter
-    step = 0.2  # Convergence factor (step) (0 < μ < 1)
-    tol = 0.0  # Tolerance: If |error| < tol, stops at the current run.
+    # Uknown System
+    Wo = H
+    # Noise Power
+    sigman2 = 0.04
+    # Number of coefficients of the adaptative filter
+    N = 4
+    # Convergence factor (step) (0 < μ < 1)
+    step = 0.002
+    # Tolerance: If |error| < tol, stops at the current run.
+    tol = 0.0
+
     # Initializing
     W = np.ones(shape=(N, K+1))
-    X = np.zeros(N)   # Input at a certain iteration (tapped delay line)
+    # Input at a certain iteration (tapped delay line)
+    X = np.zeros(N)
     x = (np.random.randn(K) + np.random.randn(K)*1j)/np.sqrt(2)
+    # complex noise
     n = np.sqrt(sigman2/2) * (np.random.randn(K) +
-                              np.random.randn(K)*1j)  # complex noise
+                              np.random.randn(K)*1j)
     d = []
 
     for i in range(K):
-        X = np.concatenate(([x[i]], X))[:N]  # (tapped delay line)
+        # (tapped delay line)
+        X = np.concatenate(([x[i]], X))[:N]
         d.append(np.dot(Wo.conj(), X))
 
-    d = np.array(d)  # + n
+    # desired signal
+    d = np.array(d) + n
 
-    Filter = pdf.AdaptiveFilter(W[:, 1])  # Istanciating Adaptive Filter
+    # Istanciating Adaptive Filter
+    Filter = pdf.AdaptiveFilter(W[:, 1])
+    print(" Adapting with LMS \n")
     # Adapting with the LMS Algorithm
-    Output = Filter.adapt_LMS(d, x, step, tolerance=tol)
+    Output = pdf.LMS.LMS(Filter, d, x, step, tolerance=tol)
+    # Filter Reset
+    Filter._reset()
+    print(" Adaptign with SignData \n")
+    # Adapting with the LMS - SignData Algorithm
+    OutputSD = pdf.LMS.SignData(Filter, d, x, step, tolerance=tol)
+    # Filter Reset
+    Filter._reset()
+    print(" Adapting with SignError \n")
+    # Adapting with the LMS - SignError Algorithm
+    OutputSE = pdf.LMS.SignError(Filter, d, x, step, tolerance=tol)
 
-    return (Filter, Output)
+    Outputs = (Output, OutputSD, OutputSE)
+    return (Filter, Outputs)
 
 
 Filter, Result = LMS_example()

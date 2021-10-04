@@ -36,7 +36,7 @@ def NLMS_example():
 
     Filter = pdf.AdaptiveFilter(W[:, 1])  # Istanciating Adaptive Filter
     # Adapting with the NLMS Algorithm
-    Output = Filter.adapt_NLMS(d, x, gamma, step)
+    Output = pdf.LMS.NLMS(Filter, d, x, gamma, step)
 
     return (Filter, Output)
 
