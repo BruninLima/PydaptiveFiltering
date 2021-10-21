@@ -7,7 +7,7 @@ THE AUTHORS
   
   . Guilherme de Oliveira Pinto - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
   
-  . Markus Vinícius Santos Lima - mvsl20@gmailcom & markus@lps.ufrj.br
+  . Markus Vinícius Santos Lima - mvsl20@gmail.com & markus@lps.ufrj.br
   
   . Wallace Alves Martins - wallace.wam@gmail.com & wallace@lps.ufrj.br
   
