@@ -1,7 +1,6 @@
 import numpy as np
 import pydaptivefiltering as pdf
 
-
 def LMS_example():
     """
     Types:
@@ -23,8 +22,6 @@ def LMS_example():
     N = 4
     # Convergence factor (step) (0 < μ < 1)
     step = 0.002
-    # Tolerance: If |error| < tol, stops at the current run.
-    tol = 0.0
 
     # Initializing
     W = np.ones(shape=(N, K+1))
@@ -48,20 +45,21 @@ def LMS_example():
     Filter = pdf.AdaptiveFilter(W[:, 1])
     print(" Adapting with LMS \n")
     # Adapting with the LMS Algorithm
-    Output = pdf.LMS.LMS(Filter, d, x, step, tolerance=tol)
+    Output = pdf.LMS.LMS(Filter, d, x, step)
     # Filter Reset
     Filter._reset()
     print(" Adaptign with SignData \n")
     # Adapting with the LMS - SignData Algorithm
-    OutputSD = pdf.LMS.SignData(Filter, d, x, step, tolerance=tol)
+    OutputSD = pdf.LMS.SignData(Filter, d, x, step)
     # Filter Reset
     Filter._reset()
     print(" Adapting with SignError \n")
     # Adapting with the LMS - SignError Algorithm
-    OutputSE = pdf.LMS.SignError(Filter, d, x, step, tolerance=tol)
+    OutputSE = pdf.LMS.SignError(Filter, d, x, step)
 
     Outputs = (Output, OutputSD, OutputSE)
     return (Filter, Outputs)
 
 
-Filter, Result = LMS_example()
+if __name__ == "__main__":
+    Filter, Result = LMS_example()

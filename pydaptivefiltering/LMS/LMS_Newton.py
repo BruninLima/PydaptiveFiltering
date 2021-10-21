@@ -1,7 +1,7 @@
-#  SignData.py
+#  LMS_Newton.py
 #
-#      Implements the Sign-Data LMS algorithm for COMPLEX valued data.
-#      (Algorithm 4.1 - book: Adaptive Filtering: Algorithms and Practical
+#      Implements the LMS-Newton algorithm for COMPLEX valued data.
+#      (Algorithm 4.2 - book: Adaptive Filtering: Algorithms and Practical
 #                                                       Implementation, Diniz)
 #
 #      Authors:
@@ -17,16 +17,16 @@ import numpy as np
 from time import time
 
 
-def SignData(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: float = 1e-2, verbose: bool = True) -> dict:
+def LMS_Newton(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, alpha: float, initialInvRxHat: np.ndarray, step: float = 1e-2, verbose: bool = True) -> dict:
     """
     Description
     -----------
-        Implements the Sign-Data LMS algorithm for COMPLEX valued data. 
-        (Algorithm 4.1 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
+        Implements the LMS-Newton algorithm for COMPLEX valued data. 
+        (Algorithm 4.2 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
 
     Syntax
     ------
-    OutputDictionary = SignData(Filter, desired_signal, input_signal, step, verbose)
+    OutputDictionary = LMS_Newton(Filter, desired_signal, input_signal, step, verbose)
 
     Inputs
     -------
@@ -70,6 +70,7 @@ def SignData(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step:
     # Initialization
     tic = time()
     nIterations = desired_signal.size
+    invRxHat = initialInvRxHat
 
     regressor = np.zeros(Filter.filter_order+1, dtype=input_signal.dtype)
     error_vector = np.array([])
@@ -86,8 +87,13 @@ def SignData(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step:
 
         error_it = desired_signal[it] - output_it
 
-        next_coefficients = coefficients + 2 * \
-            step * error_it.conj() * np.sign(regressor)
+        auxDen = (1-alpha)/alpha + regressor.conj()*invRxHat*regressor
+
+        invRxHat = (invRxHat-(invRxHat*regressor*regressor.conj()
+                              * invRxHat)/auxDen)/(1 - alpha)
+
+        next_coefficients = coefficients + step * \
+            error_it.conj() * invRxHat * regressor
 
         error_vector = np.append(error_vector, error_it)
         outputs_vector = np.append(outputs_vector, output_it)

@@ -1,96 +1,104 @@
+#  LMS.py
+#
+#      Implements the Complex LMS algorithm for COMPLEX valued data.
+#      (Algorithm 3.2 - book: Adaptive Filtering: Algorithms and Practical
+#                                                       Implementation, Diniz)
+#
+#      Authors:
+#       . Bruno Ramos Lima Netto        - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
+#       . Guilherme de Oliveira Pinto   - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
+#       . Markus Vinícius Santos Lima   - mvsl20@gmailcom           & markus@lps.ufrj.br
+#       . Wallace Alves Martins         - wallace.wam@gmail.com     & wallace@lps.ufrj.br
+#       . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com          & wagner@lps.ufrj.br
+#       . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
+
+# Imports
 import numpy as np
 from time import time
 
 
-def LMS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: float = 1e-2, max_runs: int = 25, tolerance=0, verbose=(True, 5)) -> dict:
+def LMS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: float = 1e-2, verbose: bool = False) -> dict:
     """
-    Fit filter parameters to considering desired vector and inp
-    ut x. desired and x must have length K,
-    where K is the number of iterations
+    Description
+    -----------
+        Implements the Complex LMS algorithm for COMPLEX valued data. 
+        (Algorithm 3.2 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
+
+    Syntax
+    ------
+    OutputDictionary = LMS(Filter, desired_signal, input_signal, step, verbose)
 
     Inputs
     -------
-
-    desired : numpy array (row vector)
-    desired signal
-    x : numpy array (row vector)
-    input signal to feed filter
-    step : Convergence (relaxation) factor.
-
-    max_runs
-    max_iter
-
-    verbose (boolean, int): (True/False, Print_every)
-
+        filter  : Adaptive Filter                       filter object
+        desired : Desired signal                        numpy array (row vector)
+        input   : Input signal to feed filter           numpy array (row vector)
+        step    : Convergence (relaxation) factor.      float
+        verbose : Verbose boolean                       bool
 
     Outputs
     -------
+        dictionary:
+            outputs      : Store the estimated output of each iteration.        numpy array (collumn vector)
+            errors       : Store the error for each iteration.                  numpy array (collumn vector)
+            coefficients : Store the estimated coefficients for each iteration  numpy array (collumn vector)
 
-    python dict :
-    outputs : numpy array (collumn vector)
-    Store the estimated output of each iteration. outpu
-    ts_vector[k] represents the output erros at iteration k
-    errors : numpy array (collumn vector)
-    FIR error vectors. error_vector[k] represents the o
-    utput erros at iteration k.
-    coefficients : numpy array
-    Store the estimated coefficients for each iteration
+    Main Variables
+    --------- 
+        regressor
+        outputs_vector[k] represents the output errors at iteration k    
+        FIR error vectors. 
+        error_vector[k] represents the output errors at iteration k.
+
+    Misc Variables
+    --------------
+        tic
+        nIterations
+
+
+    Authors
+    -------
+        . Bruno Ramos Lima Netto        - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
+        . Guilherme de Oliveira Pinto   - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
+        . Markus Vinícius Santos Lima   - mvsl20@gmailcom           & markus@lps.ufrj.br
+        . Wallace Alves Martins         - wallace.wam@gmail.com     & wallace@lps.ufrj.br
+        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com          & wagner@lps.ufrj.br
+        . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
+
     """
-    verbose, print_every = verbose
-    # assert type(verbose) == bool
-    # assert type(print_every) == int && print_every > 0
 
-    total_tic = time()
+    # Initialization
     tic = time()
-    for run in range(max_runs):
+    nIterations = desired_signal.size
 
-        if verbose == True:
-            if run == max_runs - 1 or run % print_every == 0:
-                print("Run {}\t ".format(run), end='')
+    regressor = np.zeros(Filter.filter_order+1, dtype=input_signal.dtype)
+    error_vector = np.array([])
+    outputs_vector = np.array([])
 
-        max_iter = desired_signal.size
+    # Main Loop
+    for it in range(nIterations):
 
-        x_k = np.zeros(Filter.filter_order+1, dtype=input_signal.dtype)
+        regressor = np.concatenate(([input_signal[it]], regressor))[
+            :Filter.filter_order+1]
 
-        errors_vector = np.array([])
-        outputs_vector = np.array([])
+        coefficients = Filter.coefficients
+        output_it = np.dot(coefficients.conj(), regressor)
 
-        for k in range(max_iter):
+        error_it = desired_signal[it] - output_it
 
-            x_k = np.concatenate(([input_signal[k]], x_k))[
-                :Filter.filter_order+1]
+        next_coefficients = coefficients + step * error_it.conj() * regressor
 
-            w_k = Filter.coefficients
-            y_k = np.dot(w_k.conj(), x_k)
+        error_vector = np.append(error_vector, error_it)
+        outputs_vector = np.append(outputs_vector, output_it)
 
-            error_k = desired_signal[k] - y_k
-
-            next_w_k = w_k + step * error_k.conj() * x_k
-
-            errors_vector = np.append(errors_vector, error_k)
-            outputs_vector = np.append(outputs_vector, y_k)
-
-            Filter.coefficients = next_w_k
-            Filter.coefficients_history.append(next_w_k)
-
-        if verbose == True:
-
-            if run == max_runs - 1 or print_every != -1 and run % print_every == 0:
-                tac = time() - tic
-                print('|error| = {:.02}\t Time: {:.03} ms'.format(
-                    np.abs(error_k), (tac)*1000))
-                tic = time()
-        # tolerance break point
-
-        if np.abs(error_k) < tolerance:
-            if verbose == True:
-                print(" ")
-                print(" -- Ended at Run {} -- \n".format(run))
-                print("Final |error| = {:.02}".format(np.abs(error_k)))
-            break
+        Filter.coefficients = next_coefficients
+        Filter.coefficients_history.append(next_coefficients)
 
     if verbose == True:
         print(" ")
-        print('Total runtime {:.03} ms'.format((time() - total_tic)*1000))
+        print('Total runtime {:.03} ms'.format((time() - tic)*1000))
+
     return {'outputs': outputs_vector,
-            'errors': errors_vector, 'coefficients': Filter.coefficients_history}
+            'errors': error_vector, 'coefficients': Filter.coefficients_history}
+
+#   EOF
