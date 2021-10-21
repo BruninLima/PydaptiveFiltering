@@ -1,7 +1,9 @@
-#  RLS.py
+#  RLS_Alt.py
 #
-#      Implements the RLS algorithm for COMPLEX valued data.
-#      (Algorithm 5.3 - book: Adaptive Filtering: Algorithms and Practical
+#      Implements the Alternative RLS algorithm for COMPLEX valued data.
+#      RLS_Alt differs from RLS in the number of computations. The RLS_Alt
+#      uses an auxiliar variable (psi) in order to reduce the computational burden.
+#      (Algorithm 5.4 - book: Adaptive Filtering: Algorithms and Practical
 #                                                       Implementation, Diniz)
 #
 #      Authors:
@@ -17,7 +19,7 @@ import numpy as np
 from time import time
 
 
-def RLS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, Delta: float, Lambda: float, verbose: bool = False) -> dict:
+def RLS_Alt(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, Delta: float, Lambda: float, verbose: bool = False) -> dict:
     """
     Description
     -----------
@@ -30,13 +32,12 @@ def RLS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, Delta: flo
 
     Inputs
     -------
-        filter  : Adaptive Filter                                      filter object
-        desired : Desired signal                                       numpy array (row vector)
-        input   : Input signal to feed filter                          numpy array (row vector)
-        Delta   : The matrix delta*eye is the initial value of the
-                inverse of the deterministic autocorrelation matrix.   float
-        Lambda  : Forgetting factor                                    float
-        verbose : Verbose boolean                                      bool
+        filter  : Adaptive Filter                       filter object
+        desired : Desired signal                        numpy array (row vector)
+        input   : Input signal to feed filter           numpy array (row vector)
+        Delta   :
+        Lambda  :
+        verbose : Verbose boolean                       bool
 
     Outputs
     -------
@@ -83,9 +84,6 @@ def RLS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, Delta: flo
     errors_posteriori = np.array([])
 
     S_d = Delta*np.eye(Filter.filter_order+1)
-    p_d = np.zeros(Filter.filter_order+1)
-
-    coefficients = S_d@p_d
 
     # Main Loop
     for it in range(nIterations):
@@ -93,19 +91,21 @@ def RLS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, Delta: flo
         regressor = np.concatenate(([input_signal[it]], regressor))[
             :Filter.filter_order+1]
 
+        coefficients = Filter.coefficients
         #   a priori estimated output
-        output_it = np.dot(coefficients.T.conj(), regressor)
+        output_it = np.dot(coefficients.conj(), regressor)
         outputs_vector = np.append(outputs_vector, output_it)
 
         #   a priori error
         error_it = desired_signal[it] - output_it
         error_vector = np.append(error_vector, error_it)
 
-        S_d = (1/Lambda)*(S_d - (S_d * regressor * regressor.conj()*S_d) /
-                          (Lambda + regressor.T.conj()*S_d*regressor))
-        p_d = Lambda*p_d + desired_signal[it].conj()*regressor
+        psi = S_d * regressor
 
-        next_coefficients = S_d@p_d
+        S_d = (1/Lambda)*(S_d - (psi*psi.conj()) /
+                          (Lambda + psi.conj()*regressor))
+
+        next_coefficients = coefficients + error_it.conj() * S_d @ regressor
 
         #   a posteriori estimated output
         outputs_posteriori = np.append(
