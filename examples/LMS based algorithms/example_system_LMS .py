@@ -1,6 +1,7 @@
 import numpy as np
 import pydaptivefiltering as pdf
 
+
 def LMS_example():
     """
     Types:
