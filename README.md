@@ -24,7 +24,7 @@ The project is currently on its early stages (pre-alpha). The planned order of w
 
 ## 💻 Requirements
 
-* You have installed the most recent version of `<linguagem / dependência / requeridos>`
+* Currently it requires Python 3.5 or earlier. 
 
 ## 🚀 Install Instructions
 
