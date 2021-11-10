@@ -3,8 +3,8 @@ from setuptools import setup
 setup(
     name="pydaptivefiltering",
     packages=["pydaptivefiltering"],
-    version='0.1',
-    description=" Python 3.x Implementation of the AdaptiveFiltering Toolbox.",
+    version='0.2',
+    description=" Python 3.8+ Implementation of the AdaptiveFiltering Toolbox.",
     author="Bruno Lima Netto",
     author_email="brunolimanetto@gmail.com",
     url="https://github.com/BruninLima",
@@ -16,7 +16,7 @@ setup(
     ],
 
     classifiers=[
-        'Development Status :: 2 - Pre-Alpha',
+        'Development Status :: 3 - Alpha',
         'Intended Audience :: Science/Research',
         'Topic :: Software Development :: Libraries',
         'Programming Language :: Python :: 3'
