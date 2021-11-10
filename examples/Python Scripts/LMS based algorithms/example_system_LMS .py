@@ -81,21 +81,22 @@ if __name__ == "__main__":
     plt.gca().set_title('Learning Curve for MSE [dB]')
     MSE = [abs(err)**2 for err in Output['errors']]
     plt.gca().semilogy(MSE)
-
+    plt.grid()
     plt.subplot(222)
     plt.gca().set_title('Learning Curve for MSEmin [dB]')
     MSEmin = [abs(n)**2 for n in ComplexNoise]
     plt.gca().semilogy(MSEmin)
-
+    plt.grid()
     plt.subplot(223)
     plt.gca().set_title('Evolution of the Coefficients (Real Part)')
     real_part = [coef.real for coef in Output['coefficients']]
     plt.gca().plot(real_part)
-
+    plt.grid()
     plt.subplot(224)
     plt.gca().set_title('Evolution of the Coefficients (Imaginary Part)')
     imag_part = [coef.imag for coef in Output['coefficients']]
     plt.gca().plot(imag_part)
+    plt.grid()
 
     plt.tight_layout(pad=4.0)
     plt.show()

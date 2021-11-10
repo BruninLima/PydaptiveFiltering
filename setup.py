@@ -8,7 +8,7 @@ setup(
     author="Bruno Lima Netto",
     author_email="brunolimanetto@gmail.com",
     url="https://github.com/BruninLima",
-    download_url="https://github.com/BruninLima/PydaptiveFiltering/archive/refs/tags/v0.1.tar.gz",
+    download_url="https://github.com/BruninLima/PydaptiveFiltering/archive/refs/tags/v0.2.tar.gz",
     keywords=["Adaptive", "Filtering", "Digital", "Signal", "Processing"],
     install_requires=[
         'numpy',
