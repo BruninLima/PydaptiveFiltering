@@ -19,7 +19,7 @@ The project is currently on its early stages (pre-alpha). The planned order of w
 
 ## 💻 Requirements
 
-* Currently it requires Python 3.5 or earlier. 
+* Currently it requires Python 3.5 or later. 
 
 ## 🚀 Install Instructions
 
