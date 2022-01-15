@@ -1,4 +1,4 @@
-#  SM.Simp_AP.py
+#  SM.Simp_PUAP.py
 #
 #      Implements the Simplified Set-membership Partial-Update Affine-Projection
 #                                              algorithm for COMPLEX valued data.
@@ -18,12 +18,13 @@ import numpy as np
 from time import time
 
 
-def AP(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, gamma_bar: float, gamma_barVector: np.ndarray, gamma: float, upSelector: np.ndarray, memoryLength: int, verbose: bool = False) -> dict:
+def Simp_PUAP(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, gamma_bar: float, gamma_barVector: np.ndarray, gamma: float, upSelector: np.ndarray, memoryLength: int, verbose: bool = False) -> dict:
     """
     Description
     -----------
-        Implements the Set-membership Affine-Projection algorithm for COMPLEX valued data.
-        (Algorithm 6.2 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
+        Implements the Simplified Set-membership Partial-Update Affine-Projection
+                                                algorithm for COMPLEX valued data.
+        (Algorithm 6.6 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
 
     Syntax
     ------

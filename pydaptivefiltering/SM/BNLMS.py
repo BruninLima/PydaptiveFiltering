@@ -1,7 +1,7 @@
-#  SM.Simp_AP.py
+#  SM.NLMS.py
 #
-#      Implements the Simplified Set-membership Affine-Projection algorithm for COMPLEX valued data.
-#      (Algorithm 6.7 - book: Adaptive Filtering: Algorithms and Practical
+#      Implements the Set-membership Biormalized LMS algorithm for REAL valued data.
+#      (Algorithm 6.5 - book: Adaptive Filtering: Algorithms and Practical
 #                                                       Implementation, Diniz)
 #
 #      Authors:
@@ -17,26 +17,25 @@ import numpy as np
 from time import time
 
 
-def Simp_AP(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, gamma_bar: float, gamma_barVector: np.ndarray, gamma: float, memoryLength: int, verbose: bool = False) -> dict:
+def BNLMS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, gamma_bar: float, gamma: float, verbose: bool = False) -> dict:
     """
     Description
     -----------
-        Implements the Simplified Set-membership Affine-Projection algorithm for COMPLEX valued data.
-        (Algorithm 6.7 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
+        Implements the Set-membership Biormalized LMS algorithm for REAL valued data.
+        (Algorithm 6.5 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
 
     Syntax
     ------
-    OutputDictionary = SM.AP(Filter, desired_signal, input_signal, step, verbose)
+    OutputDictionary = SM.NLMS(Filter, desired_signal, input_signal, verbose)
 
     Inputs
     -------
-        filter         : Adaptive Filter                       filter object
-        desired        : Desired signal                        numpy array (row vector)
-        input          : Input signal to feed filter           numpy array (row vector)
-        gamma_bar      : Upper bound for the error modulus.
-        gamma          : Regularization factor.
-        memoryLength   : Reuse data factor.
-        verbose        : Verbose boolean                       bool
+        filter  : Adaptive Filter                       filter object
+        desired : Desired signal                        numpy array (row vector)
+        input   : Input signal to feed filter           numpy array (row vector)
+        gamma_bar : Upper bound for the error modulus.
+        gamma                 : Regularization factor.
+        verbose : Verbose boolean                       bool
 
     Outputs
     -------
@@ -44,7 +43,6 @@ def Simp_AP(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, gamma_
             outputs      : Store the estimated output of each iteration.        numpy array (collumn vector)
             errors       : Store the error for each iteration.                  numpy array (collumn vector)
             coefficients : Store the estimated coefficients for each iteration. numpy array (collumn vector)
-            nUpdates     : Number of filter coefficient updates.
 
     Main Variables
     --------- 
@@ -80,51 +78,51 @@ def Simp_AP(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, gamma_
     tic = time()
     nIterations = desired_signal.size
 
-    regressor = np.zeros(
-        (Filter.filter_order+1, memoryLength+1), dtype=input_signal.dtype)
+    regressor = np.zeros(Filter.filter_order+1, dtype=input_signal.dtype)
     error_vector = np.array([])
     outputs_vector = np.array([])
     nUpdates = 0
 
-    u1 = np.array([1] + ([0]*memoryLength))
     # Main Loop
 
-    # assert len(gamma_barVector) == memoryLength + 1
-    # assert gamma_barVector .<= gamma_bar
-
     prefixedInput = np.concatenate(
-        (np.zeros(Filter.filter_order+1), input_signal))
-    prefixedDesired = np.concatenate((np.zeros(memoryLength+1), input_signal))
+        (np.zeros(Filter.filter_order), input_signal))
 
     for it in range(nIterations):
 
-        regressor[:, 2:memoryLength+1] = regressor[:, 1:memoryLength]
+        regressor_prev = regressor
 
-        regressor[:, 1] = prefixedInput[it+(Filter.filter_order):-1]
+        regressor = prefixedInput[it+(Filter.filter_order):-1]
 
         coefficients = Filter.coefficients
 
-        output_it = np.dot(regressor.conj(), coefficients)
+        output_it = np.dot(coefficients.conj(), regressor)
 
-        error_it = prefixedDesired[it+memoryLength].conj() - output_it
-
-        mu = 0
+        error_it = desired_signal[it] - output_it
 
         if abs(error_it) > gamma_bar:
+
             nUpdates += 1
 
             mu = 1 - (gamma_bar/abs(error_it))
 
-        auxTerm = (regressor.T.conj()*regressor +
-                   gamma*np.eye(memoryLength+1))
+        else:
 
-        coefficients = coefficients + regressor * \
-            (1/auxTerm) * (mu * error_it*u1)
-
-        Filter.coefficients_history.append(coefficients)
+            mu = 0
 
         error_vector = np.append(error_vector, error_it)
         outputs_vector = np.append(outputs_vector, output_it)
+
+        prev_norm_sq = np.dot(regressor_prev, regressor_prev)
+        norm_sq = np.dot(regressor, regressor)
+        aux_prev_reg = np.dot(regressor_prev.conj(), regressor)
+
+        lambda1 = (mu*error_it*prev_norm_sq) / \
+            (gamma + norm_sq * prev_norm_sq - (aux_prev_reg) ^ 2)
+        lambda2 = -(mu*error_it*aux_prev_reg) / \
+            (gamma + norm_sq * prev_norm_sq - (aux_prev_reg) ^ 2)
+
+        coefficients = coefficients + lambda1*regressor + lambda2*regressor_prev
 
         Filter.coefficients = coefficients
 
