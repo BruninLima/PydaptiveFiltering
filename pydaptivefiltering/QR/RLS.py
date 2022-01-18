@@ -1,7 +1,7 @@
 #  RLS.py
 #
-#      Implements the RLS algorithm for COMPLEX valued data.
-#      (Algorithm 5.3 - book: Adaptive Filtering: Algorithms and Practical
+#      Implements the QR-RLS algorithm for REAL valued data.
+#      (Algorithm 9.1 - book: Adaptive Filtering: Algorithms and Practical
 #                                                       Implementation, Diniz)
 #
 #      Authors:
@@ -17,24 +17,22 @@ import numpy as np
 from time import time
 
 
-def RLS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, Delta: float, Lambda: float, verbose: bool = False) -> dict:
+def RLS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, Lambda: float, verbose: bool = False) -> dict:
     """
     Description
     -----------
-        Implements the RLS algorithm for COMPLEX valued data. 
-        (Algorithm 5.3 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
+        Implements the QR-RLS algorithm for REAL valued data.
+        (Algorithm 9.1 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
 
     Syntax
     ------
-    OutputDictionary = RLS(Filter, desired_signal, input_signal, Delta, Lambda, verbose)
+    OutputDictionary = RLS(Filter, desired_signal, input_signal, Lambda, verbose)
 
     Inputs
     -------
         filter  : Adaptive Filter                                      filter object
         desired : Desired signal                                       numpy array (row vector)
         input   : Input signal to feed filter                          numpy array (row vector)
-        Delta   : The matrix delta*eye is the initial value of the
-                inverse of the deterministic autocorrelation matrix.   float
         Lambda  : Forgetting factor                                    float
         verbose : Verbose boolean                                      bool
 
@@ -75,17 +73,39 @@ def RLS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, Delta: flo
     # Initialization
     tic = time()
     nIterations = desired_signal.size
-
-    regressor = np.zeros(Filter.filter_order+1, dtype=input_signal.dtype)
+    nCoefficients = Filter.filter_order + 1
+    regressor = np.zeros(nCoefficients, dtype=input_signal.dtype)
     error_vector = np.array([])
     outputs_vector = np.array([])
     outputs_posteriori = np.array([])
     errors_posteriori = np.array([])
 
-    S_d = Delta*np.eye(Filter.filter_order+1)
-    p_d = np.zeros(Filter.filter_order+1)
+    # Scalar Values
+    gamma = 0
+    cosTetaI = 0
+    sinTetaI = 0
+    cI = 0
+    dLine = 0
 
-    coefficients = S_d@p_d
+    # Backsubstituition Procedure
+    coefficients = np.zeros(nCoefficients, nCoefficients)
+
+    coefficients[0][0] += (desired_signal[0]/input_signal[0])
+
+    for kt in range(nCoefficients):
+        coefficients[1, kt] += (desired_signal[0]/input_signal[0])
+        for ct in range(1, kt):
+            coefficients[ct, kt] += desired_signal[ct] / \
+                input_signal[1] - (input[1:ct]*coefficients[ct-1::1, kt])
+
+    # Build Initial Matrices
+
+    ULineMatrix = np.zeros(nCoefficients, nCoefficients)
+    for it in range(nCoefficients):
+        # Uline
+        ULineMatrix[it, 1] = (lambda**(it/2))*input_signal[nCoefficients-it]
+        # dLine_q2
+        # TODO
 
     # Main Loop
     for it in range(nIterations):
@@ -110,7 +130,7 @@ def RLS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, Delta: flo
         #   a posteriori estimated output
         outputs_posteriori = np.append(
             outputs_posteriori, np.dot(next_coefficients.conj(), regressor))
-        #   a posteriori estiamted error
+        #   a posteriori estimated error
         errors_posteriori = np.append(
             errors_posteriori, desired_signal[it] - outputs_posteriori[-1])
 
