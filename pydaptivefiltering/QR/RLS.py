@@ -103,7 +103,7 @@ def RLS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, Lambda: fl
     ULineMatrix = np.zeros(nCoefficients, nCoefficients)
     for it in range(nCoefficients):
         # Uline
-        ULineMatrix[it, 1] = (lambda**(it/2))*input_signal[nCoefficients-it]
+        ULineMatrix[it, 1] = (Lambda**(it/2))*input_signal[nCoefficients-it]
         # dLine_q2
         # TODO
 
