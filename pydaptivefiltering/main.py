@@ -62,3 +62,39 @@ class AdaptiveFilter():
     def _reset(self):
         self.coefficients = self.coefficients_history[0]
         self._reset_history()
+
+
+def HELP():
+    """
+
+    Helper Function
+
+    Prints some information about everything.
+
+    """
+
+    print(" ")
+    print(" Pydaptive Filtering - Main Help Function")
+    print(" ")
+    print(" ")
+    print("There are 10 main sub-areas containing Adaptive Filtering algorithms:")
+    print(" ")
+    print("     LMS Algorithms - Chapter 3 and 4")
+    print(" ")
+    print("     RLS Algorithms - Chapter 5")
+    print(" ")
+    print("     Set Membership Algorithms - Chapter 6")
+    print(" ")
+    print("     Lattice-based RLS Algorithms - Chapter 7")
+    print(" ")
+    print("     Fast Transversal RLS Algorithms - Chapter 8")
+    print(" ")
+    print("     QR Decomposition Based RLS Algorithms - Chapter 9")
+    print(" ")
+    print("     IIR Adaptive Filters - Chapter 10")
+    print(" ")
+    print("     Nonlinear Adaptive Filters - Chapter 11")
+    print(" ")
+    print("     Subband Adaptive Filters - Chapter 12")
+    print(" ")
+    print("     Blind Adaptive Filtering - Chapter 13")

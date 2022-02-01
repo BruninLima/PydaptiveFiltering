@@ -1,4 +1,4 @@
-from pydaptivefiltering.main import AdaptiveFilter
+from pydaptivefiltering.main import AdaptiveFilter, HELP
 from pydaptivefiltering import LMS
 from pydaptivefiltering import SM
 from pydaptivefiltering import RLS
