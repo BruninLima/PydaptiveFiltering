@@ -17,7 +17,7 @@ import numpy as np
 from time import time
 
 
-def Dual_sign(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: float = 1e-2, verbose: bool = False) -> dict:
+def Dual_sign(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, rho: float, gamma: int, step: float = 1e-2,  verbose: bool = False) -> dict:
     """
     Description
     -----------
@@ -27,15 +27,17 @@ def Dual_sign(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step
 
     Syntax
     ------
-    OutputDictionary = AP(Filter, desired_signal, input_signal, step, verbose)
+    OutputDictionary = Dual_sign(Filter, desired_signal, input_signal, step, verbose)
 
     Inputs
     -------
-        filter  : Adaptive Filter                       filter object
-        desired : Desired signal                        numpy array (row vector)
-        input   : Input signal to feed filter           numpy array (row vector)
-        step    : Convergence (relaxation) factor.      float
-        verbose : Verbose boolean                       bool
+        filter  : Adaptive Filter                                       filter object
+        desired : Desired signal                                        numpy array (row vector)
+        input   : Input signal to feed filter                           numpy array (row vector)
+        rho     : Error modulus threshold                               float
+        gamma   : Gain factor. Gamma is a poiwer of two. (gamma > 1)    int
+        step    : Convergence (relaxation) factor.                      float
+        verbose : Verbose boolean                                       bool
 
     Outputs
     -------
@@ -75,7 +77,7 @@ def Dual_sign(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step
     regressor = np.zeros(Filter.filter_order+1, dtype=input_signal.dtype)
     error_vector = np.array([])
     outputs_vector = np.array([])
-
+    dualSignError = 0
     # Main Loop
     for it in range(nIterations):
 
@@ -87,7 +89,12 @@ def Dual_sign(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step
 
         error_it = desired_signal[it] - output_it
 
-        next_coefficients = coefficients + step * error_it.conj() * regressor
+        if abs(error_it) > rho:
+            dualSignError = gamma*np.sign(error_it)
+        else:
+            dualSignError = np.sign(error_it)
+
+        next_coefficients = coefficients + 2 * step * dualSignError * regressor
 
         error_vector = np.append(error_vector, error_it)
         outputs_vector = np.append(outputs_vector, output_it)

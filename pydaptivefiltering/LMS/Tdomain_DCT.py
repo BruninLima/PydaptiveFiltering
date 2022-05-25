@@ -36,6 +36,11 @@ def Tdomain_DCT(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, st
         filter  : Adaptive Filter                       filter object
         desired : Desired signal                        numpy array (row vector)
         input   : Input signal to feed filter           numpy array (row vector)
+        gamma   : Regularization factor.                float
+                    (small positive constant to avoid singularity)
+        alpha   : Used to estimate eigenvalues of Ru    float
+                    (0 << alpha << 0.1)
+        initialPower: Initial Power.                    float
         step    : Convergence (relaxation) factor.      float
         verbose : Verbose boolean                       bool
 
@@ -45,7 +50,9 @@ def Tdomain_DCT(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, st
             outputs      : Store the estimated output of each iteration.        numpy array (collumn vector)
             errors       : Store the error for each iteration.                  numpy array (collumn vector)
             coefficients : Store the estimated coefficients for each iteration  numpy array (collumn vector)
-
+                                in the ORIGINAL domain.
+            coefficientsDCT: Store the estimated coefficients for each iteration numpy array (collumn vector)
+                                in the TRANSFORM domain.
     Main Variables
     --------- 
         regressor
@@ -53,10 +60,14 @@ def Tdomain_DCT(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, st
         FIR error vectors. 
         error_vector[k] represents the output errors at iteration k.
 
-    Misc Variables
-    --------------
-        tic
-        nIterations
+    Comments:
+    --------
+        The adaptive filter is implemented in the Transform-Domain (DCT). Therefore, the first
+        three output variables are calculated in this TRANSFORMED domain. The last output
+        variable, coefficientVector, corresponds to the adaptive filter coefficients in the
+        ORIGINAL domain (the coefficientVector is the Inverse Discrete Cossine Transform
+        aplied to the coefficientVectorDCT) and is only calculated in order to facilitate
+        comparisons, i.e., for implementation purposes just coefficientVectorDCT matters.
 
 
     Authors
@@ -77,24 +88,39 @@ def Tdomain_DCT(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, st
     regressor = np.zeros(Filter.filter_order+1, dtype=input_signal.dtype)
     error_vector = np.array([])
     outputs_vector = np.array([])
+    coefficientVectorDCT = np.array([])
+
+    N = Filter.filter_order+1
+    n, k = np.ogrid[1:2*N+1:2, :N]
+    T = 2 * np.cos(np.pi/(2*N) * n * k)  # dctmtx
+
+    coefficientVectorDCT.append(T@(Filter.coefficients))
+    powerVector = initialPower*np.ones((Filter.filter_order + 1))
 
     # Main Loop
     for it in range(nIterations):
 
-        regressor = np.concatenate(([input_signal[it]], regressor))[
+        regressorDCT = T @ np.concatenate(([input_signal[it]], regressor))[
             :Filter.filter_order+1]
 
-        coefficients = Filter.coefficients
-        output_it = np.dot(coefficients.conj(), regressor)
+        powerVector = alpha*(regressorDCT * regressorDCT.conj()
+                             ) + (1 - alpha)*(powerVector)
+
+        output_it = np.dot(coefficientVectorDCT[it].conj(), regressorDCT)
 
         error_it = desired_signal[it] - output_it
 
-        next_coefficients = coefficients + step * error_it.conj() * regressor
+        next_coefficients = coefficientVectorDCT[-1] + step * \
+            error_it.conj() * regressorDCT / (gamma + powerVector)
+
+        coefficientVectorDCT = np.append(
+            coefficientVectorDCT, next_coefficients)
 
         error_vector = np.append(error_vector, error_it)
+
         outputs_vector = np.append(outputs_vector, output_it)
 
-        Filter.coefficients = next_coefficients
+        Filter.coefficients = T.conj() @ next_coefficients
         Filter.coefficients_history.append(next_coefficients)
 
     if verbose == True:
@@ -102,6 +128,6 @@ def Tdomain_DCT(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, st
         print('Total runtime {:.03} ms'.format((time() - tic)*1000))
 
     return {'outputs': outputs_vector,
-            'errors': error_vector, 'coefficients': Filter.coefficients_history, 'adaptedFilter': Filter}
+            'errors': error_vector, 'coefficients': Filter.coefficients_history, 'coefficientsDCT': coefficientVectorDCT, 'adaptedFilter': Filter}
 
 #   EOF
