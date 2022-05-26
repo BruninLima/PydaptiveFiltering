@@ -33,8 +33,15 @@ def Tdomain(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: 
         filter  : Adaptive Filter                       filter object
         desired : Desired signal                        numpy array (row vector)
         input   : Input signal to feed filter           numpy array (row vector)
+        gamma   : Regularization factor.                float
+                    (small positive constant to avoid singularity)
+        alpha   : Used to estimate eigenvalues of Ru    float
+                    (0 << alpha << 0.1)
+        initialPower: Initial Power.                    float
+        T       : Transform applied to the signal       unitary MATRIX (filterOrder+1 x filterOrder+1)
         step    : Convergence (relaxation) factor.      float
         verbose : Verbose boolean                       bool
+
 
     Outputs
     -------

@@ -53,6 +53,7 @@ def Tdomain_DCT(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, st
                                 in the ORIGINAL domain.
             coefficientsDCT: Store the estimated coefficients for each iteration numpy array (collumn vector)
                                 in the TRANSFORM domain.
+                                
     Main Variables
     --------- 
         regressor

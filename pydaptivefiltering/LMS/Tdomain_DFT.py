@@ -16,6 +16,7 @@
 # Imports
 import numpy as np
 from time import time
+from scipy.fft import fft, ifft
 
 
 def Tdomain_DFT(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: float = 1e-2, verbose: bool = False) -> dict:
@@ -36,6 +37,11 @@ def Tdomain_DFT(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, st
         filter  : Adaptive Filter                       filter object
         desired : Desired signal                        numpy array (row vector)
         input   : Input signal to feed filter           numpy array (row vector)
+        gamma   : Regularization factor.                float
+                    (small positive constant to avoid singularity)
+        alpha   : Used to estimate eigenvalues of Ru    float
+                    (0 << alpha << 0.1)
+        initialPower: Initial Power.                    float
         step    : Convergence (relaxation) factor.      float
         verbose : Verbose boolean                       bool
 
@@ -45,6 +51,9 @@ def Tdomain_DFT(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, st
             outputs      : Store the estimated output of each iteration.        numpy array (collumn vector)
             errors       : Store the error for each iteration.                  numpy array (collumn vector)
             coefficients : Store the estimated coefficients for each iteration  numpy array (collumn vector)
+                                in the ORIGINAL domain.
+            coefficientsDFT: Store the estimated coefficients for each iteration numpy array (collumn vector)
+                                in the TRANSFORM domain.
 
     Main Variables
     --------- 
@@ -70,31 +79,42 @@ def Tdomain_DFT(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, st
 
     """
 
-    # Initialization
+        # Initialization
     tic = time()
     nIterations = desired_signal.size
 
     regressor = np.zeros(Filter.filter_order+1, dtype=input_signal.dtype)
     error_vector = np.array([])
     outputs_vector = np.array([])
+    coefficientVectorDFT = np.array([])
+
+    coefficientVectorDFT.append(coefficientVectorDFT, fft(Filter.coefficients)/np.sqrt(Filter.filter_order + 1))
+    powerVector = initialPower*np.ones((Filter.filter_order + 1))
 
     # Main Loop
     for it in range(nIterations):
 
-        regressor = np.concatenate(([input_signal[it]], regressor))[
-            :Filter.filter_order+1]
+        regressorDFT = fft(np.concatenate(([input_signal[it]], regressor))[
+            :Filter.filter_order+1]) / np.sqrt(Filter.filter_order + 1)
 
-        coefficients = Filter.coefficients
-        output_it = np.dot(coefficients.conj(), regressor)
+        powerVector = alpha*(regressorDFT * regressorDFT.conj()
+                             ) + (1 - alpha)*(powerVector)
+
+        output_it = np.dot(coefficientVectorDFT[it].conj(), regressorDFT)
 
         error_it = desired_signal[it] - output_it
 
-        next_coefficients = coefficients + step * error_it.conj() * regressor
+        next_coefficients = coefficientVectorDFT[-1] + step * \
+            error_it.conj() * regressorDFT / (gamma + powerVector)
+
+        coefficientVectorDFT = np.append(
+            coefficientVectorDFT, next_coefficients)
 
         error_vector = np.append(error_vector, error_it)
+
         outputs_vector = np.append(outputs_vector, output_it)
 
-        Filter.coefficients = next_coefficients
+        Filter.coefficients = ifft(next_coefficients)
         Filter.coefficients_history.append(next_coefficients)
 
     if verbose == True:
@@ -102,6 +122,6 @@ def Tdomain_DFT(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, st
         print('Total runtime {:.03} ms'.format((time() - tic)*1000))
 
     return {'outputs': outputs_vector,
-            'errors': error_vector, 'coefficients': Filter.coefficients_history, 'adaptedFilter': Filter}
+            'errors': error_vector, 'coefficients': Filter.coefficients_history, 'coefficientsDFT': coefficientVectorDFT, 'adaptedFilter': Filter}
 
 #   EOF
