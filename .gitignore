@@ -4,3 +4,4 @@ test.ipynb
 __pycache__
 *.gz
 MANIFEST
+.vscode

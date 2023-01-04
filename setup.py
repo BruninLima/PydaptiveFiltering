@@ -4,8 +4,8 @@ setup(
     name="pydaptivefiltering",
     packages=find_packages(
         include=["pydaptivefiltering", "pydaptivefiltering.*"]),
-    version='0.3',
-    description=" Python 3.8+ Implementation of the AdaptiveFiltering Toolbox.",
+    version='0.5',
+    description="A modern Python implementation of the AdaptiveFiltering toolbox.",
     author="Bruno Lima Netto",
     author_email="brunolimanetto@gmail.com",
     url="https://github.com/BruninLima",
@@ -13,7 +13,7 @@ setup(
     keywords=["Adaptive", "Filtering", "Digital", "Signal", "Processing"],
     install_requires=[
         'numpy',
-
+        'time'
     ],
 
     classifiers=[
