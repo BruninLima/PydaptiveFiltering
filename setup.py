@@ -13,7 +13,7 @@ setup(
     keywords=["Adaptive", "Filtering", "Digital", "Signal", "Processing"],
     install_requires=[
         'numpy',
-        'time'
+        'time',
     ],
 
     classifiers=[

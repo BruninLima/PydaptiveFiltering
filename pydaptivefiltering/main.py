@@ -69,8 +69,6 @@ def HELP():
 
     Helper Function
 
-    Prints some information about everything.
-
     """
 
     print(" ")

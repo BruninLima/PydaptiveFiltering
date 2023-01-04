@@ -5,3 +5,7 @@ from pydaptivefiltering.LMS.SignData import SignData
 from pydaptivefiltering.LMS.SignError import SignError
 from pydaptivefiltering.LMS.DualSign import DualSign
 from pydaptivefiltering.LMS.Power2_Error import Power2_Error
+from pydaptivefiltering.LMS.AffineProjection import AffineProjection
+from pydaptivefiltering.LMS.Tdomain_DCT import Tdomain_DCT
+from pydaptivefiltering.LMS.Tdomain_DFT import Tdomain_DFT
+from pydaptivefiltering.LMS.Tdomain import Tdomain

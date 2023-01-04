@@ -1,4 +1,4 @@
-#  LMS.Dual_sign.py
+#  LMS.DualSign.py
 #
 #      Implements the DualSign LMS algorithm for REAL valued data.
 #      (Modified version of Algorithm 4.1 - book: Adaptive Filtering: Algorithms
@@ -45,6 +45,7 @@ def DualSign(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, rho: 
             outputs      : Store the estimated output of each iteration.        numpy array (collumn vector)
             errors       : Store the error for each iteration.                  numpy array (collumn vector)
             coefficients : Store the estimated coefficients for each iteration  numpy array (collumn vector)
+            adaptedFilter: Store the adapted filter object                      filter object
 
     Main Variables
     --------- 

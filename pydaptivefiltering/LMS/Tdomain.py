@@ -15,9 +15,10 @@
 # Imports
 import numpy as np
 from time import time
+from scipy.fftpack import dct
 
 
-def Tdomain(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: float = 1e-2, verbose: bool = False) -> dict:
+def Tdomain(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, gamma: float, alpha: float, initialPower: float, T, step: float = 1e-2, verbose: bool = False) -> dict:
     """
     Description
     -----------
@@ -81,6 +82,7 @@ def Tdomain(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: 
     regressor = np.zeros(Filter.filter_order+1, dtype=input_signal.dtype)
     error_vector = np.array([])
     outputs_vector = np.array([])
+    coefficientsVectorT = np.array([])
 
     # Main Loop
     for it in range(nIterations):
@@ -88,17 +90,25 @@ def Tdomain(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: 
         regressor = np.concatenate(([input_signal[it]], regressor))[
             :Filter.filter_order+1]
 
+        regressorT = T @ regressor
+
+        powerVector = alpha*(regressorT * regressorT.conj()
+                             ) + (1 - alpha)*(powerVector)
+
         coefficients = Filter.coefficients
-        output_it = np.dot(coefficients.conj(), regressor)
+
+        output_it = np.dot(coefficients.conj(), regressorT)
 
         error_it = desired_signal[it] - output_it
 
-        next_coefficients = coefficients + step * error_it.conj() * regressor
+        next_coefficients = coefficients + step * error_it.conj() * regressorT / \
+            (gamma + powerVector)
 
         error_vector = np.append(error_vector, error_it)
         outputs_vector = np.append(outputs_vector, output_it)
+        coefficientsVectorT = np.append(coefficientsVectorT, next_coefficients)
 
-        Filter.coefficients = next_coefficients
+        Filter.coefficients = T.conj() @ next_coefficients
         Filter.coefficients_history.append(next_coefficients)
 
     if verbose == True:
@@ -106,6 +116,6 @@ def Tdomain(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: 
         print('Total runtime {:.03} ms'.format((time() - tic)*1000))
 
     return {'outputs': outputs_vector,
-            'errors': error_vector, 'coefficients': Filter.coefficients_history, 'adaptedFilter': Filter}
+            'errors': error_vector, 'coefficients': Filter.coefficients_history, 'coefficientsT': coefficientsVectorT, 'adaptedFilter': Filter}
 
 #   EOF

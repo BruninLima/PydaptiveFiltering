@@ -1,4 +1,4 @@
-#  LMS.py
+#  LMS.LMS.py
 #
 #      Implements the Complex LMS algorithm for COMPLEX valued data.
 #      (Algorithm 3.2 - book: Adaptive Filtering: Algorithms and Practical
@@ -42,7 +42,8 @@ def LMS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: floa
             outputs      : Store the estimated output of each iteration.        numpy array (collumn vector)
             errors       : Store the error for each iteration.                  numpy array (collumn vector)
             coefficients : Store the estimated coefficients for each iteration  numpy array (collumn vector)
-
+            adaptedFilter: Store the adapted filter object                      filter object
+            
     Main Variables
     --------- 
         regressor

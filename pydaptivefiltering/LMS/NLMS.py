@@ -1,4 +1,4 @@
-#  NLMS.py
+#  LMS.NLMS.py
 #
 #      Implements the Normalized LMS algorithm for COMPLEX valued data.
 #      (Algorithm 4.3 - book: Adaptive Filtering: Algorithms and Practical
@@ -43,6 +43,7 @@ def NLMS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, gamma: fl
             outputs      : Store the estimated output of each iteration.        numpy array (collumn vector)
             errors       : Store the error for each iteration.                  numpy array (collumn vector)
             coefficients : Store the estimated coefficients for each iteration  numpy array (collumn vector)
+            adaptedFilter: Store the adapted filter object                      filter object
 
     Main Variables
     ---------
@@ -101,6 +102,6 @@ def NLMS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, gamma: fl
         print('Total runtime {:.03} ms'.format((time() - tic)*1000))
 
     return {'outputs': outputs_vector,
-            'errors': error_vector, 'coefficients': Filter.coefficients_history}
+            'errors': error_vector, 'coefficients': Filter.coefficients_history, 'adaptedFilter': Filter}
 
 #   EOF

@@ -1,4 +1,4 @@
-#  Power2_error.py
+#  LMS.Power2_Error.py
 #
 #      Implements the Power-of-Two Error LMS algorithm for REAL valued data.
 #      (Modified version of Algorithm 4.1 - book: Adaptive Filtering: Algorithms and Practical

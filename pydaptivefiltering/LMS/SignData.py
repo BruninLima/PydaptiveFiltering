@@ -1,4 +1,4 @@
-#  SignData.py
+#  LMS.SignData.py
 #
 #      Implements the Sign-Data LMS algorithm for COMPLEX valued data.
 #      (Algorithm 4.1 - book: Adaptive Filtering: Algorithms and Practical

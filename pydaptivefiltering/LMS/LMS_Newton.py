@@ -1,4 +1,4 @@
-#  LMS_Newton.py
+#  LMS.LMS_Newton.py
 #
 #      Implements the LMS-Newton algorithm for COMPLEX valued data.
 #      (Algorithm 4.2 - book: Adaptive Filtering: Algorithms and Practical

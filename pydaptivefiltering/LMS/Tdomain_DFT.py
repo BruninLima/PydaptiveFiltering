@@ -19,7 +19,7 @@ from time import time
 from scipy.fft import fft, ifft
 
 
-def Tdomain_DFT(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: float = 1e-2, verbose: bool = False) -> dict:
+def Tdomain_DFT(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, gamma: float, alpha: float, initialPower: float, step: float = 1e-2, verbose: bool = False) -> dict:
     """
     Description
     -----------
