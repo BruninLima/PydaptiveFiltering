@@ -15,7 +15,7 @@
 # 3)  Choose an adaptive filtering algorithm to govern the rules of coefficient #
 #   updating.                                                                   #
 #                                                                               #
-#     Adaptive Algorithm used here: DualSign                                    #
+#     Adaptive Algorithm used here: Power2_Error                                #
 #                                                                               #
 #################################################################################
 
@@ -25,25 +25,24 @@ import matplotlib.pyplot as plt
 import pydaptivefiltering as pdf
 
 
-def DualSign_example():
+def Power2_Error_example():
     """
-
     Types:
     ------
     None -> '(Filter, dictionary["outputs", "errors", "coefficients"])'
 
-    Example for the DualSign algorithm. 
+    Example for the Power2_Error algorithm, SignData and SignError. 
 
     """
     # Parameters
     K = 70                  # Number of iterations
     H = np.array([0.32, -0.3, 0.5, 0.2])
     Wo = H                  # Unknown System
-    sigma_n2 = 0.04         # Noise Power
+    sigma_n2 = 0.04          # Noise Power
     N = 4                   # Number of coefficients of the adaptive filter
+    bd = 15                 # Word length of the data
+    tau = 2**(-bd)          # Gain factor
     mu = 0.1                # Convergence factor (step) (0 < μ < 1)
-    rho = 2                 # bound for the modulus of the error
-    gamma = 2               # gain factor for the error signal
 
     # Initializing
     W = np.ones(shape=(N, K+1))
@@ -64,18 +63,18 @@ def DualSign_example():
     # Desired signal
     d = np.array(d) + n
 
-    # Instantiating Adaptive Filter
+    # Adaptive Filter
     Filter = pdf.AdaptiveFilter(W[:, 1])
-    print(" Adapting with DualSign \n")
+    print(" Adapting with the Power2_Error algorithm")
     # Adapting
-    Output = pdf.LMS.DualSign(Filter, d, x, rho, gamma, mu)
+    Output = pdf.LMS.Power2_Error(Filter, d, x, bd, tau, mu)
 
-    return (Filter, Output, ComplexNoise)
+    return (Filter, Output, n)
 
 
 if __name__ == "__main__":
     # Running the model
-    Filter, Output, ComplexNoise = DualSign_example()
+    Filter, Output, ComplexNoise = Power2_Error_example()
 
     # Plotting
     plt.figure(figsize=(16, 16))

@@ -1,7 +1,7 @@
-#  NLMS.py
+#  Power2_error.py
 #
-#      Implements the Normalized LMS algorithm for COMPLEX valued data.
-#      (Algorithm 4.3 - book: Adaptive Filtering: Algorithms and Practical
+#      Implements the Power-of-Two Error LMS algorithm for REAL valued data.
+#      (Modified version of Algorithm 4.1 - book: Adaptive Filtering: Algorithms and Practical
 #                                                       Implementation, Diniz)
 #
 #      Authors:
@@ -17,23 +17,25 @@ import numpy as np
 from time import time
 
 
-def NLMS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, gamma: float, step: float = 1e-2, verbose: bool = False) -> dict:
+def Power2_Error(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, bd: int, tau: float, step: float = 1e-2, verbose: bool = False) -> dict:
     """
     Description
     -----------
-        Implements the Normalized LMS algorithm for COMPLEX valued data.
-        (Algorithm 4.3 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
+        Implements the Power-of-Two Error LMS algorithm for REAL valued data.
+        (Modified version of Algorithm 4.1 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
 
     Syntax
     ------
-    OutputDictionary = NLMS(Filter, desired_signal,
-                            input_signal, gamma, step, verbose)
+    OutputDictionary = Power2_error(Filter, desired_signal,
+                                    input_signal, tau, step, verbose)
 
     Inputs
     -------
         filter  : Adaptive Filter                       filter object
         desired : Desired signal                        numpy array (row vector)
         input   : Input signal to feed filter           numpy array (row vector)
+        bd      : Word length (signal bit)              int 
+        tau     : Gain Factor                           float
         step    : Convergence (relaxation) factor.      float
         verbose : Verbose boolean                       bool
 
@@ -55,7 +57,6 @@ def NLMS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, gamma: fl
     --------------
         tic
         nIterations
-
 
     Authors
     -------
@@ -87,20 +88,28 @@ def NLMS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, gamma: fl
 
         error_it = desired_signal[it] - output_it
 
-        gamma_factor = step/(regressor.conj()*regressor + gamma)
-        next_coefficients = coefficients + gamma_factor * error_it.conj() * regressor
+        if (abs(error_it) >= 1):
+            power2Error = np.sign(error_it)
+
+        elif (abs(error_it < 2**(-bd+1))):
+            power2Error = tau*np.sign(error_it)
+
+        else:
+            power2Error = (2**(np.floor(np.log2(abs(error_it))))
+                           )*np.sign(error_it)
+
+        next_coefficients = coefficients + 2*step*power2Error*regressor
 
         error_vector = np.append(error_vector, error_it)
         outputs_vector = np.append(outputs_vector, output_it)
 
-        Filter.coefficients = next_coefficients
+        Filter.coefficients = coefficients
         Filter.coefficients_history.append(next_coefficients)
 
-    if verbose == True:
-        print(" ")
-        print('Total runtime {:.03} ms'.format((time() - tic)*1000))
+        if verbose == True:
+            print(" ")
+            print('Total runtime {:.03} ms'.format((time() - tic)*1000))
 
+    # Output
     return {'outputs': outputs_vector,
-            'errors': error_vector, 'coefficients': Filter.coefficients_history}
-
-#   EOF
+            'errors': error_vector, 'coefficients': Filter.coefficients_history, 'adaptedFilter': Filter}

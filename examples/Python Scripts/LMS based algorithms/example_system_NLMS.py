@@ -5,7 +5,7 @@
 #  In this example we have a typical system identification scenario. We want    #
 # to estimate the filter coefficients of an unknown system given by Wo. In      #
 # order to accomplish this task we use an adaptive filter with the same         #
-# number of coefficients, N, as the unkown system. The procedure is:            #
+# number of coefficients, N, as the unknown system. The procedure is:           #
 # 1)  Excitate both filters (the unknown and the adaptive) with the signal      #
 #   x. In this case, x is chosen according to the 4-QAM constellation.          #
 #   The variance of x is normalized to 1.                                       #
@@ -35,12 +35,12 @@ def NLMS_example():
 
     """
     # Parameters
-    K = 70                 # Number of iterations
+    K = 70                   # Number of iterations
     H = np.array([0.32+0.21*1j, -0.3+0.7*1j, 0.5-0.8*1j, 0.2+0.5*1j])
-    Wo = H                  # Uknown System
-    sigman2 = 0.04          # Noise Power
-    N = 4                   # Number of coefficients of the adaptative filter
-    mu = 0.1                # Convergence factor (step) (0 < μ < 1)
+    Wo = H                   # Unknown System
+    sigma_n2 = 0.04          # Noise Power
+    N = 4                    # Number of coefficients of the adaptive filter
+    mu = 0.1                 # Convergence factor (step) (0 < μ < 1)
     gamma = 1e-5
 
     # Initializing
@@ -49,8 +49,8 @@ def NLMS_example():
     X = np.zeros(N)
     x = (np.random.randn(K) + np.random.randn(K)*1j)/np.sqrt(2)
     # complex noise
-    n = np.sqrt(sigman2/2) * (np.random.randn(K) +
-                              np.random.randn(K)*1j)
+    n = np.sqrt(sigma_n2/2) * (np.random.randn(K) +
+                               np.random.randn(K)*1j)
     d = []
 
     for k in range(K):
@@ -62,7 +62,7 @@ def NLMS_example():
     # desired signal
     d = np.array(d) + n
 
-    # Istanciating Adaptive Filter
+    # Instantiating Adaptive Filter
     Filter = pdf.AdaptiveFilter(W[:, 1])
     print(" Adapting with NLMS \n")
     # Adapting with the LMS Algorithm

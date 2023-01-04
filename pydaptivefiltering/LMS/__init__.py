@@ -4,3 +4,4 @@ from pydaptivefiltering.LMS.NLMS import NLMS
 from pydaptivefiltering.LMS.SignData import SignData
 from pydaptivefiltering.LMS.SignError import SignError
 from pydaptivefiltering.LMS.DualSign import DualSign
+from pydaptivefiltering.LMS.Power2_Error import Power2_Error
