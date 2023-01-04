@@ -16,6 +16,7 @@
 # Imports
 import numpy as np
 from time import time
+from scipy.fftpack import dct
 
 
 def Tdomain_DCT(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, gamma: float, alpha: float, initialPower: float,  step: float = 1e-2, verbose: bool = False) -> dict:
@@ -89,20 +90,18 @@ def Tdomain_DCT(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, ga
     regressor = np.zeros(Filter.filter_order+1, dtype=input_signal.dtype)
     error_vector = np.array([])
     outputs_vector = np.array([])
-    coefficientVectorDCT = np.array([])
+    coefficientVectorDCT = np.zeros(
+        (nIterations+1, Filter.filter_order + 1), dtype=input_signal.dtype)
 
     N = Filter.filter_order+1
-    T = np.zeros((N, N), dtype=input_signal.dtype)  # dctmtx
-    for i in range(N):
-        for j in range(N):
-            if j == 0:
-                T[i, j] = np.sqrt(1/N)
-            else:
-                T[i, j] = np.sqrt(2/N) * \
-                    np.cos((np.pi*(2*i+1)*j)/(2*N))
+    T = dct(np.eye(N), norm='ortho', axis=0)
+    coefficientVectorDCT[0] = T@Filter.coefficients
 
     powerVector = np.ones(Filter.filter_order+1,
                           dtype=input_signal.dtype)*initialPower
+
+    coefficientsDCT = T@Filter.coefficients
+    coefficientVectorDCT[0] = coefficientsDCT
 
     # Main Loop
     for it in range(nIterations):
@@ -110,27 +109,27 @@ def Tdomain_DCT(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, ga
         regressor = np.concatenate(([input_signal[it]], regressor))[
             :Filter.filter_order+1]
 
-        regressorDCT = T @ regressor
+    regressorDCT = np.dot(T, regressor)
 
-        powerVector = alpha*(regressorDCT * regressorDCT.conj()
-                             ) + (1 - alpha)*(powerVector)
+    powerVector = alpha*(regressorDCT * regressorDCT.conj()
+                         ) + (1 - alpha)*(powerVector)
 
-        coefficients = Filter.coefficients
+    output_it = np.dot(regressorDCT.conj(), coefficientVectorDCT[it])
 
-        output_it = np.dot(coefficients.conj(), regressorDCT)
+    error_it = desired_signal[it] - output_it
 
-        error_it = desired_signal[it] - output_it
+    next_coefficients = coefficientsDCT + step * \
+        error_it.conj() * regressorDCT / (gamma + powerVector)
 
-        next_coefficients = coefficients + step * \
-            error_it.conj() * regressorDCT / (gamma + powerVector)
+    error_vector = np.append(error_vector, error_it)
 
-        error_vector = np.append(error_vector, error_it)
-        outputs_vector = np.append(outputs_vector, output_it)
-        coefficientVectorDCT = np.append(
-            coefficientVectorDCT, next_coefficients)
+    outputs_vector = np.append(outputs_vector, output_it)
 
-        Filter.coefficients = T.conj() @ next_coefficients
-        Filter.coefficients_history.append(next_coefficients)
+    coefficientVectorDCT[it + 1] = next_coefficients
+
+    coeffs = np.dot(T.conj().T, coefficientVectorDCT[it])
+    Filter.coefficients = coeffs
+    Filter.coefficients_history.append(coeffs)
 
     if verbose == True:
         print(" ")
