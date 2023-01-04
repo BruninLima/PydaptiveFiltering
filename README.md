@@ -4,7 +4,7 @@
 
 <!---<img src="exemplo-image.png" alt="exemplo imagem">--->
 
-> Python 3.? package of adaptive filtering functions based on the book Adaptive Filtering - Algorithms and Pratical Implementation, Paulo Diniz. Also, based on the MATLAB Adaptive Filtering Toolbox.  
+> A modern Python package of adaptive filtering functions based on the book Adaptive Filtering - Algorithms and Pratical Implementation, Paulo Diniz. Also, based on the MATLAB Adaptive Filtering Toolbox.  
 
 ### Future Work
 
