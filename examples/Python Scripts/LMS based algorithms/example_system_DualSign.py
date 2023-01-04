@@ -15,7 +15,7 @@
 # 3)  Choose an adaptive filtering algorithm to govern the rules of coefficient #
 #   updating.                                                                   #
 #                                                                               #
-#     Adaptive Algorithm used here: LMS                                         #
+#     Adaptive Algorithm used here: DualSign                                    #
 #                                                                               #
 #################################################################################
 
@@ -24,23 +24,26 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pydaptivefiltering as pdf
 
-
-def LMS_example():
+def DualSign_example():
     """
+    
     Types:
     ------
     None -> '(Filter, dictionary["outputs", "errors", "coefficients"])'
 
-    Example for the LMS algorithm, SignData and SignError. 
+    Example for the DualSign algorithm. 
 
     """
     # Parameters
     K = 70                  # Number of iterations
-    H = np.array([0.32+0.21*1j, -0.3+0.7*1j, 0.5-0.8*1j, 0.2+0.5*1j])
+    H = np.array([0.32,-0.3,0.5,0.2])
     Wo = H                  # Unknown System
-    sigma_n2 = 0.04          # Noise Power
+    sigma_n2 = 0.04         # Noise Power
     N = 4                   # Number of coefficients of the adaptive filter
     mu = 0.1                # Convergence factor (step) (0 < μ < 1)
+    rho = 2                 # bound for the modulus of the error
+    gamma = 2               # gain factor for the error signal
+
 
     # Initializing
     W = np.ones(shape=(N, K+1))
@@ -58,21 +61,22 @@ def LMS_example():
         X = np.concatenate(([x[k]], X))[:N]
         d.append(np.dot(Wo.conj(), X))
 
-    # desired signal
+    # Desired signal
     d = np.array(d) + n
 
     # Instantiating Adaptive Filter
     Filter = pdf.AdaptiveFilter(W[:, 1])
-    print(" Adapting with LMS \n")
-    # Adapting with the LMS Algorithm
-    Output = pdf.LMS.LMS(Filter, d, x, mu)
+    print(" Adapting with DualSign \n")
+    # Adapting
+    Output = pdf.LMS.DualSign(Filter, d, x, rho, gamma, mu)
 
-    return (Filter, Output, n)
+    return (Filter, Output, ComplexNoise)
+
 
 
 if __name__ == "__main__":
     # Running the model
-    Filter, Output, ComplexNoise = LMS_example()
+    Filter, Output, ComplexNoise = DualSign_example()
 
     # Plotting
     plt.figure(figsize=(16, 16))

@@ -15,7 +15,7 @@
 # 3)  Choose an adaptive filtering algorithm to govern the rules of coefficient #
 #   updating.                                                                   #
 #                                                                               #
-#     Adaptive Algorithm used here: LMS                                         #
+#     Adaptive Algorithm used here: LMS_Newton                                  #
 #                                                                               #
 #################################################################################
 
@@ -25,22 +25,25 @@ import matplotlib.pyplot as plt
 import pydaptivefiltering as pdf
 
 
-def LMS_example():
+def LMS_Newton_example():
     """
+
     Types:
     ------
     None -> '(Filter, dictionary["outputs", "errors", "coefficients"])'
 
-    Example for the LMS algorithm, SignData and SignError. 
+    Example for the LMS_Newton algorithm. 
 
     """
+
     # Parameters
     K = 70                  # Number of iterations
-    H = np.array([0.32+0.21*1j, -0.3+0.7*1j, 0.5-0.8*1j, 0.2+0.5*1j])
+    H = np.array([0.32+0.21j, -0.3+0.7j, 0.5-0.8j, 0.2+0.5j])
     Wo = H                  # Unknown System
-    sigma_n2 = 0.04          # Noise Power
+    sigma_n2 = 0.04         # Noise Power
     N = 4                   # Number of coefficients of the adaptive filter
     mu = 0.1                # Convergence factor (step) (0 < μ < 1)
+    alpha = 0.05            # wieght on the present info.(0 < α < 0.1)
 
     # Initializing
     W = np.ones(shape=(N, K+1))
@@ -58,21 +61,21 @@ def LMS_example():
         X = np.concatenate(([x[k]], X))[:N]
         d.append(np.dot(Wo.conj(), X))
 
-    # desired signal
+    # Desired signal
     d = np.array(d) + n
 
     # Instantiating Adaptive Filter
     Filter = pdf.AdaptiveFilter(W[:, 1])
-    print(" Adapting with LMS \n")
-    # Adapting with the LMS Algorithm
-    Output = pdf.LMS.LMS(Filter, d, x, mu)
+    print(" Adapting with LMS_Newton \n")
+    # Adapting with the LMS_Newton Algorithm
+    Output = pdf.LMS.LMS_Newton(Filter, d, x, alpha, mu)
 
     return (Filter, Output, n)
 
 
 if __name__ == "__main__":
     # Running the model
-    Filter, Output, ComplexNoise = LMS_example()
+    Filter, Output, ComplexNoise = LMS_Newton_example()
 
     # Plotting
     plt.figure(figsize=(16, 16))

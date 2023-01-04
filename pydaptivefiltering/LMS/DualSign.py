@@ -1,6 +1,6 @@
 #  LMS.Dual_sign.py
 #
-#      Implements the Dual-Sign LMS algorithm for REAL valued data.
+#      Implements the DualSign LMS algorithm for REAL valued data.
 #      (Modified version of Algorithm 4.1 - book: Adaptive Filtering: Algorithms
 #                                                       and Practical Implementation, Diniz)
 #
@@ -17,11 +17,11 @@ import numpy as np
 from time import time
 
 
-def Dual_sign(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, rho: float, gamma: int, step: float = 1e-2,  verbose: bool = False) -> dict:
+def DualSign(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, rho: float, gamma: int, step: float = 1e-2,  verbose: bool = False) -> dict:
     """
     Description
     -----------
-        Implements the Dual-Sign LMS algorithm for REAL valued data.
+        Implements the DualSign LMS algorithm for REAL valued data.
         (Modified version of Algorithm 4.1 - book: Adaptive Filtering: Algorithms
                                                 and Practical Implementation, Diniz)
 
@@ -35,7 +35,7 @@ def Dual_sign(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, rho:
         desired : Desired signal                                        numpy array (row vector)
         input   : Input signal to feed filter                           numpy array (row vector)
         rho     : Error modulus threshold                               float
-        gamma   : Gain factor. Gamma is a poiwer of two. (gamma > 1)    int
+        gamma   : Gain factor. Gamma is a power of two. (gamma > 1)     int
         step    : Convergence (relaxation) factor.                      float
         verbose : Verbose boolean                                       bool
 
