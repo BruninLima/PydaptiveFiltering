@@ -1,1 +1,2 @@
-from Blind_Filters.Affine_Projection import Affine_projection
+from BlindFilters.affine_projection import affine_projection
+from BlindFilters.cma import cma

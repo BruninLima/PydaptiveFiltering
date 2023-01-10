@@ -1,7 +1,7 @@
-#  Blind_Filters.Affine_Projection.py
+#  BlindFilters.affine_projection.py
 #
-#      Implements the Complex LMS algorithm for COMPLEX valued data.
-#      (Algorithm 3.2 - book: Adaptive Filtering: Algorithms and Practical
+#      Implements the Complex Affine-Projection Constant-Modulus algorithm for COMPLEX valued data.
+#      (Algorithm 13.4 - book: Adaptive Filtering: Algorithms and Practical
 #                                                       Implementation, Diniz)
 #
 #      Authors:
@@ -17,22 +17,23 @@ import numpy as np
 from time import time
 
 
-def Affine_Projection(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: float = 1e-2, verbose: bool = False) -> dict:
+def affine_projection(Filter, input_signal: np.ndarray, gamma: float, L: int, step: float = 1e-2, verbose: bool = False) -> dict:
     """
     Description
     -----------
-        Implements the Complex LMS algorithm for COMPLEX valued data. 
-        (Algorithm 3.2 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
+        Implements the Complex Affine-Projection Constant-Modulus algorithm for COMPLEX valued data.
+        (Algorithm 13.4 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
 
     Syntax
     ------
-    OutputDictionary = LMS(Filter, desired_signal, input_signal, step, verbose)
+    OutputDictionary = affine_projection(Filter, desired_signal, input_signal, L, gamma, step, verbose)
 
     Inputs
     -------
         filter  : Adaptive Filter                       filter object
-        desired : Desired signal                        numpy array (row vector)
         input   : Input signal to feed filter           numpy array (row vector)
+        gamma   : Regularization factor.                float
+        L       : Number of iterations to store.        int
         step    : Convergence (relaxation) factor.      float
         verbose : Verbose boolean                       bool
 
@@ -70,24 +71,31 @@ def Affine_Projection(Filter, desired_signal: np.ndarray, input_signal: np.ndarr
 
     # Initialization
     tic = time()
-    nIterations = desired_signal.size
+    nIterations = input_signal.size
 
-    regressor = np.zeros(Filter.filter_order+1, dtype=input_signal.dtype)
+    regressor = np.zeros((L+1, Filter.filter_order+1),
+                         dtype=input_signal.dtype)
     error_vector = np.array([])
     outputs_vector = np.array([])
 
     # Main Loop
     for it in range(nIterations):
 
-        regressor = np.concatenate(([input_signal[it]], regressor))[
-            :Filter.filter_order+1]
+        regressor[1:] = regressor[:-1]
+        regressor[0] = input_signal[it:(Filter.filter_order)+it+1]
 
         coefficients = Filter.coefficients
-        output_it = np.dot(coefficients.conj(), regressor)
 
-        error_it = desired_signal[it] - output_it
+        output_it = np.dot(regressor, coefficients.conj())
 
-        next_coefficients = coefficients + step * error_it.conj() * regressor
+        desiredLevelConj = np.sign(output_it)
+
+        error_it = (desiredLevelConj[it: L + 1] - output_it).conj()
+
+        aux_matrix = np.linalg.inv(
+            regressor @ regressor.T + gamma * np.eye(L+1))
+        next_coefficients = coefficients + step * \
+            (regressor.T @ aux_matrix @ error_it)
 
         error_vector = np.append(error_vector, error_it)
         outputs_vector = np.append(outputs_vector, output_it)
