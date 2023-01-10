@@ -65,6 +65,7 @@ def LMS_example():
     Filter = pdf.AdaptiveFilter(W[:, 1])
     print(" Adapting with LMS \n")
     # Adapting with the LMS Algorithm
+    print(" Input Signal: ", x.shape)
     Output = pdf.LMS.LMS(Filter, d, x, mu)
 
     return (Filter, Output, n)
