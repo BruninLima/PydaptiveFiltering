@@ -100,6 +100,7 @@ def SignData(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step:
         print('Total runtime {:.03} ms'.format((time() - tic)*1000))
 
     return {'outputs': outputs_vector,
-            'errors': error_vector, 'coefficients': Filter.coefficients_history}
+            'errors': error_vector,
+            'coefficients': Filter.coefficients_history}
 
 #   EOF

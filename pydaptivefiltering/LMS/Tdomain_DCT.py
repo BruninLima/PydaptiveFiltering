@@ -135,6 +135,9 @@ def Tdomain_DCT(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, ga
         print(" ")
         print('Total runtime {:0.2f} seconds'.format(time() - tic))
 
-    return {'outputs': outputs_vector, 'errors': error_vector, 'coefficients': Filter.coefficients, 'coefficientsDCT': coefficientVectorDCT, 'adaptedFilter': Filter}
+    return {'outputs': outputs_vector,
+            'errors': error_vector,
+            'coefficients': Filter.coefficients,
+            'coefficientsDCT': coefficientVectorDCT}
 
 # EOF

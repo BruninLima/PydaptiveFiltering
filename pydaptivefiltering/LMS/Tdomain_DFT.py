@@ -79,7 +79,7 @@ def Tdomain_DFT(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, ga
 
     """
 
-        # Initialization
+    # Initialization
     tic = time()
     nIterations = desired_signal.size
 
@@ -88,7 +88,8 @@ def Tdomain_DFT(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, ga
     outputs_vector = np.array([])
     coefficientVectorDFT = np.array([])
 
-    coefficientVectorDFT.append(coefficientVectorDFT, fft(Filter.coefficients)/np.sqrt(Filter.filter_order + 1))
+    coefficientVectorDFT.append(coefficientVectorDFT, fft(
+        Filter.coefficients)/np.sqrt(Filter.filter_order + 1))
     powerVector = initialPower*np.ones((Filter.filter_order + 1))
 
     # Main Loop
@@ -122,6 +123,8 @@ def Tdomain_DFT(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, ga
         print('Total runtime {:.03} ms'.format((time() - tic)*1000))
 
     return {'outputs': outputs_vector,
-            'errors': error_vector, 'coefficients': Filter.coefficients_history, 'coefficientsDFT': coefficientVectorDFT, 'adaptedFilter': Filter}
+            'errors': error_vector,
+            'coefficients': Filter.coefficients_history,
+            'coefficientsDFT': coefficientVectorDFT}
 
 #   EOF

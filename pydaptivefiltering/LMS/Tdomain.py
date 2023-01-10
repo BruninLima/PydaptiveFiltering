@@ -116,6 +116,8 @@ def Tdomain(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, gamma:
         print('Total runtime {:.03} ms'.format((time() - tic)*1000))
 
     return {'outputs': outputs_vector,
-            'errors': error_vector, 'coefficients': Filter.coefficients_history, 'coefficientsT': coefficientsVectorT, 'adaptedFilter': Filter}
+            'errors': error_vector, 
+            'coefficients': Filter.coefficients_history, 
+            'coefficientsT': coefficientsVectorT}
 
 #   EOF

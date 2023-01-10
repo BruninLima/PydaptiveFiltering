@@ -43,7 +43,7 @@ def LMS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: floa
             errors       : Store the error for each iteration.                  numpy array (collumn vector)
             coefficients : Store the estimated coefficients for each iteration  numpy array (collumn vector)
             adaptedFilter: Store the adapted filter object                      filter object
-            
+
     Main Variables
     --------- 
         regressor
@@ -100,6 +100,7 @@ def LMS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: floa
         print('Total runtime {:.03} ms'.format((time() - tic)*1000))
 
     return {'outputs': outputs_vector,
-            'errors': error_vector, 'coefficients': Filter.coefficients_history, 'adaptedFilter': Filter}
+            'errors': error_vector,
+            'coefficients': Filter.coefficients_history}
 
 #   EOF

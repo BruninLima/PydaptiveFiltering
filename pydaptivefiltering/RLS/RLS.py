@@ -44,7 +44,6 @@ def RLS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, Delta: flo
             outputs      : Store the estimated output of each iteration.        numpy array (column vector)
             errors       : Store the error for each iteration.                  numpy array (column vector)
             coefficients : Store the estimated coefficients for each iteration  numpy array (column vector)
-
             outputs_posteriori : Store the a posteriori estimated output of each iteration. (column vector)
             errors_posteriori  : Store the a posteriori error for each iteration.           (column vector)
 

@@ -102,6 +102,7 @@ def NLMS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, gamma: fl
         print('Total runtime {:.03} ms'.format((time() - tic)*1000))
 
     return {'outputs': outputs_vector,
-            'errors': error_vector, 'coefficients': Filter.coefficients_history, 'adaptedFilter': Filter}
+            'errors': error_vector,
+            'coefficients': Filter.coefficients_history}
 
 #   EOF
