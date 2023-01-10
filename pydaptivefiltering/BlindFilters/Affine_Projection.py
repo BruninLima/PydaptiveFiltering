@@ -1,4 +1,4 @@
-#  LMS.LMS.py
+#  Blind_Filters.Affine_Projection.py
 #
 #      Implements the Complex LMS algorithm for COMPLEX valued data.
 #      (Algorithm 3.2 - book: Adaptive Filtering: Algorithms and Practical
