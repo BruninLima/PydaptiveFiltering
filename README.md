@@ -1,4 +1,4 @@
-# PydaptiveFiltering
+# pydaptivefiltering
 
 
 
@@ -8,14 +8,18 @@
 
 ### Future Work
 
-The project is currently on its early stages (pre-alpha). The planned order of work is the following:
+The project is currently on its early stages (pre-alpha). The planned order of work for every kind of algorithm is: (Algorithm(1), Examples(2), Notebooks(3)). The following is the planned and current progress for each of the algorithms:
 
 - [x] LMS based algorithms
-- [x] LMS Examples + Notebooks
 - [x] RLS based algorithms
-- [ ] RLS Examples + Notebooks
-- [ ] SetMembership Algorithms
-- [ ] Lattice-based RLS
+- [x] SetMembership Algorithms
+- [ ] Lattice-based RLS (0/3)
+- [ ] Fast Transversal RLS (0/2)
+- [x] QR
+- [ ] IIR Filters (0/5)
+- [ ] Nonlinear Filters (1/6)
+- [ ] Subband Filters (0/3)
+- [x] BlindFilters
 
 ## 💻 Requirements
 
