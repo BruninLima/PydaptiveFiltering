@@ -13,12 +13,12 @@ The project is currently on its early stages (pre-alpha). The planned order of w
 - [x] LMS based algorithms
 - [x] RLS based algorithms
 - [x] SetMembership Algorithms
-- [ ] Lattice-based RLS
-- [ ] Fast Transversal RLS
+- [ ] Lattice-based RLS (0/3)
+- [ ] Fast Transversal RLS (0/2)
 - [x] QR
-- [ ] IIR Filters
-- [ ] Nonlinear Filters
-- [ ] Subband Filters
+- [ ] IIR Filters (0/5)
+- [ ] Nonlinear Filters (0/6)
+- [ ] Subband Filters (0/3)
 - [x] BlindFilters
 
 ## 💻 Requirements
