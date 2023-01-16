@@ -1,4 +1,4 @@
-# PydaptiveFiltering
+# pydaptivefiltering
 
 
 
