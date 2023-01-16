@@ -10,10 +10,10 @@
 
 The project is currently on its early stages (pre-alpha). The planned order of work for every kind of algorithm is: (Algorithm(1), Examples(2), Notebooks(3)). The following is the planned and current progress for each of the algorithms:
 
-- [2] LMS based algorithms
-- [1] RLS based algorithms
-- [1] SetMembership Algorithms
-- [2] BlindFilters
+- [x] LMS based algorithms
+- [x] RLS based algorithms
+- [x] SetMembership Algorithms
+- [x] BlindFilters
 - [ ] Fast Transversal RLS
 - [ ] IIR Filters
 - [ ] Nonlinear Filters
