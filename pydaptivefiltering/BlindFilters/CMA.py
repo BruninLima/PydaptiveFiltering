@@ -71,7 +71,8 @@ def cma(Filter, input_signal: np.ndarray, step: float = 1e-2, verbose: bool = Fa
     tic = time()
     nIterations = input_signal.size
     nCoefficients = Filter.filter_order + 1
-    desiredLevel = np.mean(np.abs(input) ** 4) / np.mean(np.abs(input) ** 2)
+    desiredLevel = np.mean(np.abs(input_signal) ** 4) / \
+        np.mean(np.abs(input_signal) ** 2)
 
     # Pre Allocations
     coefficientVector = np.zeros((nCoefficients, nIterations + 1))
@@ -82,7 +83,8 @@ def cma(Filter, input_signal: np.ndarray, step: float = 1e-2, verbose: bool = Fa
     coefficientVector[:, 0] = Filter.coefficients
 
     # Improve source code regularity
-    prefixedInput = np.concatenate((np.random.randn(nCoefficients - 1), input))
+    prefixedInput = np.concatenate(
+        (np.random.randn(nCoefficients - 1), input_signal))
 
     # Main Loop
     for it in range(nIterations):
