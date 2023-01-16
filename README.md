@@ -17,7 +17,7 @@ The project is currently on its early stages (pre-alpha). The planned order of w
 - [ ] Fast Transversal RLS (0/2)
 - [x] QR
 - [ ] IIR Filters (0/5)
-- [ ] Nonlinear Filters (1/6)
+- [ ] Nonlinear Filters (0/6)
 - [ ] Subband Filters (0/3)
 - [x] BlindFilters
 
