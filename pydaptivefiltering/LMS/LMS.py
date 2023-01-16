@@ -1,4 +1,4 @@
-#  lms.lms.py
+#  LMS.LMS.py
 #
 #      Implements the Complex LMS algorithm for COMPLEX valued data.
 #      (Algorithm 3.2 - book: Adaptive Filtering: Algorithms and Practical
@@ -17,7 +17,7 @@ import numpy as np
 from time import time
 
 
-def lms(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: float = 1e-2, verbose: bool = False) -> dict:
+def LMS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: float = 1e-2, verbose: bool = False) -> dict:
     """
     Description
     -----------

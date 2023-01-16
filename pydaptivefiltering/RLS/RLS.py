@@ -1,4 +1,4 @@
-#  RLS.py
+#  RLS.rls.py
 #
 #      Implements the RLS algorithm for COMPLEX valued data.
 #      (Algorithm 5.3 - book: Adaptive Filtering: Algorithms and Practical
@@ -73,18 +73,24 @@ def RLS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, Delta: flo
 
     # Initialization
     tic = time()
-    nIterations = desired_signal.size
+    nIterations = input_signal.size
+    nCoefficients = Filter.filter_order + 1
+
+
+    # Pre Allocations
+    coefficientVector = np.zeros((nCoefficients, nIterations + 1))
+    errorVector       = np.zeros((nIterations,))
+    outputVector      = np.zeros((nIterations,))
+    errorPosteriori   = np.zeros((nIterations,))
+    outputPosteriori  = np.zeros((nIterations,))
 
     regressor = np.zeros(Filter.filter_order+1, dtype=input_signal.dtype)
-    error_vector = np.array([])
-    outputs_vector = np.array([])
-    outputs_posteriori = np.array([])
-    errors_posteriori = np.array([])
 
     S_d = Delta*np.eye(Filter.filter_order+1)
     p_d = np.zeros(Filter.filter_order+1)
 
-    coefficients = S_d@p_d
+    # Initial Coefficients Values
+    coefficientVector[:, 0] = S_d@p_d
 
     # Main Loop
     for it in range(nIterations):
@@ -93,13 +99,11 @@ def RLS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, Delta: flo
             :Filter.filter_order+1]
 
         #   a priori estimated output
-        output_it = np.dot(coefficients.T.conj(), regressor)
-        outputs_vector = np.append(outputs_vector, output_it)
+        outputVector[it] = np.dot(coefficientVector[:, it].conj(), regressor)
 
         #   a priori error
-        error_it = desired_signal[it] - output_it
-        error_vector = np.append(error_vector, error_it)
-
+        errorVector[it] = desired_signal[it] - outputVector[it]
+        
         S_d = (1/Lambda)*(S_d - (S_d * regressor * regressor.conj()*S_d) /
                           (Lambda + regressor.T.conj()*S_d*regressor))
         p_d = Lambda*p_d + desired_signal[it].conj()*regressor
@@ -107,11 +111,9 @@ def RLS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, Delta: flo
         next_coefficients = S_d@p_d
 
         #   a posteriori estimated output
-        outputs_posteriori = np.append(
-            outputs_posteriori, np.dot(next_coefficients.conj(), regressor))
+        outputPosteriori[it] = np.dot(next_coefficients.conj(), regressor)
         #   a posteriori estiamted error
-        errors_posteriori = np.append(
-            errors_posteriori, desired_signal[it] - outputs_posteriori[-1])
+        errorPosteriori[it] = desired_signal[it] - outputPosteriori[it]
 
         #   Adapt Filter
         Filter.coefficients = next_coefficients
@@ -121,10 +123,10 @@ def RLS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, Delta: flo
         print(" ")
         print('Total runtime {:.03} ms'.format((time() - tic)*1000))
 
-    return {'outputs': outputs_vector,
-            'errors': error_vector,
+    return {'outputs': outputVector,
+            'errors': errorVector,
             'coefficients': Filter.coefficients_history,
-            'outputs_posteriori': outputs_posteriori,
-            'errors_posteriori': errors_posteriori}
+            'outputs_posteriori': outputPosteriori,
+            'errors_posteriori': errorPosteriori}
 
 #   EOF
