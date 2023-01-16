@@ -8,13 +8,17 @@
 
 ### Future Work
 
-The project is currently on its early stages (pre-alpha). The planned order of work is the following:
+The project is currently on its early stages (pre-alpha). The planned order of work for every kind of algorithm is: (Algorithm(1), Examples(2), Notebooks(3)). The following is the planned and current progress for each of the algorithms:
 
-- [x] LMS based algorithms
-- [x] LMS Examples + Notebooks
-- [x] RLS based algorithms
-- [ ] RLS Examples + Notebooks
-- [ ] SetMembership Algorithms
+- [2] LMS based algorithms
+- [1] RLS based algorithms
+- [1] SetMembership Algorithms
+- [2] BlindFilters
+- [ ] Fast Transversal RLS
+- [ ] IIR Filters
+- [ ] Nonlinear Filters
+- [ ] QR
+- [ ] Subband Filters
 - [ ] Lattice-based RLS
 
 ## 💻 Requirements
