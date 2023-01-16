@@ -15,7 +15,7 @@ The project is currently on its early stages (pre-alpha). The planned order of w
 - [x] SetMembership Algorithms
 - [ ] Lattice-based RLS
 - [ ] Fast Transversal RLS
-- [ ] QR
+- [x] QR
 - [ ] IIR Filters
 - [ ] Nonlinear Filters
 - [ ] Subband Filters
