@@ -1,4 +1,4 @@
-#  LMS.LMS.py
+#  lms.lms.py
 #
 #      Implements the Complex LMS algorithm for COMPLEX valued data.
 #      (Algorithm 3.2 - book: Adaptive Filtering: Algorithms and Practical
@@ -17,7 +17,7 @@ import numpy as np
 from time import time
 
 
-def LMS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: float = 1e-2, verbose: bool = False) -> dict:
+def lms(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: float = 1e-2, verbose: bool = False) -> dict:
     """
     Description
     -----------
@@ -70,11 +70,17 @@ def LMS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: floa
 
     # Initialization
     tic = time()
-    nIterations = desired_signal.size
-
+    nIterations = input_signal.size
+    nCoefficients = Filter.filter_order + 1
     regressor = np.zeros(Filter.filter_order+1, dtype=input_signal.dtype)
-    error_vector = np.array([])
-    outputs_vector = np.array([])
+
+    # Pre Allocations
+    coefficientVector = np.zeros((nCoefficients, nIterations + 1))
+    errorVector = np.zeros((nIterations,))
+    outputVector = np.zeros((nIterations,))
+
+    # Initial Coefficients Values
+    coefficientVector[:, 0] = Filter.coefficients
 
     # Main Loop
     for it in range(nIterations):
@@ -82,25 +88,21 @@ def LMS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: floa
         regressor = np.concatenate(([input_signal[it]], regressor))[
             :Filter.filter_order+1]
 
-        coefficients = Filter.coefficients
-        output_it = np.dot(coefficients.conj(), regressor)
+        outputVector[it] = np.dot(coefficientVector[:, it].conj(), regressor)
 
-        error_it = desired_signal[it] - output_it
+        errorVector[it] = desired_signal[it] - outputVector[it]
 
-        next_coefficients = coefficients + step * error_it.conj() * regressor
-
-        error_vector = np.append(error_vector, error_it)
-        outputs_vector = np.append(outputs_vector, output_it)
-
-        Filter.coefficients = next_coefficients
+        next_coefficients = coefficientVector[:, it] + \
+            step * errorVector[it].conj() * regressor
+        coefficientVector[:, it + 1] = next_coefficients
         Filter.coefficients_history.append(next_coefficients)
 
     if verbose == True:
         print(" ")
         print('Total runtime {:.03} ms'.format((time() - tic)*1000))
 
-    return {'outputs': outputs_vector,
-            'errors': error_vector,
+    return {'outputs': outputVector,
+            'errors': errorVector,
             'coefficients': Filter.coefficients_history}
 
 #   EOF

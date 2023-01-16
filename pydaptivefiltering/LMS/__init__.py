@@ -1,4 +1,4 @@
-from pydaptivefiltering.LMS.LMS import LMS
+from pydaptivefiltering.LMS.lms import lms
 from pydaptivefiltering.LMS.LMS_Newton import LMS_Newton
 from pydaptivefiltering.LMS.NLMS import NLMS
 from pydaptivefiltering.LMS.SignData import SignData

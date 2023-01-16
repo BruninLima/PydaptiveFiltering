@@ -1,7 +1,7 @@
 #  BlindFilters.bilinear_RLS.py
 #
-#      Implements the Constant-Modulus algorithm for COMPLEX valued data.
-#      (Algorithm 13.2 - book: Adaptive Filtering: Algorithms and Practical
+#      Implements the Bilinear RLS algorithm for REAL valued data.
+#      (Algorithm 11.3 - book: Adaptive Filtering: Algorithms and Practical
 #                                                       Implementation, Diniz)
 #
 #      Authors:
@@ -17,20 +17,21 @@ import numpy as np
 from time import time
 
 
-def bilinear_RLS(Filter, input_signal: np.ndarray, step: float = 1e-2, verbose: bool = False) -> dict:
+def bilinear_RLS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: float = 1e-2, verbose: bool = False) -> dict:
     """
     Description
     -----------
-        Implements the Constant-Modulus algorithm for COMPLEX valued data.
-        (Algorithm 13.2 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
+        Implements the Bilinear RLS algorithm for REAL valued data.
+        (Algorithm 11.3 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
 
     Syntax
     ------
-    OutputDictionary = affine_projection(Filter, desired_signal, input_signal, L, gamma, step, verbose)
+    OutputDictionary = bilinear_RLS(Filter, desired_signal, input_signal, L, gamma, step, verbose)
 
     Inputs
     -------
         filter  : Adaptive Filter                       filter object
+        desired : Desired signal to feed filter         numpy array (row vector)
         input   : Input signal to feed filter           numpy array (row vector)
         step    : Convergence (relaxation) factor.      float
         verbose : Verbose boolean                       bool
@@ -71,8 +72,6 @@ def bilinear_RLS(Filter, input_signal: np.ndarray, step: float = 1e-2, verbose: 
     tic = time()
     nIterations = input_signal.size
     nCoefficients = Filter.filter_order + 1
-    desiredLevel = np.mean(np.abs(input_signal) ** 4) / \
-        np.mean(np.abs(input_signal) ** 2)
 
     # Pre Allocations
     coefficientVector = np.zeros((nCoefficients, nIterations + 1))
@@ -82,18 +81,15 @@ def bilinear_RLS(Filter, input_signal: np.ndarray, step: float = 1e-2, verbose: 
     # Initial Coefficients Values
     coefficientVector[:, 0] = Filter.coefficients
 
-    # Improve source code regularity
-    prefixedInput = np.concatenate(
-        (np.random.randn(nCoefficients - 1), input_signal))
-
     # Main Loop
     for it in range(nIterations):
 
-        regressor = prefixedInput[it + (nCoefficients - 1) - 1:: -1]
+        regressor = np.concatenate(([input_signal[it]], regressor))[
+            :Filter.filter_order+1]
 
         outputVector[it] = np.dot(coefficientVector[:, it], regressor)
 
-        errorVector[it] = abs(outputVector[it]) ** 2 - desiredLevel
+        errorVector[it] = desired_signal[it] - outputVector[it]
 
         next_coefficients = coefficientVector[:, it] - step * 2 * \
             errorVector[it] * np.conj(outputVector[it]) * regressor
