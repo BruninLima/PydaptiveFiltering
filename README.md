@@ -16,7 +16,7 @@ The project is currently on its early stages (pre-alpha). The planned order of w
 - [x] Lattice-based RLS 
 - [x] Fast Transversal RLS
 - [x] QR
-- [ ] IIR Filters (0/5)
+- [ ] IIR Filters (1/5)
 - [ ] Nonlinear Filters (0/6)
 - [ ] Subband Filters (0/3)
 - [x] BlindFilters
