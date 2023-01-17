@@ -23,8 +23,8 @@ def RLS_Alt(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, Delta:
     """
     Description
     -----------
-        Implements the RLS algorithm for COMPLEX valued data. 
-        (Algorithm 5.3 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
+        Implements the Alternative RLS algorithm for COMPLEX valued data. 
+        (Algorithm 5.4 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
 
     Syntax
     ------
@@ -45,7 +45,6 @@ def RLS_Alt(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, Delta:
             outputs      : Store the estimated output of each iteration.        numpy array (column vector)
             errors       : Store the error for each iteration.                  numpy array (column vector)
             coefficients : Store the estimated coefficients for each iteration  numpy array (column vector)
-
             outputs_posteriori : Store the a posteriori estimated output of each iteration. (column vector)
             errors_posteriori  : Store the a posteriori error for each iteration.           (column vector)
 
