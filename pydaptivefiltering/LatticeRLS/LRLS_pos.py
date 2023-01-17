@@ -1,7 +1,7 @@
 #  Lattice_RLS.LRLS_pos.py
 #
-#      Implements the RLS algorithm for COMPLEX valued data.
-#      (Algorithm 5.3 - book: Adaptive Filtering: Algorithms and Practical
+#      Implements the Lattice RLS algorithm based on a posteriori errors.
+#      (Algorithm 7.1 - book: Adaptive Filtering: Algorithms and Practical
 #                                                       Implementation, Diniz)
 #
 #      Authors:
@@ -21,12 +21,12 @@ def LRLS_pos(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, Lambd
     """
     Description
     -----------
-        Implements the RLS algorithm for COMPLEX valued data. 
-        (Algorithm 5.3 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
+        Implements the Lattice RLS algorithm based on a posteriori errors. 
+        (Algorithm 7.1 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
 
     Syntax
     ------
-    OutputDictionary = RLS(Filter, desired_signal, input_signal, Delta, Lambda, verbose)
+    OutputDictionary = LRLS_pos(Filter, desired_signal, input_signal, Delta, Lambda, verbose)
 
     Inputs
     -------
@@ -123,7 +123,8 @@ def LRLS_pos(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, Lambd
             error_f[ot + 1] = error_f[ot] - kappa_b * error_b_Curr[ot]
 
             xiMin_f[ot + 1] = Lambda * xiMin_f[ot] + error_f[ot + 1] ** 2
-            xiMin_b_Curr[ot + 1] = Lambda * xiMin_b_Curr[ot] + error_b_Curr[ot + 1] ** 2
+            xiMin_b_Curr[ot + 1] = Lambda * \
+                xiMin_b_Curr[ot] + error_b_Curr[ot + 1] ** 2
 
             ladderVector[ot, it] = kappa_b
             kappaVector[ot, it] = kappa_f
@@ -136,4 +137,4 @@ def LRLS_pos(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, Lambd
 
     return ladderVector, kappaVector, posterioriErrorMatrix
 
-#EOF
+# EOF
