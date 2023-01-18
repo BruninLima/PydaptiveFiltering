@@ -27,7 +27,7 @@ import pydaptivefiltering as pdf
 
 def LMS_example():
     # Number of realizations within the ensemble
-    ensemble = 1
+    ensemble = 109
     # Number of iterations
     K = 500
     # Unknown system
@@ -82,18 +82,18 @@ def LMS_example():
     plt.plot(np.arange(1, K+1), MSE_av)
     plt.gca().semilogy(MSE)
     plt.grid()
-    
+
     plt.subplot(222)
     plt.gca().set_title('Learning Curve for MSEmin [dB]')
     plt.gca().semilogy(MSEmin)
     plt.grid()
-    
+
     plt.subplot(223)
     plt.gca().set_title('Evolution of the Coefficients (Real Part)')
     real_part = np.real(W_av[0, :])
     plt.gca().plot(real_part)
     plt.grid()
-    
+
     plt.subplot(224)
     plt.gca().set_title('Evolution of the Coefficients (Imaginary Part)')
     imag_part = np.imag(W_av[0, :])
@@ -101,7 +101,7 @@ def LMS_example():
     plt.grid()
 
     plt.tight_layout(pad=4.0)
-    plt.show()  
+    plt.show()
 
 
 if __name__ == "__main__":
