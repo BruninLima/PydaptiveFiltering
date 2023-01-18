@@ -2,5 +2,10 @@ from pydaptivefiltering.main import AdaptiveFilter, HELP
 from pydaptivefiltering import LMS
 from pydaptivefiltering import RLS
 from pydaptivefiltering import SetMembership
+from pydaptivefiltering import LatticeRLS
+from pydaptivefiltering import Fast_Transversal_RLS
 from pydaptivefiltering import QR
+from pydaptivefiltering import IIR_Filters
+from pydaptivefiltering import NonlinearFilters
+from pydaptivefiltering import SubbandFilters
 from pydaptivefiltering import BlindFilters

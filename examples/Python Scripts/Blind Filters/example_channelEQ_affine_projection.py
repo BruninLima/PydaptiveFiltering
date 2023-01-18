@@ -23,6 +23,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pydaptivefiltering as pdf
+from numpy.linalg import toeplitz
 
 ensemble = 200
 K = 10000
@@ -34,8 +35,7 @@ N = 5
 mu = 0.001
 delay = 1
 constellation = np.array([(2 + 2j), (-2 + 2j), (2 - 2j), (-2 - 2j)])/np.sqrt(2)
-HMatrix = np.matrix(np.concatenate(
-    (np.array([H[0]]), np.concatenate((H, np.zeros(N-1)), axis=0)), axis=1)).T
+HMatrix = toeplitz([H[0]] + [0]*(N-1), np.concatenate((H, [0]*(N-1))))
 
 # Finding the Wiener filter
 Rx = sigma_x2*np.eye(N+len(H)-1)
