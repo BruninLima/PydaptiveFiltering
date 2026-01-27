@@ -91,3 +91,5 @@ def test_iir_input_validation(filter_class, params):
     flt = filter_class(M=1, N=1, **params)
     with pytest.raises(ValueError):
         flt.optimize(np.zeros(10), np.zeros(5))
+
+        

@@ -41,18 +41,15 @@ class MultilayerPerceptron(AdaptiveFilter):
             step         : float (Convergence factor mu)
             w_init       : array_like, optional (Initial coefficients)
         """
-        # We pass a placeholder to super because MLP has multiple weight matrices
         super().__init__(n_neurons, w_init)
         
         self.n_neurons: int = n_neurons
         self.input_dim: int = input_dim
         self.step: float = step
 
-        # Initialization of weights and biases (Layer 1, 2 and 3)
-        # Using small random values as in the Matlab code
         self.w1: np.ndarray = 0.2 * np.random.randn(n_neurons, input_dim)
         self.w2: np.ndarray = 0.2 * np.random.randn(n_neurons, n_neurons)
-        self.w3: np.ndarray = 0.2 * np.random.randn(n_neurons) # Vector for output layer
+        self.w3: np.ndarray = 0.2 * np.random.randn(n_neurons) 
         
         self.b1: np.ndarray = 0.1 * np.random.randn(n_neurons)
         self.b2: np.ndarray = 0.1 * np.random.randn(n_neurons)
@@ -106,65 +103,63 @@ class MultilayerPerceptron(AdaptiveFilter):
         x_in: np.ndarray = np.asarray(input_signal, dtype=float)
         d_in: np.ndarray = np.asarray(desired_signal, dtype=float)
 
-        self._validate_inputs(x_in, d_in)
-        n_samples: int = x_in.size
+        # Detecta se o input é matriz (amostras, dim) ou vetor (amostras,)
+        is_multidim = x_in.ndim > 1
+        n_samples = x_in.shape[0]
         
-        y: np.ndarray = np.zeros(n_samples, dtype=float)
-        e: np.ndarray = np.zeros(n_samples, dtype=float)
+        # Validação manual para suportar matrizes
+        if n_samples != d_in.size:
+            raise ValueError(f"Tamanhos incompatíveis: input ({n_samples}) e desired ({d_in.size})")
+
+        y = np.zeros(n_samples, dtype=float)
+        e = np.zeros(n_samples, dtype=float)
         
-        # Internal history for MLP matrices
         w1_hist, w2_hist, w3_hist = [], [], []
 
-        # Delays for the regressor [x(k), d(k-1), x(k-1)]
         x_prev = 0.0
         d_prev = 0.0
 
         for k in range(n_samples):
-            # 1. Regressor construction
-            uxl = np.array([x_in[k], d_prev, x_prev], dtype=float)
+            # LÓGICA DO REGRESSOR:
+            # Se for multidimensional, usa a linha atual como vetor de entrada.
+            # Se for unidimensional, monta o regressor padrão [x(k), d(k-1), x(k-1)]
+            if is_multidim:
+                uxl = x_in[k]
+            else:
+                uxl = np.array([x_in[k], d_prev, x_prev], dtype=float)
             
-            # 2. Forward Pass
-            # Layer 1
+            # --- Forward Pass ---
             v1 = np.dot(self.w1, uxl) - self.b1
             y1 = self._sigmoid(v1)
             
-            # Layer 2
             v2 = np.dot(self.w2, y1) - self.b2
             y2 = self._sigmoid(v2)
             
-            # Output Layer (Linear output based on the provided Matlab script)
             y[k] = np.dot(y2, self.w3) - self.b3
-            
-            # 3. Error Computation
             e[k] = d_in[k] - y[k]
             
-            # 4. Backward Pass (Error Gradients)
-            # Output layer error is effectively e[k]
-            
-            # Hidden Layer 2 error gradient
+            # --- Backward Pass (Backpropagation) ---
+            # Erro na camada de saída (linear) refletido para a oculta 2
             er_hid2 = e[k] * self.w3 * self._sigmoid_derivative(v2)
             
-            # Hidden Layer 1 error gradient
+            # Erro da oculta 2 refletido para a oculta 1
             er_hid1 = np.dot(self.w2.T, er_hid2) * self._sigmoid_derivative(v1)
             
-            # 5. Weights and Biases Update
-            # Layer 3
+            # --- Weight Updates ---
             self.w3 += 2 * self.step * e[k] * y2
             self.b3 -= 2 * self.step * e[k]
             
-            # Layer 2
             self.w2 += 2 * self.step * np.outer(er_hid2, y1)
             self.b2 -= 2 * self.step * er_hid2
             
-            # Layer 1
             self.w1 += 2 * self.step * np.outer(er_hid1, uxl)
             self.b1 -= 2 * self.step * er_hid1
             
-            # Update delays
-            x_prev = x_in[k]
+            # Atualização dos estados para o próximo k (configuração série-paralela)
+            # x_prev recebe o valor escalar se x_in for 1D
+            x_prev = x_in[k] if not is_multidim else x_in[k, 0]
             d_prev = d_in[k]
             
-            # Recording history
             if self._record_history:
                 w1_hist.append(self.w1.copy())
                 w2_hist.append(self.w2.copy())
@@ -182,5 +177,4 @@ class MultilayerPerceptron(AdaptiveFilter):
                 'w3': w3_hist
             }
         }
-
 # EOF

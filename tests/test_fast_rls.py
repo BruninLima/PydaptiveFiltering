@@ -213,3 +213,34 @@ def test_real_stab_fast_rls_complex_input_policy(real_rls_test_data):
 
     assert "outputs" in res
     assert np.isrealobj(res["outputs"])
+
+def test_long_term_stability_comparison(real_rls_test_data):
+    """Verifica se o StabFastRLS sobrevive onde o FastRLS padrão pode divergir."""
+    # Gera um sinal muito longo (ex: 20k amostras)
+    x_long, d_long, _ = generate_real_fir_data(n_samples=20000, seed=42)
+    order = 3 # Ordem maior aumenta instabilidade
+    
+    f_stab = StabFastRLS(filter_order=order, forgetting_factor=0.999, epsilon=0.5)
+    res_stab = f_stab.optimize(x_long, d_long)
+    
+    # Stab deve ser finito e ter erro razoável no final
+    assert np.all(np.isfinite(res_stab["outputs"]))
+    mse_end = np.mean(np.square(res_stab["outputs"][-500:] - d_long[-500:]))
+    assert mse_end < 1.0 # Não divergiu
+
+def test_tracking_performance_abrupt_change(real_rls_test_data):
+    """Testa se o StabFastRLS consegue rastrear uma mudança no sistema."""
+    x, d, w_true = generate_real_fir_data(n_samples=1000, seed=1)
+    # Muda o sistema no meio
+    w_new = -w_true 
+    x2, d2, _ = generate_real_fir_data(n_samples=1000, w_true=w_new, seed=2)
+    
+    x_total = np.concatenate([x, x2])
+    d_total = np.concatenate([d, d2])
+    
+    f_stab = StabFastRLS(filter_order=len(w_true)-1, forgetting_factor=0.995, epsilon=0.5)
+    res = f_stab.optimize(x_total, d_total)
+    
+    w_final = _last_w(res["coefficients"])
+    # Deve estar perto do NOVO sistema
+    np.testing.assert_allclose(np.real(w_final), w_new, atol=0.2)

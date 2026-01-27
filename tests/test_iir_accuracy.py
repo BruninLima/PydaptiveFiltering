@@ -116,3 +116,32 @@ def test_iir_transfer_function_match(filter_class, target_system):
     # A diferença entre as respostas temporais deve ser pequena
     dist = np.linalg.norm(y_true[:20] - y_est[:20])
     assert dist < 0.5
+
+def test_iir_stability_check(target_system):
+    """Verifica se o filtro estimado permanece estável (polos dentro do círculo unitário)."""
+    x, d = generate_iir_system(1000, [1.0], [1.0, -0.9], noise_std=0.01) # Polo próximo de 1
+    flt = GaussNewton(M=0, N=1, step=0.1)
+    res = flt.optimize(x, d)
+    
+    w_final = res["coefficients"][-1]
+    # Para 1ª ordem: H(z) = b / (1 - a1*z^-1). O polo é 'a1'.
+    polo = w_final[0] 
+    assert np.abs(polo) < 1.0, f"Filtro instável com polo em {polo}"
+
+def test_bias_comparison_sm_vs_ee():
+    """Demonstra que Steiglitz-McBride tem menos viés que Error Equation com ruído alto."""
+    b, a = [0.5], [1.0, -0.6]
+    theta_true = [0.6, 0.5]
+    x, d = generate_iir_system(4000, b, a, noise_std=0.2) # Ruído alto
+    
+    ee = ErrorEquation(M=0, N=1, lambda_hat=0.99)
+    sm = SteiglitzMcBride(M=0, N=1, step=0.01)
+    
+    res_ee = ee.optimize(x, d)
+    res_sm = sm.optimize(x, d)
+    
+    msd_ee = np.sum((res_ee["coefficients"][-1] - theta_true)**2)
+    msd_sm = np.sum((res_sm["coefficients"][-1] - theta_true)**2)
+    
+    # Steiglitz-McBride deve chegar mais perto dos parâmetros reais
+    assert msd_sm < msd_ee

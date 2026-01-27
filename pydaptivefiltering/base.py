@@ -48,11 +48,14 @@ class AdaptiveFilter(ABC):
         self.w_history.append(self.w.copy())
 
     def _validate_inputs(self, x, d):
-        """Validação comum para todos os filtros adaptativos."""
-        if x.size != d.size:
+        # Use len() ou x.shape[0] em vez de x.size
+        n_samples_x = x.shape[0] if x.ndim > 1 else x.size
+        n_samples_d = d.shape[0] if d.ndim > 1 else d.size
+        
+        if n_samples_x != n_samples_d:
             raise ValueError(
-                f"Tamanhos incompatíveis: input_signal ({x.size}) e "
-                f"desired_signal ({d.size}) devem ter o mesmo comprimento."
+                f"Tamanhos incompatíveis: input ({n_samples_x}) e "
+                f"desired ({n_samples_d}) devem ter o mesmo número de amostras."
             )
         
     def filter_signal(self, input_signal: Union[np.ndarray, list]) -> np.ndarray:

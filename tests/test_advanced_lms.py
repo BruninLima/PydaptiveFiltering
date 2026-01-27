@@ -102,3 +102,69 @@ def test_newton_tracking_performance(system_data, calculate_msd):
     
     # Deve convergir para o novo estado (-w_opt)
     assert calculate_msd(-w_opt, model.w) < 1e-2
+
+def test_newton_scale_invariance(system_data_real, calculate_msd):
+    """
+    LMS-Newton deve convergir mesmo se escalarmos o sinal de entrada,
+    desde que a matriz inversa compense o ganho.
+    """
+    x = system_data_real["x"]
+    d = system_data_real["d_ideal"]
+    order = system_data_real["order"]
+    
+    # Escala o sinal por 10
+    x_scaled = x * 10.0
+    d_scaled = d * 10.0
+    
+    init_inv = np.eye(order + 1)
+    model = LMSNewton(order, initial_inv_rx=init_inv, step=0.1, alpha=0.95)
+    model.optimize(x_scaled, d_scaled)
+    
+    # O vetor de pesos w deve ser o mesmo, independente da escala do sinal
+    # (Pois d_ideal também foi escalado proporcionalmente)
+    assert calculate_msd(system_data_real["w_optimal"], model.w) < 1e-2
+
+def test_algorithms_robustness_to_zero_input(system_data):
+    """Verifica se os algoritmos evitam divisão por zero usando regularização."""
+    order = system_data["order"]
+    x_zeros = np.zeros(100, dtype=complex)
+    d_zeros = np.zeros(100, dtype=complex)
+
+    # CORREÇÃO: Adicionados alpha e initial_power exigidos pelo seu código
+    model_td = TDomainDFT(
+        filter_order=order, 
+        gamma=1e-6, 
+        alpha=0.1, 
+        initial_power=1.0, 
+        step=0.1
+    )
+    model_td.optimize(x_zeros, d_zeros)
+
+    init_inv = np.eye(order + 1)
+    model_newton = LMSNewton(order, initial_inv_rx=init_inv, alpha=0.9)
+    model_newton.optimize(x_zeros, d_zeros)
+
+    assert not np.isnan(model_td.w).any(), "TDomainDFT falhou com entrada zero (NaN detected)"
+    assert not np.isnan(model_newton.w).any(), "LMSNewton falhou com entrada zero (NaN detected)"
+
+def test_tdomain_convergence_speed_colored_noise(correlated_data_real, calculate_msd):
+    """Em ruído colorido, o TDomainDFT deve superar o LMS padrão."""
+    x, d, h_true, order = correlated_data_real
+
+    lms = LMS(order, step=0.01)
+    lms.optimize(x[:1000], d[:1000])
+
+    # CORREÇÃO: Adicionados gamma e initial_power exigidos pelo seu código
+    td_dft = TDomainDFT(
+        filter_order=order, 
+        gamma=1e-4, 
+        alpha=0.1, 
+        initial_power=1.0, 
+        step=0.1
+    )
+    td_dft.optimize(x[:1000], d[:1000])
+
+    msd_lms = calculate_msd(h_true, lms.w)
+    msd_dft = calculate_msd(h_true, td_dft.w)
+
+    assert msd_dft < msd_lms
