@@ -1,106 +1,125 @@
 #  LMS.SignData.py
 #
-#      Implements the Sign-Data LMS algorithm for COMPLEX valued data.
-#      (Algorithm 4.1 - book: Adaptive Filtering: Algorithms and Practical
-#                                                       Implementation, Diniz)
+#       Implements the Sign-Data LMS algorithm for COMPLEX valued data.
+#       (Algorithm 4.1 - book: Adaptive Filtering: Algorithms and Practical
+#                                                              Implementation, Diniz)
 #
-#      Authors:
-#       . Bruno Ramos Lima Netto        - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-#       . Guilherme de Oliveira Pinto   - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-#       . Markus Vinícius Santos Lima   - mvsl20@gmailcom           & markus@lps.ufrj.br
-#       . Wallace Alves Martins         - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-#       . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com          & wagner@lps.ufrj.br
-#       . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
+#       Authors:
+#        . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
+#        . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
+#        . Markus Vinícius Santos Lima    - mvsl20@gmailcom           & markus@lps.ufrj.br
+#        . Wallace Alves Martins          - wallace.wam@gmail.com     & wallace@lps.ufrj.br
+#        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
+#        . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
 
-# Imports
+#Imports
 import numpy as np
 from time import time
+from typing import Optional, Union, List, Dict
+from pydaptivefiltering.main import AdaptiveFilter
 
-
-def SignData(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: float = 1e-2, verbose: bool = True) -> dict:
+class SignData(AdaptiveFilter):
     """
     Description
     -----------
         Implements the Sign-Data LMS algorithm for COMPLEX valued data. 
         (Algorithm 4.1 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
-
-    Syntax
-    ------
-    OutputDictionary = SignData(Filter, desired_signal, input_signal, step, verbose)
-
-    Inputs
-    -------
-        filter  : Adaptive Filter                       filter object
-        desired : Desired signal                        numpy array (row vector)
-        input   : Input signal to feed filter           numpy array (row vector)
-        step    : Convergence (relaxation) factor.      float
-        verbose : Verbose boolean                       bool
-
-    Outputs
-    -------
-        dictionary:
-            outputs      : Store the estimated output of each iteration.        numpy array (collumn vector)
-            errors       : Store the error for each iteration.                  numpy array (collumn vector)
-            coefficients : Store the estimated coefficients for each iteration  numpy array (collumn vector)
-
-    Main Variables
-    --------- 
-        regressor
-        outputs_vector[k] represents the output errors at iteration k    
-        FIR error vectors. 
-        error_vector[k] represents the output errors at iteration k.
-
-    Misc Variables
-    --------------
-        tic
-        nIterations
-
-
-    Authors
-    -------
-        . Bruno Ramos Lima Netto        - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-        . Guilherme de Oliveira Pinto   - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-        . Markus Vinícius Santos Lima   - mvsl20@gmailcom           & markus@lps.ufrj.br
-        . Wallace Alves Martins         - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com          & wagner@lps.ufrj.br
-        . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
-
     """
 
-    # Initialization
-    tic = time()
-    nIterations = desired_signal.size
+    def __init__(
+        self, 
+        filter_order: int, 
+        step: float = 1e-2, 
+        w_init: Optional[Union[np.ndarray, list]] = None
+    ) -> None:
+        """
+        Inputs
+        -------
+            filter_order : int (The order of the filter M)
+            step         : float (Convergence factor mu)
+            w_init       : array_like, optional (Initial coefficients)
+        """
+        super().__init__(filter_order, w_init)
+        self.step: float = step
 
-    regressor = np.zeros(Filter.filter_order+1, dtype=input_signal.dtype)
-    error_vector = np.array([])
-    outputs_vector = np.array([])
+    def optimize(
+        self, 
+        input_signal: Union[np.ndarray, list], 
+        desired_signal: Union[np.ndarray, list], 
+        verbose: bool = False
+    ) -> Dict[str, Union[np.ndarray, List[np.ndarray]]]:
+        """
+        Description
+        -----------
+            Executes the weight update process for the Sign-Data LMS algorithm.
 
-    # Main Loop
-    for it in range(nIterations):
+        Inputs
+        -------
+            desired_signal : numpy array (row vector)
+            input_signal   : numpy array (row vector)
+            verbose        : bool (Verbose boolean)
 
-        regressor = np.concatenate(([input_signal[it]], regressor))[
-            :Filter.filter_order+1]
+        Outputs
+        -------
+            dictionary:
+                outputs      : Store the estimated output of each iteration.
+                errors       : Store the error for each iteration.
+                coefficients : Store the estimated coefficients for each iteration.
 
-        coefficients = Filter.coefficients
-        output_it = np.dot(coefficients.conj(), regressor)
+        Main Variables
+        --------- 
+            regressor      : Vector containing the tapped delay line.
+            outputs_vector : Represents the output at iteration k.
+            error_vector   : Represents the output errors at iteration k.
 
-        error_it = desired_signal[it] - output_it
+        Misc Variables
+        --------------
+            tic            : Initial time for runtime calculation.
+            n_samples      : Number of iterations based on signal size.
 
-        next_coefficients = coefficients + 2 * \
-            step * error_it.conj() * np.sign(regressor)
+        Authors
+        -------
+            . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
+            . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
+            . Markus Vinícius Santos Lima    - mvsl20@gmailcom           & markus@lps.ufrj.br
+            . Wallace Alves Martins          - wallace.wam@gmail.com     & wallace@lps.ufrj.br
+            . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
+            . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
+        """
+        tic: float = time()
+        
+        x: np.ndarray = np.asarray(input_signal, dtype=complex)
+        d: np.ndarray = np.asarray(desired_signal, dtype=complex)
 
-        error_vector = np.append(error_vector, error_it)
-        outputs_vector = np.append(outputs_vector, output_it)
+        self._validate_inputs(x, d)
+        n_samples: int = x.size
+        
+        y: np.ndarray = np.zeros(n_samples, dtype=complex)
+        e: np.ndarray = np.zeros(n_samples, dtype=complex)
+        
+        x_padded: np.ndarray = np.zeros(n_samples + self.m, dtype=complex)
+        x_padded[self.m:] = x
 
-        Filter.coefficients = next_coefficients
-        Filter.coefficients_history.append(next_coefficients)
+        
 
-    if verbose == True:
-        print(" ")
-        print('Total runtime {:.03} ms'.format((time() - tic)*1000))
+        for k in range(n_samples):
+            x_k: np.ndarray = x_padded[k : k + self.m + 1][::-1]
+            
+            y[k] = np.dot(self.w.conj(), x_k)
+            
+            e[k] = d[k] - y[k]
 
-    return {'outputs': outputs_vector,
-            'errors': error_vector,
-            'coefficients': Filter.coefficients_history}
+            self.w = self.w + 2 * self.step * np.conj(e[k]) * np.sign(x_k)
+            
+            self._record_history()
 
-#   EOF
+        if verbose:
+            print(f"Sign-Data LMS completed in {(time() - tic)*1000:.03f} ms")
+
+        return {
+            'outputs': y,
+            'errors': e,
+            'coefficients': self.w_history
+        }
+
+# EOF

@@ -1,136 +1,145 @@
-#  SM.NLMS.py
+#  SetMembership.BNLMS.py
 #
-#      Implements the Set-membership Biormalized LMS algorithm for REAL valued data.
-#      (Algorithm 6.5 - book: Adaptive Filtering: Algorithms and Practical
-#                                                       Implementation, Diniz)
+#       Implements the Set-membership Binormalized LMS algorithm for COMPLEX valued data.
+#       (Algorithm 6.5 - book: Adaptive Filtering: Algorithms and Practical
+#                                                              Implementation, Diniz)
 #
-#      Authors:
-#       . Bruno Ramos Lima Netto        - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-#       . Guilherme de Oliveira Pinto   - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-#       . Markus Vinícius Santos Lima   - mvsl20@gmailcom           & markus@lps.ufrj.br
-#       . Wallace Alves Martins         - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-#       . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com          & wagner@lps.ufrj.br
-#       . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
+#       Authors:
+#        . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
+#        . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilhermepinto7@gmail.com
+#        . Markus Vinícius Santos Lima    - mvsl20@gmailcom           & markus@lps.ufrj.br
+#        . Wallace Alves Martins          - wallace.wam@gmail.com     & wallace@lps.ufrj.br
+#        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
+#        . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
 
-# Imports
+#Imports
 import numpy as np
 from time import time
+from typing import Optional, Union, List, Dict
+from pydaptivefiltering.main import AdaptiveFilter
 
-
-def BNLMS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, gamma_bar: float, gamma: float, verbose: bool = False) -> dict:
+class SM_BNLMS(AdaptiveFilter):
     """
     Description
     -----------
-        Implements the Set-membership Biormalized LMS algorithm for REAL valued data.
-        (Algorithm 6.5 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
-
-    Syntax
-    ------
-    OutputDictionary = SM.NLMS(Filter, desired_signal, input_signal, verbose)
-
-    Inputs
-    -------
-        filter  : Adaptive Filter                       filter object
-        desired : Desired signal                        numpy array (row vector)
-        input   : Input signal to feed filter           numpy array (row vector)
-        gamma_bar : Upper bound for the error modulus.
-        gamma                 : Regularization factor.
-        verbose : Verbose boolean                       bool
-
-    Outputs
-    -------
-        dictionary:
-            outputs      : Store the estimated output of each iteration.        numpy array (collumn vector)
-            errors       : Store the error for each iteration.                  numpy array (collumn vector)
-            coefficients : Store the estimated coefficients for each iteration. numpy array (collumn vector)
-
-    Main Variables
-    --------- 
-        regressor
-        outputs_vector[k] represents the output errors at iteration k    
-        FIR error vectors. 
-        error_vector[k] represents the output errors at iteration k.
-
-    Misc Variables
-    --------------
-        tic
-        nIterations
-
-
-    Comments:
-            Set-membership filtering implies that the (adaptive) filter coefficients are only
-        updated if the magnitude of the error is greater than S.gamma_bar. In practice, we
-        choose S.gamma_bar as a function of the noise variance (sigma_n2). A commom choice
-        is S.gamma_bar = sqrt(5 * sigma_n2).
-
-    Authors
-    -------
-        . Bruno Ramos Lima Netto        - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-        . Guilherme de Oliveira Pinto   - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-        . Markus Vinícius Santos Lima   - mvsl20@gmailcom           & markus@lps.ufrj.br
-        . Wallace Alves Martins         - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com          & wagner@lps.ufrj.br
-        . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
-
+    Implements the Set-membership Binormalized LMS (SM-BNLMS) algorithm for COMPLEX valued data.
+    This algorithm is a specific case of SM-AP with L=1, designed to improve 
+    convergence speed over SM-NLMS with low computational overhead by reusing 
+    the previous regressor.
+    (Algorithm 6.5 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
     """
 
-    # Initialization
-    tic = time()
-    nIterations = desired_signal.size
+    def __init__(
+        self, 
+        filter_order: int, 
+        gamma_bar: float, 
+        gamma: float, 
+        w_init: Optional[Union[np.ndarray, list]] = None
+    ) -> None:
+        """
+        Inputs
+        -------
+            filter_order : int (Filter order M)
+            gamma_bar    : float (Upper bound for the error modulus)
+            gamma        : float (Regularization factor to avoid division by zero)
+            w_init       : array_like, optional (Initial weights)
+        """
+        super().__init__(filter_order, w_init)
+        self.gamma_bar = gamma_bar
+        self.gamma = gamma
+        self.n_updates = 0
+        self.regressor_prev = np.zeros(self.m + 1, dtype=complex)
 
-    regressor = np.zeros(Filter.filter_order+1, dtype=input_signal.dtype)
-    error_vector = np.array([])
-    outputs_vector = np.array([])
-    nUpdates = 0
+    def optimize(
+        self, 
+        input_signal: Union[np.ndarray, list], 
+        desired_signal: Union[np.ndarray, list], 
+        verbose: bool = False
+    ) -> Dict[str, Union[np.ndarray, List[np.ndarray], int]]:
+        """
+        Description
+        -----------
+            Executes the optimization process for the SM-BNLMS algorithm.
 
-    # Main Loop
+        Inputs
+        -------
+            input_signal   : np.ndarray | list (Input vector x)
+            desired_signal : np.ndarray | list (Desired vector d)
+            verbose        : bool (Verbose boolean)
 
-    prefixedInput = np.concatenate(
-        (np.zeros(Filter.filter_order), input_signal))
+        Outputs
+        -------
+            dictionary:
+                outputs      : Estimated output of each iteration.
+                errors       : Error for each iteration.
+                coefficients : History of estimated coefficients.
+                n_updates    : Total number of coefficient updates performed.
 
-    for it in range(nIterations):
+        Main Variables
+        --------- 
+            regressor        : Current input vector x(k) at iteration k.
+            regressor_prev   : Previous input vector x(k-1).
+            lambda1, lambda2 : Lagrange multipliers used for the weight update constraint.
+            den              : Denominator including regularization and cross-correlation terms.
 
-        regressor_prev = regressor
+        Authors
+        -------
+            . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com
+            . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com
+            . Markus Vinícius Santos Lima    - mvsl20@gmailcom
+            . Wallace Alves Martins          - wallace.wam@gmail.com
+            . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com
+            . Paulo Sergio Ramirez Diniz    - diniz@lps.ufrj.br
+        """
+        tic = time()
+        x_in = np.asarray(input_signal, dtype=complex)
+        d_in = np.asarray(desired_signal, dtype=complex)
+        self._validate_inputs(x_in, d_in)
 
-        regressor = prefixedInput[it+(Filter.filter_order):-1]
+        n_iterations = d_in.size
+        self.outputs = np.zeros(n_iterations, dtype=complex)
+        self.errors = np.zeros(n_iterations, dtype=complex)
+        self.n_updates = 0
 
-        coefficients = Filter.coefficients
+        for k in range(n_iterations):
+            self.regressor_prev = np.copy(self.regressor)
+            
+            self.regressor = np.roll(self.regressor, 1)
+            self.regressor[0] = x_in[k]
 
-        output_it = np.dot(coefficients.conj(), regressor)
+            self.outputs[k] = np.dot(self.w.conj(), self.regressor)
+            self.errors[k] = d_in[k] - self.outputs[k]
+            
+            error_abs = np.abs(self.errors[k])
 
-        error_it = desired_signal[it] - output_it
+            if error_abs > self.gamma_bar:
+                self.n_updates += 1
+                
+                mu = 1.0 - (self.gamma_bar / error_abs)
+                
+                norm_sq = np.real(np.dot(self.regressor.conj(), self.regressor))
+                prev_norm_sq = np.real(np.dot(self.regressor_prev.conj(), self.regressor_prev))
+                cross_term = np.dot(self.regressor_prev.conj(), self.regressor)
+                
+                den = self.gamma + (norm_sq * prev_norm_sq) - np.abs(cross_term)**2
+                
+                lambda1 = (mu * self.errors[k] * prev_norm_sq) / den
+                lambda2 = -(mu * self.errors[k] * np.conj(cross_term)) / den
+                
+                self.w += (np.conj(lambda1) * self.regressor) + (np.conj(lambda2) * self.regressor_prev)
 
-        if abs(error_it) > gamma_bar:
+            self._record_history()
 
-            nUpdates += 1
+        if verbose:
+            runtime = (time() - tic) * 1000
+            print(f"[SM-BNLMS] Updates: {self.n_updates}/{n_iterations}")
+            print(f"Runtime: {runtime:.03f} ms")
 
-            mu = 1 - (gamma_bar/abs(error_it))
+        return {
+            'outputs': self.outputs,
+            'errors': self.errors,
+            'coefficients': self.w_history,
+            'n_updates': self.n_updates
+        }
 
-        else:
-
-            mu = 0
-
-        error_vector = np.append(error_vector, error_it)
-        outputs_vector = np.append(outputs_vector, output_it)
-
-        prev_norm_sq = np.dot(regressor_prev, regressor_prev)
-        norm_sq = np.dot(regressor, regressor)
-        aux_prev_reg = np.dot(regressor_prev.conj(), regressor)
-
-        lambda1 = (mu*error_it*prev_norm_sq) / \
-            (gamma + norm_sq * prev_norm_sq - (aux_prev_reg) ^ 2)
-        lambda2 = -(mu*error_it*aux_prev_reg) / \
-            (gamma + norm_sq * prev_norm_sq - (aux_prev_reg) ^ 2)
-
-        coefficients = coefficients + lambda1*regressor + lambda2*regressor_prev
-
-        Filter.coefficients = coefficients
-
-    if verbose == True:
-        print(" ")
-        print('Total runtime {:.03} ms'.format((time() - tic)*1000))
-
-    return {'outputs': outputs_vector,
-            'errors': error_vector, 'coefficients': Filter.coefficients_history}, nUpdates
-
-#   EOF
+# EOF

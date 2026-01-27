@@ -1,113 +1,123 @@
 #  LMS.DualSign.py
 #
-#      Implements the DualSign LMS algorithm for REAL valued data.
-#      (Modified version of Algorithm 4.1 - book: Adaptive Filtering: Algorithms
-#                                                       and Practical Implementation, Diniz)
+#       Implements the DualSign LMS algorithm for REAL valued data.
+#       (Modified version of Algorithm 4.1 - book: Adaptive Filtering: Algorithms
+#                                              and Practical Implementation, Diniz)
 #
-#      Authors:
-#       . Bruno Ramos Lima Netto        - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-#       . Guilherme de Oliveira Pinto   - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-#       . Markus Vinícius Santos Lima   - mvsl20@gmailcom           & markus@lps.ufrj.br
-#       . Wallace Alves Martins         - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-#       . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com          & wagner@lps.ufrj.br
-#       . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
+#       Authors:
+#        . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
+#        . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
+#        . Markus Vinícius Santos Lima    - mvsl20@gmailcom           & markus@lps.ufrj.br
+#        . Wallace Alves Martins          - wallace.wam@gmail.com     & wallace@lps.ufrj.br
+#        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
+#        . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
 
-# Imports
+#Imports
 import numpy as np
 from time import time
+from typing import Optional, Union, List, Dict
+from pydaptivefiltering.main import AdaptiveFilter
 
-
-def DualSign(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, rho: float, gamma: int, step: float = 1e-2,  verbose: bool = False) -> dict:
+class DualSign(AdaptiveFilter):
     """
     Description
     -----------
-        Implements the DualSign LMS algorithm for REAL valued data.
-        (Modified version of Algorithm 4.1 - book: Adaptive Filtering: Algorithms
-                                                and Practical Implementation, Diniz)
+    Implements the DualSign LMS algorithm for REAL valued data.
+    This algorithm uses a sign-error approach with two different gains 
+    controlled by a threshold (rho) on the error magnitude.
 
-    Syntax
-    ------
-    OutputDictionary = Dual_sign(Filter, desired_signal, input_signal, step, verbose)
-
-    Inputs
-    -------
-        filter  : Adaptive Filter                                       filter object
-        desired : Desired signal                                        numpy array (row vector)
-        input   : Input signal to feed filter                           numpy array (row vector)
-        rho     : Error modulus threshold                               float
-        gamma   : Gain factor. Gamma is a power of two. (gamma > 1)     int
-        step    : Convergence (relaxation) factor.                      float
-        verbose : Verbose boolean                                       bool
-
-    Outputs
-    -------
-        dictionary:
-            outputs      : Store the estimated output of each iteration.        numpy array (collumn vector)
-            errors       : Store the error for each iteration.                  numpy array (collumn vector)
-            coefficients : Store the estimated coefficients for each iteration  numpy array (collumn vector)
-
-    Main Variables
-    --------- 
-        regressor
-        outputs_vector[k] represents the output errors at iteration k    
-        FIR error vectors. 
-        error_vector[k] represents the output errors at iteration k.
-
-    Misc Variables
-    --------------
-        tic
-        nIterations
-
-
-    Authors
-    -------
-        . Bruno Ramos Lima Netto        - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-        . Guilherme de Oliveira Pinto   - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-        . Markus Vinícius Santos Lima   - mvsl20@gmailcom           & markus@lps.ufrj.br
-        . Wallace Alves Martins         - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com          & wagner@lps.ufrj.br
-        . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
-
+    Parameters
+    ----------
+    filter_order : int
+        Order of the filter (number of coefficients - 1).
+    rho : float
+        Error modulus threshold that decides which gain factor to use.
+    gamma : int
+        Gain factor (must be > 1). Usually a power of two to facilitate 
+        hardware implementation.
+    step : float, optional
+        Convergence (relaxation) factor, also known as mu. Default is 1e-2.
+    w_init : np.ndarray | list, optional
+        Initial weights of the filter. If None, initialized with zeros.
     """
 
-    # Initialization
-    tic = time()
-    nIterations = desired_signal.size
+    def __init__(
+        self, 
+        filter_order: int, 
+        rho: float, 
+        gamma: int, 
+        step: float = 1e-2, 
+        w_init: Optional[Union[np.ndarray, list]] = None
+    ) -> None:
+        super().__init__(filter_order, w_init)
+        self.rho: float = rho
+        self.gamma: int = gamma
+        self.step: float = step
 
-    regressor = np.zeros(Filter.filter_order+1, dtype=input_signal.dtype)
-    error_vector = np.array([])
-    outputs_vector = np.array([])
-    dualSignError = 0
-    # Main Loop
-    for it in range(nIterations):
+    def optimize(
+        self, 
+        input_signal: Union[np.ndarray, list], 
+        desired_signal: Union[np.ndarray, list], 
+        verbose: bool = False
+    ) -> Dict[str, Union[np.ndarray, List[np.ndarray]]]:
+        """
+        Executes the DualSign LMS adaptation process.
 
-        regressor = np.concatenate(([input_signal[it]], regressor))[
-            :Filter.filter_order+1]
+        Parameters
+        ----------
+        input_signal : np.ndarray | list
+            Input signal vector x(k).
+        desired_signal : np.ndarray | list
+            Desired signal vector d(k).
+        verbose : bool, optional
+            If True, prints the execution time and status. Default is False.
 
-        coefficients = Filter.coefficients
-        output_it = np.dot(coefficients.conj(), regressor)
+        Returns
+        -------
+        dict
+            A dictionary containing:
+            - 'outputs': np.ndarray of the estimated output signal.
+            - 'errors': np.ndarray of the estimation error signal.
+            - 'coefficients': list of the weight vectors at each iteration.
+        """
+        tic: float = time()
+        
+        x_in: np.ndarray = np.asarray(input_signal, dtype=float)
+        d_in: np.ndarray = np.asarray(desired_signal, dtype=float)
+        
+        self._validate_inputs(x_in, d_in)
+        n_iterations: int = d_in.size
+        
+        self.errors: np.ndarray = np.zeros(n_iterations, dtype=float)
+        self.outputs: np.ndarray = np.zeros(n_iterations, dtype=float)
 
-        error_it = desired_signal[it] - output_it
+        
 
-        if abs(error_it) > rho:
-            dualSignError = gamma*np.sign(error_it)
-        else:
-            dualSignError = np.sign(error_it)
+        for k in range(n_iterations):
+            self.regressor: np.ndarray = np.roll(self.regressor, 1)
+            self.regressor[0] = x_in[k]
 
-        next_coefficients = coefficients + 2 * step * dualSignError * regressor
+            self.outputs[k] = np.dot(self.w, self.regressor)
 
-        error_vector = np.append(error_vector, error_it)
-        outputs_vector = np.append(outputs_vector, output_it)
+            self.errors[k] = d_in[k] - self.outputs[k]
 
-        Filter.coefficients = next_coefficients
-        Filter.coefficients_history.append(next_coefficients)
+            if np.abs(self.errors[k]) > self.rho:
+                dual_sign_error: float = self.gamma * np.sign(self.errors[k])
+            else:
+                dual_sign_error: float = np.sign(self.errors[k])
 
-    if verbose == True:
-        print(" ")
-        print('Total runtime {:.03} ms'.format((time() - tic)*1000))
+            self.w = self.w + 2 * self.step * dual_sign_error * self.regressor
+            
+            self.w_history.append(self.w.copy())
 
-    return {'outputs': outputs_vector,
-            'errors': error_vector,
-            'coefficients': Filter.coefficients_history}
+        if verbose:
+            runtime: float = (time() - tic) * 1000
+            print(f"\n[DualSign] Optimization completed in {runtime:.3f} ms.")
 
-#   EOF
+        return {
+            'outputs': self.outputs,
+            'errors': self.errors,
+            'coefficients': self.w_history
+        }
+
+# EOF

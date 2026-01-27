@@ -22,82 +22,99 @@
 # Imports
 import numpy as np
 import matplotlib.pyplot as plt
-import pydaptivefiltering as pdf
+from time import time
+from pydaptivefiltering.LMS import NLMS
 
-
-def NLMS_example():
+def run_nlms_system_identification():
     """
-    Types:
-    ------
-    None -> '(Filter, dictionary["outputs", "errors", "coefficients"])'
-
-    Example for the LMS algorithm, SignData and SignError. 
-
+    Example: System Identification using the Normalized LMS (NLMS) Class.
+    Based on Algorithm 4.3 from Paulo S. R. Diniz's book.
     """
-    # Parameters
-    K = 70                   # Number of iterations
-    H = np.array([0.32+0.21*1j, -0.3+0.7*1j, 0.5-0.8*1j, 0.2+0.5*1j])
-    Wo = H                   # Unknown System
-    sigma_n2 = 0.04          # Noise Power
-    N = 4                    # Number of coefficients of the adaptive filter
-    mu = 0.1                 # Convergence factor (step) (0 < μ < 1)
-    gamma = 1e-5
+    # 1. Experiment Parameters
+    n_samples = 600
+    h_unknown = np.array([0.32+0.21*1j, -0.3+0.7*1j, 0.5-0.8*1j, 0.2+0.5*1j])
+    filter_order = len(h_unknown) - 1
+    sigma_n2 = 0.04  # Noise Power
+    mu = 0.1         # Step size (relaxation factor)
+    gamma = 1e-5     # Regularization term
 
-    # Initializing
-    W = np.ones(shape=(N, K+1))
-    # Input at a certain iteration (tapped delay line)
-    X = np.zeros(N)
-    x = (np.random.randn(K) + np.random.randn(K)*1j)/np.sqrt(2)
-    # complex noise
-    n = np.sqrt(sigma_n2/2) * (np.random.randn(K) +
-                               np.random.randn(K)*1j)
-    d = []
+    # 2. Signal Generation
+    x = (np.random.randn(n_samples) + 1j * np.random.randn(n_samples)) / np.sqrt(2)
+    noise = np.sqrt(sigma_n2/2) * (np.random.randn(n_samples) + 1j * np.random.randn(n_samples))
+    
+    # Generate Desired Signal d(k)
+    from pydaptivefiltering.main import AdaptiveFilter
+    class Plant(AdaptiveFilter):
+        def optimize(self, **kwargs): pass
+    
+    plant = Plant(filter_order, w_init=h_unknown)
+    d = plant.filter_signal(x) + noise
 
-    for k in range(K):
+    # 3. NLMS Execution
+    nlms_filter = NLMS(filter_order=filter_order, step=mu, gamma=gamma)
+    
+    print("-" * 50)
+    print(f"Starting NLMS Adaptation (Order: {filter_order})...")
+    
+    tic = time()
+    results = nlms_filter.optimize(input_signal=x, desired_signal=d)
+    runtime = (time() - tic) * 1000
+    
+    print(f"Adaptation Finished in {runtime:.03f} ms")
+    print("-" * 50)
 
-        # input signal (tapped delay line)
-        X = np.concatenate(([x[k]], X))[:N]
-        d.append(np.dot(Wo.conj(), X))
+    # 4. Numerical Comparison (Last 5 samples)
+    y = results['outputs']
+    print("\nSteady State Samples (Last 5):")
+    print(f"{'Sample':<8} | {'Desired (d)':<25} | {'Filter Output (y)':<25}")
+    for i in range(n_samples - 5, n_samples):
+        print(f"{i:<8} | {str(np.round(d[i], 4)):<25} | {str(np.round(y[i], 4)):<25}")
 
-    # desired signal
-    d = np.array(d) + n
+    # 5. Graphical Visualization
+    plt.figure(figsize=(14, 12))
+    
+    # Subplot 1: Signal Comparison
+    ax1 = plt.subplot(3, 1, 1)
+    ax1.plot(np.abs(d[-50:]), 'ro-', label='Desired signal (d)', alpha=0.6)
+    ax1.plot(np.abs(y[-50:]), 'b*-', label='Filter output (y)', alpha=0.8)
+    ax1.set_title('NLMS Signal Comparison (Last 50 Samples)')
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
 
-    # Instantiating Adaptive Filter
-    Filter = pdf.AdaptiveFilter(W[:, 1])
-    print(" Adapting with NLMS \n")
-    # Adapting with the LMS Algorithm
-    Output = pdf.LMS.NLMS(Filter, d, x, mu)
+    # Subplot 2: Learning Curve MSE [dB]
+    ax2 = plt.subplot(3, 2, 3)
+    mse_db = 10 * np.log10(np.abs(results['errors'])**2 + 1e-12)
+    ax2.plot(mse_db, label='NLMS MSE')
+    ax2.set_title('Learning Curve: MSE [dB]')
+    ax2.set_ylabel('dB')
+    ax2.grid(True, alpha=0.3)
 
-    return (Filter, Output, n)
+    # Subplot 3: Noise Floor
+    ax3 = plt.subplot(3, 2, 4)
+    mse_min = 10 * np.log10(np.abs(noise)**2 + 1e-12)
+    ax3.plot(mse_min, color='orange', alpha=0.4, label='Noise Floor')
+    ax3.set_title('Minimum MSE (Noise Floor)')
+    ax3.grid(True, alpha=0.3)
 
+    # Subplot 4: Real Coefficients
+    ax4 = plt.subplot(3, 2, 5)
+    weights_hist = np.array(results['coefficients'])
+    ax4.plot(weights_hist.real)
+    for val in h_unknown.real:
+        ax4.axhline(y=val, color='black', linestyle='--', alpha=0.5)
+    ax4.set_title('Coefficients (Real Part)')
+    ax4.grid(True, alpha=0.3)
+
+    # Subplot 5: Imaginary Coefficients
+    ax5 = plt.subplot(3, 2, 6)
+    ax5.plot(weights_hist.imag)
+    for val in h_unknown.imag:
+        ax5.axhline(y=val, color='black', linestyle='--', alpha=0.5)
+    ax5.set_title('Coefficients (Imaginary Part)')
+    ax5.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.show()
 
 if __name__ == "__main__":
-    # Running the model
-    Filter, Output, ComplexNoise = NLMS_example()
-
-    # Plotting
-    plt.figure(figsize=(16, 16))
-
-    plt.subplot(221)
-    plt.gca().set_title('Learning Curve for MSE [dB]')
-    MSE = [abs(err)**2 for err in Output['errors']]
-    plt.gca().semilogy(MSE)
-    plt.grid()
-    plt.subplot(222)
-    plt.gca().set_title('Learning Curve for MSEmin [dB]')
-    MSEmin = [abs(n)**2 for n in ComplexNoise]
-    plt.gca().semilogy(MSEmin)
-    plt.grid()
-    plt.subplot(223)
-    plt.gca().set_title('Evolution of the Coefficients (Real Part)')
-    real_part = [coef.real for coef in Output['coefficients']]
-    plt.gca().plot(real_part)
-    plt.grid()
-    plt.subplot(224)
-    plt.gca().set_title('Evolution of the Coefficients (Imaginary Part)')
-    imag_part = [coef.imag for coef in Output['coefficients']]
-    plt.gca().plot(imag_part)
-    plt.grid()
-
-    plt.tight_layout(pad=4.0)
-    plt.show()
+    run_nlms_system_identification()

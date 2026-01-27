@@ -1,133 +1,164 @@
-#  Lattice_RLS.NLRLS_pos.py
+# LatticeRLS.NLRLS_pos.py
 #
 #      Implements the Normalized Lattice RLS algorithm based on a posteriori error.
-#      (Algorithm 7.1 - book: Adaptive Filtering: Algorithms and Practical
-#                                                       Implementation, Diniz)
+#      (Algorithm 7.6 - book: Adaptive Filtering: Algorithms and Practical
+#                               Implementation, Diniz)
 #
 #      Authors:
-#       . Bruno Ramos Lima Netto        - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-#       . Guilherme de Oliveira Pinto   - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-#       . Markus Vinícius Santos Lima   - mvsl20@gmailcom           & markus@lps.ufrj.br
-#       . Wallace Alves Martins         - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-#       . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com          & wagner@lps.ufrj.br
+#       . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
+#       . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
+#       . Markus Vinícius Santos Lima    - mvsl20@gmailcom           & markus@lps.ufrj.br
+#       . Wallace Alves Martins          - wallace.wam@gmail.com     & wallace@lps.ufrj.br
+#       . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
 #       . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
 
 # Imports
 import numpy as np
 from time import time
+from typing import Optional, Union, Dict
+from pydaptivefiltering.main import AdaptiveFilter
 
-
-def NLRLS_pos(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, Lambda: float, N: int, Epsilon: float,  verbose: bool = False) -> dict:
+class NormalizedLatticeRLS(AdaptiveFilter):
     """
     Description
     -----------
         Implements the Normalized Lattice RLS algorithm based on a posteriori error.
-        (Algorithm 7.2 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
-
-    Syntax
-    ------
-    OutputDictionary = NLRLS_pos(Filter, desired_signal, input_signal, Delta, Lambda, verbose)
-
-    Inputs
-    -------
-        filter  : Adaptive Filter                                      filter object
-        desired_signal : desired_signal signal                                       numpy array (row vector)
-        input   : Input signal to feed filter                          numpy array (row vector)
-        Lambda  : Forgetting factor                                    float
-        N       : Number of sections of the lattice filter             int
-        Epsilon : Regularization factor                                float
-        verbose : Verbose boolean                                      bool
-
-    Outputs
-    -------
-        dictionary:
-            ladderVector : Store the ladder coefficients for each iteration      numpy array (column vector)
-            kappaVector  : Store the reflection coefficients for each iteration  numpy array (column vector)
-            posterioriErrorMatrix: Store the posteriori error for each iteration numpy array (column vector)
-
-    Main Variables
-    --------- 
-        regressor
-        outputs_vector[k] represents the output errors at iteration k    
-        FIR error vectors. 
-        error_vector[k] represents the output errors at iteration k.
-
-    Misc Variables
-    --------------
-        tic
-        nIterations
-
-
-    Authors
-    -------
-        . Bruno Ramos Lima Netto        - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-        . Guilherme de Oliveira Pinto   - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-        . Markus Vinícius Santos Lima   - mvsl20@gmailcom           & markus@lps.ufrj.br
-        . Wallace Alves Martins         - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com          & wagner@lps.ufrj.br
-        . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
-
+        (Algorithm 7.6 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
+        
+        This algorithm is characterized by its superior numerical properties, as all 
+        internal variables (normalized errors and reflection coefficients) are 
+        magnitude-bounded by unity.
     """
 
-    # Data Initialization
-    tic = time()
-    nCoefficients = N + 1
-    nIterations = input_signal.size()
+    def __init__(
+        self, 
+        filter_order: int, 
+        lambda_factor: float = 0.99, 
+        epsilon: float = 1e-6,
+        w_init: Optional[Union[np.ndarray, list]] = None
+    ) -> None:
+        """
+        Inputs
+        -------
+            filter_order  : int (The order of the filter M)
+            lambda_factor : float (Forgetting factor Lambda)
+            epsilon       : float (Regularization factor for initialization)
+            w_init        : array_like, optional (Initial coefficients)
+        """
+        super().__init__(filter_order, w_init)
+        self.lam = lambda_factor
+        self.epsilon = epsilon
+        self.n_sections = filter_order
+        
+        self.rho = np.zeros(self.n_sections, dtype=complex)       
+        self.rho_v = np.zeros(self.n_sections + 1, dtype=complex)  
+        self.bar_b_prev = np.zeros(self.n_sections + 1, dtype=complex) 
+        self.xi_half = np.sqrt(epsilon) 
 
-    # Pre Allocations
-    deltaVector = np.zeros((1, N + 1))
-    deltaVector_D = np.zeros((1, N + 1))
-    error_b_Curr = np.zeros((1, N + 2))
-    error_b_Prev = np.zeros((1, N + 2))
-    error_f = np.zeros((1, N + 2))
-    ladderVector = np.zeros((nCoefficients, nIterations))
-    kappaVector = np.zeros((nCoefficients, nIterations))
-    posterioriErrorMatrix = np.zeros((N + 2, nIterations))
+    def _safe_sqrt(self, value: float) -> float:
+        """
+        Ensures the value for sqrt is not negative due to precision errors.
+        """
+        return np.sqrt(max(0.0, float(value)))
 
-    # Initialize Parameters
-    deltaVector = np.zeros((1, N + 1))
-    deltaVector_D = np.zeros((1, N + 1))
-    error_b_Prev = np.zeros((1, N + 2))
-    sigma_d_2 = Epsilon
-    sigma_x_2 = Epsilon
+    def optimize(
+        self, 
+        input_signal: Union[np.ndarray, list], 
+        desired_signal: Union[np.ndarray, list], 
+        verbose: bool = False
+    ) -> Dict[str, np.ndarray]:
+        """
+        Description
+        -----------
+            Executes the weight update process for the Normalized Lattice RLS.
 
-    for it in range(nIterations):
-        # Feedforward Filtering
-        regressor = np.append(input_signal[it], np.zeros((1, N)))
-        outputs_vector = np.zeros((1, N + 2))
-        outputs_vector[0] = np.dot(regressor, ladderVector[:, it])
-        error_vector = desired_signal[it] - outputs_vector
+        Inputs
+        -------
+            input_signal   : np.ndarray | list (Input vector x)
+            desired_signal : np.ndarray | list (Desired vector d)
+            verbose        : bool (Verbose boolean)
 
-        # Error Backward
-        error_b_Curr[0] = error_vector[0]
-        for i in range(1, N + 2):
-            error_b_Curr[i] = error_vector[i] + \
-                kappaVector[i-1, it] * error_b_Curr[i-1]
+        Outputs
+        -------
+            dictionary:
+                outputs      : Store the estimated output of each iteration.
+                errors       : Store the error for each iteration.
 
-        # Error Forward
-        error_f[N + 1] = error_b_Curr[N + 1]
+        Authors
+        -------
+            . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
+            . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
+            . Markus Vinícius Santos Lima    - mvsl20@gmailcom           & markus@lps.ufrj.br
+            . Wallace Alves Martins          - wallace.wam@gmail.com     & wallace@lps.ufrj.br
+            . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
+            . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
+        """
+        tic = time()
+        x_in = np.asarray(input_signal, dtype=complex)
+        d_in = np.asarray(desired_signal, dtype=complex)
+        self._validate_inputs(x_in, d_in)
+        
+        n_samples = d_in.size
+        y = np.zeros(n_samples, dtype=complex)
+        e = np.zeros(n_samples, dtype=complex)
 
-        for i in range(N, 0, -1):
-            error_f[i] = error_b_Curr[i] + kappaVector[i-1, it] * error_f[i+1]
+        sqrt_lam = np.sqrt(self.lam)
 
-        # Update Parameters
-        sigma_d_2 = Lambda * sigma_d_2 + (1 - Lambda) * error_f[1] ** 2
-        sigma_x_2 = Lambda * sigma_x_2 + (1 - Lambda) * regressor[0] ** 2
+        for k in range(n_samples):
+            self.xi_half = np.sqrt(self.lam * (self.xi_half**2) + np.abs(x_in[k])**2 + self.epsilon)
+            
+            bar_f = x_in[k] / (self.xi_half + self.epsilon)
+            if np.abs(bar_f) > 1.0: 
+                bar_f /= (np.abs(bar_f) + self.epsilon)
+            
+            bar_b_curr = np.zeros(self.n_sections + 1, dtype=complex)
+            bar_b_curr[0] = bar_f
+            
+            for m in range(self.n_sections):
+                cos_f = self._safe_sqrt(1 - np.abs(bar_f)**2)
+                cos_b = self._safe_sqrt(1 - np.abs(self.bar_b_prev[m])**2)
 
-        xiMin_backward = sigma_d_2 / sigma_x_2
+                self.rho[m] = sqrt_lam * cos_f * cos_b * self.rho[m] + np.conj(bar_f) * self.bar_b_prev[m]
 
-        for i in range(N):
-            deltaVector[i] = error_f[i+1] / error_f[i]
-            deltaVector_D[i] = (1 - Lambda) * \
-                deltaVector[i] + Lambda * deltaVector_D[i]
-            kappaVector[i, it] = deltaVector_D[i] / \
-                (1 - deltaVector_D[i] * deltaVector_D[i] * xiMin_backward)
-            ladderVector[i, it+1] = ladderVector[i, it] + \
-                kappaVector[i, it] * error_f[i] * xiMin_backward
+                if np.abs(self.rho[m]) >= 1.0:
+                    self.rho[m] /= (np.abs(self.rho[m]) + self.epsilon)
+                
+                cos_rho = self._safe_sqrt(1 - np.abs(self.rho[m])**2)
+                
+                denom_f = (cos_rho * cos_b) + self.epsilon
+                denom_b = (cos_rho * cos_f) + self.epsilon
+                
+                f_next = (bar_f - self.rho[m] * self.bar_b_prev[m]) / denom_f
+                b_next = (self.bar_b_prev[m] - np.conj(self.rho[m]) * bar_f) / denom_b
+                
+                bar_f = f_next
+                bar_b_curr[m+1] = b_next
 
-        ladderVector[N, it + 1] = ladderVector[N, it] + \
-            error_f[N] * xiMin_backward
-        # Save Posteriori Error
-        posterioriErrorMatrix[:, it] = error_b_Curr
+            bar_e = d_in[k] / (self.xi_half + self.epsilon)
+            if np.abs(bar_e) > 1.0: 
+                bar_e /= (np.abs(bar_e) + self.epsilon)
 
-    return ladderVector, kappaVector, posterioriErrorMatrix
+            for m in range(self.n_sections + 1):
+                cos_e = self._safe_sqrt(1 - np.abs(bar_e)**2)
+                cos_b = self._safe_sqrt(1 - np.abs(bar_b_curr[m])**2)
+
+                self.rho_v[m] = sqrt_lam * cos_e * cos_b * self.rho_v[m] + np.conj(bar_e) * bar_b_curr[m]
+                
+                if np.abs(self.rho_v[m]) >= 1.0:
+                    self.rho_v[m] /= (np.abs(self.rho_v[m]) + self.epsilon)
+                
+                cos_rho_v = self._safe_sqrt(1 - np.abs(self.rho_v[m])**2)
+
+                bar_e = (bar_e - self.rho_v[m] * bar_b_curr[m]) / ((cos_rho_v * cos_b) + self.epsilon)
+
+            e[k] = bar_e * self.xi_half
+            y[k] = d_in[k] - e[k]
+
+            self.bar_b_prev = bar_b_curr.copy()
+            
+        if verbose:
+            print(f"[NLRLS] Completed in {(time() - tic)*1000:.02f} ms")
+            
+        return {'outputs': y, 'errors': e}
+
+# EOF
