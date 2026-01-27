@@ -14,7 +14,7 @@ The package currently covers the vast majority of classical and advanced linear 
 
 ### Current Implementation
 
-The project is currently on its early stages (v0.7). The planned order of work for every kind of algorithm is: (Algorithm(1), Examples(2), Notebooks(3)). The following is the planned and current progress for each of the algorithms:
+The project is currently on its early stages (v0.9). The planned order of work for every kind of algorithm is: (Algorithm(1), Examples(2), Notebooks(3)). The following is the planned and current progress for each of the algorithms:
 
 - [11/11] LMS based algorithms
 - [2/2] RLS based algorithms 
@@ -26,7 +26,7 @@ The project is currently on its early stages (v0.7). The planned order of work f
 - [6/6] Nonlinear Filters
 - [3/3] Subband Filters
 - [4/4] BlindFilters
-- [0/?] Kalman Filters
+- [1/1] Kalman Filters
 
 **PUAP:** The `SetMembership_Simp_PUAP` implementation is currently under technical review and may not exhibit expected convergence in this version.
 
