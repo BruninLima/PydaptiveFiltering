@@ -14,7 +14,7 @@ The package currently covers the vast majority of classical and advanced linear 
 
 ### Current Implementation
 
-The project is currently on its early stages (pre-alpha). The planned order of work for every kind of algorithm is: (Algorithm(1), Examples(2), Notebooks(3)). The following is the planned and current progress for each of the algorithms:
+The project is currently on its early stages (v0.7). The planned order of work for every kind of algorithm is: (Algorithm(1), Examples(2), Notebooks(3)). The following is the planned and current progress for each of the algorithms:
 
 - [11/11] LMS based algorithms
 - [2/2] RLS based algorithms 
@@ -62,7 +62,7 @@ import pydaptivefiltering as pdf
 ---
 ## 🧪 Technical Validation
 
-The package uses rigorous unit testing to ensure the mathematical integrity of each structure. We currently maintain **57 automated tests** covering:
+The package uses rigorous unit testing to ensure the mathematical integrity of each structure. We currently maintain **70+ automated tests** covering:
 
 1. **Numerical Stability:** Floating-point operations for complex structures (Lattice/QR).
 2. **Convergence Accuracy:** Verification of steady-state MSE (Mean Square Error) against system noise levels.
