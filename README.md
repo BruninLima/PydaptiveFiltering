@@ -23,7 +23,7 @@ The project is currently on its early stages (v0.7). The planned order of work f
 - [2*/2] Fast Transversal RLS
 - [1/1] QR
 - [5/5] IIR Filters
-- [0/6] Nonlinear Filters
+- [6/6] Nonlinear Filters
 - [0/3] Subband Filters
 - [0/4] BlindFilters
 
@@ -54,12 +54,31 @@ conda install pydaptivefiltering
 ---
 ## ☕ Examples of uses
 
-A good place to start is with the jupyter notebooks that can be found at the <Examples\Jupyter Notebooks\> folder
-```
-import pydaptivefiltering as pdf
-```
+The package is designed to be intuitive for both research and production. You can easily compare linear and non-linear approaches for system identification or signal prediction.
 
+A comprehensive collection of Jupyter Notebooks is available at `<Examples/Jupyter Notebooks/>`, covering:
+* **System Identification:** Comparing LMS vs. RLS convergence.
+* **Non-linear Modeling:** Using Volterra and Bilinear filters to model saturation and feedback.
+* **Neural Adaptation:** Benchmarking MLP with Momentum against classical adaptive filters.
+
+Basic usage pattern:
+```python
+import pydaptivefiltering as pdf
+import numpy as np
+
+# 1. Define your data (Input and Desired)
+x = np.random.randn(5000)
+d = my_system_output(x)
+
+# 2. Instantiate the filter
+filt = pdf.VolterraRLS(memory=3, forgetting_factor=0.99)
+
+# 3. Optimize and Analyze
+results = filt.optimize(x, d)
+print(f"Final MSE: {np.mean(results['errors'][-100:]**2)}")
+```
 ---
+
 ## 🧪 Technical Validation
 
 The package uses rigorous unit testing to ensure the mathematical integrity of each structure. We currently maintain **70+ automated tests** covering:
@@ -77,28 +96,42 @@ pytest
 
 
 ---
-## ☕ Quick Example (Lattice RLS)
+## ⚡ Quick Example: Neural Adaptive Filtering (MLP)
+
+The package now supports a **Multilayer Perceptron (MLP)** designed for adaptive filtering tasks, featuring Backpropagation with Momentum and selectable activation functions (`tanh`, `sigmoid`).
 
 ```python
 import numpy as np
-from pydaptivefiltering.LatticeRLS.LRLS_pos import LatticeRLS
+import matplotlib.pyplot as plt
+from pydaptivefiltering as pdf 
 
-# Setup data
-n_samples = 2000
-x = np.random.randn(n_samples)
-d = ... # Your desired signal
+# --- 1. Generate Non-linear Data ---
+# System: d(k) = x(k)^2 + 0.5*x(k-1)
+N = 3000
+x = np.random.uniform(-1, 1, N)
+d = np.zeros(N)
+for k in range(1, N):
+    d[k] = (x[k]**2) + 0.5*x[k-1] + 0.01*np.random.randn()
 
-# Initialize Filter
-model = LatticeRLS(filter_order=10, lambda_factor=0.99, epsilon=0.01)
+# --- 2. Initialize the Adaptive MLP ---
+# Configuration: 3 inputs [x(k), d(k-1), x(k-1)], 8 hidden neurons, Tanh activation
+mlp = pdf.MultilayerPerceptron(
+    n_neurons=8, 
+    input_dim=3, 
+    step=0.01, 
+    momentum=0.9, 
+    activation='tanh'
+)
 
-# Optimization Process
-res = model.optimize(x, d)
+# --- 3. Run Optimization ---
+res = mlp.optimize(x, d)
 
-# Results
-print(f"Final Estimation Error: {res['errors'][-1]}")
-
+# --- 4. Visualize ---
+plt.plot(10*np.log10(res['errors']**2), alpha=0.5, label='Squared Error (dB)')
+plt.title(f"MLP Convergence (Final MSE: {np.mean(res['errors'][-500:]**2):.5f})")
+plt.legend()
+plt.show()
 ```
-
 
 ---
 ## 📝 License
