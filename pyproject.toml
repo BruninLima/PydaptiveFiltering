@@ -7,6 +7,7 @@ name = "pydaptivefiltering"
 version = "0.7.0"
 description = "A modern Python implementation of the AdaptiveFiltering toolbox."
 readme = "README.md"
+license-files = ["LICENSE"]
 requires-python = ">=3.8"
 authors = [
     { name = "Bruno Ramos Lima Netto", email = "brunolimanetto@gmail.com" },
