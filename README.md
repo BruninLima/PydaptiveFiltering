@@ -28,6 +28,7 @@ The project is currently on its early stages (pre-alpha). The planned order of w
 - [0/4] BlindFilters
 
 **PUAP:** The `SetMembership_Simp_PUAP` implementation is currently under technical review and may not exhibit expected convergence in this version.
+
 **StabFastRLS:** The `Fast_TransversalRLS.StabFastRLS` implementation is currently under technical review and may exhibit unexpected warnings in this version.
 
 ---
