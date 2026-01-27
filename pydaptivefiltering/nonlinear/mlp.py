@@ -3,6 +3,7 @@
 #       Implements the Multilayer Perceptron algorithm for REAL valued data.
 #       (Algorithm 11.4 - book: Adaptive Filtering: Algorithms and Practical
 #                                                              Implementation, Diniz)
+#       Modified to include Momentum and selectable Activation Functions.
 #
 #       Authors:
 #        . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
@@ -10,7 +11,7 @@
 #        . Markus Vinícius Santos Lima    - mvsl20@gmailcom           & markus@lps.ufrj.br
 #        . Wallace Alves Martins          - wallace.wam@gmail.com     & wallace@lps.ufrj.br
 #        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
-#        . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
+#        . Paulo Sergio Ramirez Diniz    -                            diniz@lps.ufrj.br
 
 import numpy as np
 from time import time
@@ -24,21 +25,30 @@ class MultilayerPerceptron(AdaptiveFilter):
     -----------
         Implements the Multilayer Perceptron algorithm for REAL valued data.
         (Algorithm 11.4 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
+        
+        Includes improvements:
+        1. Momentum term for gradient descent stabilization.
+        2. Selectable activation functions ('tanh' or 'sigmoid').
     """
     supports_complex: bool = False
+
     def __init__(
         self, 
         n_neurons: int = 10, 
         input_dim: int = 3,
         step: float = 0.01, 
+        momentum: float = 0.9,
+        activation: str = 'tanh',
         w_init: Optional[Union[np.ndarray, list]] = None
     ) -> None:
         """
         Inputs
         -------
             n_neurons    : int (Number of neurons in each hidden layer)
-            input_dim    : int (Dimension of the input vector, default 3: [x(k), d(k-1), x(k-1)])
+            input_dim    : int (Dimension of the input vector, default 3)
             step         : float (Convergence factor mu)
+            momentum     : float (Momentum factor alpha, typically 0.0 to 0.9)
+            activation   : str ('tanh' for hyperbolic tangent, 'sigmoid' for logistic)
             w_init       : array_like, optional (Initial coefficients)
         """
         super().__init__(n_neurons, w_init)
@@ -46,23 +56,47 @@ class MultilayerPerceptron(AdaptiveFilter):
         self.n_neurons: int = n_neurons
         self.input_dim: int = input_dim
         self.step: float = step
-
-        self.w1: np.ndarray = 0.2 * np.random.randn(n_neurons, input_dim)
-        self.w2: np.ndarray = 0.2 * np.random.randn(n_neurons, n_neurons)
-        self.w3: np.ndarray = 0.2 * np.random.randn(n_neurons) 
+        self.momentum: float = momentum
         
-        self.b1: np.ndarray = 0.1 * np.random.randn(n_neurons)
-        self.b2: np.ndarray = 0.1 * np.random.randn(n_neurons)
-        self.b3: float = 0.1 * np.random.randn()
+        # --- Configuração das Funções de Ativação ---
+        # Usamos clip para evitar overflow numérico em exponenciais
+        self._activation_map = {
+            'tanh': (
+                lambda v: np.tanh(np.clip(v, -50, 50)), 
+                lambda v: 1.0 - np.tanh(np.clip(v, -50, 50))**2
+            ),
+            'sigmoid': (
+                lambda v: 1.0 / (1.0 + np.exp(-np.clip(v, -50, 50))),
+                lambda v: (1.0 / (1.0 + np.exp(-np.clip(v, -50, 50)))) * (1.0 - (1.0 / (1.0 + np.exp(-np.clip(v, -50, 50)))))
+            )
+        }
+        
+        if activation not in self._activation_map:
+            raise ValueError(f"Activation '{activation}' not supported. Choose 'tanh' or 'sigmoid'.")
+            
+        self.act_func, self.act_deriv = self._activation_map[activation]
 
-    def _sigmoid(self, v: np.ndarray) -> np.ndarray:
-        """ Standard logistic sigmoid function. """
-        return 1.0 / (1.0 + np.exp(-v))
+        # --- Inicialização de Pesos (Xavier/Glorot Initialization) ---
+        # Melhor que random puro para evitar saturação inicial em Tanh/Sigmoid
+        limit_w1 = np.sqrt(6 / (input_dim + n_neurons))
+        limit_w2 = np.sqrt(6 / (n_neurons + n_neurons))
+        limit_w3 = np.sqrt(6 / (n_neurons + 1))
 
-    def _sigmoid_derivative(self, v: np.ndarray) -> np.ndarray:
-        """ Derivative of the standard logistic sigmoid function. """
-        s = self._sigmoid(v)
-        return s * (1.0 - s)
+        self.w1 = np.random.uniform(-limit_w1, limit_w1, (n_neurons, input_dim))
+        self.w2 = np.random.uniform(-limit_w2, limit_w2, (n_neurons, n_neurons))
+        self.w3 = np.random.uniform(-limit_w3, limit_w3, n_neurons)
+        
+        self.b1 = np.zeros(n_neurons)
+        self.b2 = np.zeros(n_neurons)
+        self.b3 = 0.0
+
+        # --- Buffers para Momentum (Histórico dos Gradientes) ---
+        self.prev_dw1 = np.zeros_like(self.w1)
+        self.prev_dw2 = np.zeros_like(self.w2)
+        self.prev_dw3 = np.zeros_like(self.w3)
+        self.prev_db1 = np.zeros_like(self.b1)
+        self.prev_db2 = np.zeros_like(self.b2)
+        self.prev_db3 = 0.0
 
     @ensure_real_signals
     def optimize(
@@ -74,7 +108,7 @@ class MultilayerPerceptron(AdaptiveFilter):
         """
         Description
         -----------
-            Executes the weight update process for the MLP algorithm.
+            Executes the weight update process for the MLP algorithm with Momentum.
 
         Inputs
         -------
@@ -88,28 +122,17 @@ class MultilayerPerceptron(AdaptiveFilter):
                 outputs      : Store the estimated output of each iteration.
                 errors       : Store the error for each iteration.
                 coefficients : Store a dictionary containing w1, w2, w3 history.
-
-        Authors
-        -------
-            . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-            . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-            . Markus Vinícius Santos Lima    - mvsl20@gmailcom           & markus@lps.ufrj.br
-            . Wallace Alves Martins          - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-            . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
-            . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
         """
         tic: float = time()
         
         x_in: np.ndarray = np.asarray(input_signal, dtype=float)
         d_in: np.ndarray = np.asarray(desired_signal, dtype=float)
 
-        # Detecta se o input é matriz (amostras, dim) ou vetor (amostras,)
         is_multidim = x_in.ndim > 1
         n_samples = x_in.shape[0]
         
-        # Validação manual para suportar matrizes
         if n_samples != d_in.size:
-            raise ValueError(f"Tamanhos incompatíveis: input ({n_samples}) e desired ({d_in.size})")
+            raise ValueError(f"Shape mismatch: input ({n_samples}) and desired ({d_in.size})")
 
         y = np.zeros(n_samples, dtype=float)
         e = np.zeros(n_samples, dtype=float)
@@ -120,9 +143,7 @@ class MultilayerPerceptron(AdaptiveFilter):
         d_prev = 0.0
 
         for k in range(n_samples):
-            # LÓGICA DO REGRESSOR:
-            # Se for multidimensional, usa a linha atual como vetor de entrada.
-            # Se for unidimensional, monta o regressor padrão [x(k), d(k-1), x(k-1)]
+            # Construção do regressor
             if is_multidim:
                 uxl = x_in[k]
             else:
@@ -130,33 +151,49 @@ class MultilayerPerceptron(AdaptiveFilter):
             
             # --- Forward Pass ---
             v1 = np.dot(self.w1, uxl) - self.b1
-            y1 = self._sigmoid(v1)
+            y1 = self.act_func(v1)
             
             v2 = np.dot(self.w2, y1) - self.b2
-            y2 = self._sigmoid(v2)
+            y2 = self.act_func(v2)
             
+            # Camada de saída linear
             y[k] = np.dot(y2, self.w3) - self.b3
             e[k] = d_in[k] - y[k]
             
-            # --- Backward Pass (Backpropagation) ---
-            # Erro na camada de saída (linear) refletido para a oculta 2
-            er_hid2 = e[k] * self.w3 * self._sigmoid_derivative(v2)
+            # --- Backward Pass ---
+            # Derivada da saída (linear) é 1, então propaga o erro direto
+            er_hid2 = e[k] * self.w3 * self.act_deriv(v2)
+            er_hid1 = np.dot(self.w2.T, er_hid2) * self.act_deriv(v1)
             
-            # Erro da oculta 2 refletido para a oculta 1
-            er_hid1 = np.dot(self.w2.T, er_hid2) * self._sigmoid_derivative(v1)
+            # --- Weight Updates with Momentum ---
+            # Atualização camada 3
+            dw3 = 2 * self.step * e[k] * y2
+            self.w3 += dw3 + self.momentum * self.prev_dw3
+            self.prev_dw3 = dw3 # Salva para o próximo passo
+
+            db3 = -2 * self.step * e[k]
+            self.b3 += db3 + self.momentum * self.prev_db3
+            self.prev_db3 = db3
             
-            # --- Weight Updates ---
-            self.w3 += 2 * self.step * e[k] * y2
-            self.b3 -= 2 * self.step * e[k]
+            # Atualização camada 2
+            dw2 = 2 * self.step * np.outer(er_hid2, y1)
+            self.w2 += dw2 + self.momentum * self.prev_dw2
+            self.prev_dw2 = dw2
+
+            db2 = -2 * self.step * er_hid2
+            self.b2 += db2 + self.momentum * self.prev_db2
+            self.prev_db2 = db2
             
-            self.w2 += 2 * self.step * np.outer(er_hid2, y1)
-            self.b2 -= 2 * self.step * er_hid2
+            # Atualização camada 1
+            dw1 = 2 * self.step * np.outer(er_hid1, uxl)
+            self.w1 += dw1 + self.momentum * self.prev_dw1
+            self.prev_dw1 = dw1
+
+            db1 = -2 * self.step * er_hid1
+            self.b1 += db1 + self.momentum * self.prev_db1
+            self.prev_db1 = db1
             
-            self.w1 += 2 * self.step * np.outer(er_hid1, uxl)
-            self.b1 -= 2 * self.step * er_hid1
-            
-            # Atualização dos estados para o próximo k (configuração série-paralela)
-            # x_prev recebe o valor escalar se x_in for 1D
+            # Atualização das memórias para k+1
             x_prev = x_in[k] if not is_multidim else x_in[k, 0]
             d_prev = d_in[k]
             
