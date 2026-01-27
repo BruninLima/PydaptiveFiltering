@@ -23,7 +23,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from time import time
-from pydaptivefiltering.LMS import NLMS
+from pydaptivefiltering.lms import NLMS
 
 def run_nlms_system_identification():
     """
@@ -43,7 +43,7 @@ def run_nlms_system_identification():
     noise = np.sqrt(sigma_n2/2) * (np.random.randn(n_samples) + 1j * np.random.randn(n_samples))
     
     # Generate Desired Signal d(k)
-    from pydaptivefiltering.main import AdaptiveFilter
+    from pydaptivefiltering.base import AdaptiveFilter
     class Plant(AdaptiveFilter):
         def optimize(self, **kwargs): pass
     

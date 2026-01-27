@@ -1,4 +1,4 @@
-#  LMS.LMS_Newton.py
+#  lms.lms_newton.py
 #
 #       Implements the Complex LMS-Newton algorithm for COMPLEX valued data.
 #       (Algorithm 4.2 - book: Adaptive Filtering: Algorithms and Practical
@@ -16,9 +16,9 @@
 import numpy as np
 from time import time
 from typing import Optional, Union, List, Dict
-from pydaptivefiltering.main import AdaptiveFilter
+from pydaptivefiltering.base import AdaptiveFilter
 
-class LMS_Newton(AdaptiveFilter):
+class LMSNewton(AdaptiveFilter):
     """
     Description
     -----------
@@ -27,7 +27,7 @@ class LMS_Newton(AdaptiveFilter):
     of the inverse correlation matrix of the input signal to decorrelate the 
     data and speed up convergence.
     """
-
+    supports_complex: bool = True
     def __init__(
         self, 
         filter_order: int, 

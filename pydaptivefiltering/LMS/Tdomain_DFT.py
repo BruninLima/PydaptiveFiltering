@@ -1,4 +1,4 @@
-#  LMS.Tdomain_DFT.py
+#  lms.tdomain_dft.py
 #
 #       Implements the Transform-Domain LMS algorithm, based on the Discrete
 #       Fourier Transform (DFT), for COMPLEX valued data.
@@ -18,17 +18,17 @@ import numpy as np
 from time import time
 from scipy.fft import fft, ifft
 from typing import Optional, Union, List, Dict
-from pydaptivefiltering.main import AdaptiveFilter
+from pydaptivefiltering.base import AdaptiveFilter
 
-class TDomain_DFT(AdaptiveFilter):
+class TDomainDFT(AdaptiveFilter):
     """
     Description
     -----------
         Implements the Transform-Domain LMS algorithm, based on the Discrete
         Fourier Transform (DFT), for COMPLEX valued data.
         (Algorithm 4.4 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
-    """
-
+    """ 
+    supports_complex: bool = True
     def __init__(
         self, 
         filter_order: int, 

@@ -2,12 +2,12 @@
 import pytest
 import numpy as np
 from scipy import signal
-from pydaptivefiltering.IIR_Filters import (
+from pydaptivefiltering.iir import (
     ErrorEquation, 
     GaussNewton, 
-    GaussNewton_GradientBased, 
-    RLS_IIR, 
-    Steiglitz_McBride
+    GaussNewtonGradient, 
+    RLSIIR, 
+    SteiglitzMcBride
 )
 
 def generate_iir_system(n_samples, b_true, a_true, noise_std=0.01):
@@ -38,7 +38,7 @@ def test_rls_iir_parameter_accuracy(target_system):
     """Verifica se o RLS_IIR consegue recuperar os coeficientes exatos do sistema."""
     x, d = generate_iir_system(2000, target_system["b"], target_system["a"], noise_std=0.0)
     
-    flt = RLS_IIR(M=target_system["M"], N=target_system["N"], lambda_hat=1.0, delta=10.0)
+    flt = RLSIIR(M=target_system["M"], N=target_system["N"], lambda_hat=1.0, delta=10.0)
     result = flt.optimize(x, d)
     
     w_final = result["coefficients"][-1]
@@ -55,7 +55,7 @@ def test_gauss_newton_convergence_speed(target_system):
     # Gauss-Newton Full (mais rápido por usar matriz de correlação)
     gn_full = GaussNewton(M=0, N=1, alpha=0.05, step=0.2, delta=1.0)
     # Gauss-Newton Gradient (mais lento, similar ao LMS)
-    gn_grad = GaussNewton_GradientBased(M=0, N=1, step=0.01)
+    gn_grad = GaussNewtonGradient(M=0, N=1, step=0.01)
     
     res_full = gn_full.optimize(x, d)
     res_grad = gn_grad.optimize(x, d)
@@ -79,14 +79,14 @@ def test_steiglitz_mcbride_bias_reduction():
     
     x, d = generate_iir_system(3000, b_true, a_true, noise_std=0.05)
     
-    sm = Steiglitz_McBride(M=1, N=2, step=0.005)
+    sm = SteiglitzMcBride(M=1, N=2, step=0.005)
     result = sm.optimize(x, d)
     
     # Verifica se o erro final é comparável ao nível do ruído injetado (0.05**2 = 0.0025)
     final_mse = np.mean(result["errors"][-200:]**2)
     assert final_mse < 0.01 
 
-@pytest.mark.parametrize("filter_class", [RLS_IIR, ErrorEquation, GaussNewton])
+@pytest.mark.parametrize("filter_class", [RLSIIR, ErrorEquation, GaussNewton])
 def test_iir_transfer_function_match(filter_class, target_system):
     """
     Teste de sanidade: Verifica se a resposta em frequência do filtro 
@@ -97,7 +97,7 @@ def test_iir_transfer_function_match(filter_class, target_system):
     params = {"M": 0, "N": 1}
     if filter_class == GaussNewton:
         params.update({"alpha": 0.1, "step": 0.05, "delta": 1.0})
-    elif filter_class == RLS_IIR or filter_class == ErrorEquation:
+    elif filter_class == RLSIIR or filter_class == ErrorEquation:
         params.update({"lambda_hat": 0.999, "delta": 10})
         
     flt = filter_class(**params)

@@ -1,4 +1,4 @@
-from pydaptivefiltering.SetMembership import SM_NLMS, SM_BNLMS, SM_AP, SM_Simp_AP
+from pydaptivefiltering import SMNLMS, SMBNLMS, SMAP, SimplifiedSMAP
 
 def test_compare_sm_performance(system_data, calculate_msd):
     """
@@ -15,10 +15,10 @@ def test_compare_sm_performance(system_data, calculate_msd):
     gamma_vector = [0.0] * (L_val + 1)
 
     filters = {
-        "SM-NLMS": SM_NLMS(filter_order=order, gamma_bar=gamma_val, gamma=1e-6),
-        "SM-BNLMS": SM_BNLMS(filter_order=order, gamma_bar=gamma_val, gamma=1e-6),
-        "SM-AP": SM_AP(filter_order=order, gamma_bar=gamma_val, gamma_bar_vector=gamma_vector, gamma=1e-3, L=L_val),
-        "SM-Simp-AP": SM_Simp_AP(filter_order=order, gamma_bar=gamma_val, gamma=1e-3, L=L_val)
+        "SM-NLMS": SMNLMS(filter_order=order, gamma_bar=gamma_val, gamma=1e-6),
+        "SM-BNLMS": SMBNLMS(filter_order=order, gamma_bar=gamma_val, gamma=1e-6),
+        "SM-AP": SMAP(filter_order=order, gamma_bar=gamma_val, gamma_bar_vector=gamma_vector, gamma=1e-3, L=L_val),
+        "SM-Simp-AP": SimplifiedSMAP(filter_order=order, gamma_bar=gamma_val, gamma=1e-3, L=L_val)
     }
 
     for name, filt in filters.items():

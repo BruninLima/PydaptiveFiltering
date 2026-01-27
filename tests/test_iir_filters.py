@@ -1,21 +1,21 @@
 # test_iir_filters.py
 import pytest
 import numpy as np
-from pydaptivefiltering.IIR_Filters import (
+from pydaptivefiltering.iir import (
     ErrorEquation, 
     GaussNewton, 
-    GaussNewton_GradientBased, 
-    RLS_IIR, 
-    Steiglitz_McBride
+    GaussNewtonGradient, 
+    RLSIIR, 
+    SteiglitzMcBride
 )
 
 # Parâmetros ajustados para evitar divergência imediata nos testes
 IIR_CLASSES = [
     (ErrorEquation, {"lambda_hat": 0.999, "delta": 10.0}),
     (GaussNewton, {"alpha": 0.001, "step": 0.01, "delta": 10.0}),
-    (GaussNewton_GradientBased, {"step": 0.001}),
-    (RLS_IIR, {"lambda_hat": 0.999, "delta": 10.0}),
-    (Steiglitz_McBride, {"step": 0.001})
+    (GaussNewtonGradient, {"step": 0.001}),
+    (RLSIIR, {"lambda_hat": 0.999, "delta": 10.0}),
+    (SteiglitzMcBride, {"step": 0.001})
 ]
 
 @pytest.mark.parametrize("filter_class, params", IIR_CLASSES)
@@ -58,7 +58,7 @@ def test_steiglitz_mcbride_stability(lms_data):
     d = np.real(lms_data["d"])[:500] * 0.01
     
     # Passo pequeno para garantir que o stabilityProcedure consiga atuar
-    flt = Steiglitz_McBride(M=1, N=1, step=0.001)
+    flt = SteiglitzMcBride(M=1, N=1, step=0.001)
     result = flt.optimize(x, d)
     
     assert np.all(np.isfinite(result["outputs"]))
@@ -71,7 +71,7 @@ def test_gauss_newton_vs_gradient_based(lms_data):
     
     # Parâmetros conservadores para evitar o erro e+124
     gn_full = GaussNewton(M=1, N=1, alpha=0.01, step=0.1, delta=100.0)
-    gn_grad = GaussNewton_GradientBased(M=1, N=1, step=0.001)
+    gn_grad = GaussNewtonGradient(M=1, N=1, step=0.001)
     
     res_full = gn_full.optimize(x, d)
     res_grad = gn_grad.optimize(x, d)
@@ -84,7 +84,7 @@ def test_gauss_newton_vs_gradient_based(lms_data):
     assert mse_full < np.mean(res_full["errors"][:10]**2)
 
 @pytest.mark.parametrize("filter_class, params", [
-    (RLS_IIR, {"lambda_hat": 0.99}),
+    (RLSIIR, {"lambda_hat": 0.99}),
     (ErrorEquation, {"lambda_hat": 0.98})
 ])
 def test_iir_input_validation(filter_class, params):

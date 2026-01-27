@@ -1,27 +1,27 @@
 # pydaptivefiltering/LMS/__init__.py
 
-from .LMS import LMS
-from .LMS_Newton import LMS_Newton
-from .NLMS import NLMS
-from .SignData import SignData
-from .SignError import SignError
-from .DualSign import DualSign
-from .Power2_Error import Power2_Error
-from .AffineProjection import AffineProjection
-from .TDomain_DCT import TDomain_DCT
-from .TDomain_DFT import TDomain_DFT
-from .TDomain import TDomain
+from .lms import LMS
+from .lms_newton import LMSNewton
+from .nlms import NLMS
+from .sign_data import SignData
+from .sign_error import SignError
+from .dual_sign import DualSign
+from .power2_error import Power2ErrorLMS
+from .affine_projection import AffineProjection
+from .tdomain_dct import TDomainDCT
+from .tdomain_dft import TDomainDFT
+from .tdomain import TDomainLMS
 
 __all__ = [
     "LMS", 
-    "LMS_Newton", 
+    "LMSNewton", 
     "NLMS", 
     "SignData", 
     "SignError", 
     "DualSign", 
-    "Power2_Error", 
+    "Power2ErrorLMS", 
     "AffineProjection", 
-    "TDomain_DCT", 
-    "TDomain_DFT", 
-    "TDomain"
+    "TDomainDCT", 
+    "TDomainDFT", 
+    "TDomainLMS"
 ]

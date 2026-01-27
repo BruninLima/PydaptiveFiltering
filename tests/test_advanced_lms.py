@@ -1,9 +1,9 @@
 import numpy as np
-from pydaptivefiltering.LMS.LMS import LMS
-from pydaptivefiltering.LMS.LMS_Newton import LMS_Newton
-from pydaptivefiltering.LMS.TDomain_DFT import TDomain_DFT
-from pydaptivefiltering.LMS.TDomain_DCT import TDomain_DCT
-from pydaptivefiltering.LMS.Power2_Error import Power2_Error
+from pydaptivefiltering import LMS
+from pydaptivefiltering import LMSNewton
+from pydaptivefiltering import TDomainDFT
+from pydaptivefiltering import TDomainDCT
+from pydaptivefiltering import Power2ErrorLMS
 
 def test_lms_newton_convergence(correlated_data, calculate_msd):
     """Verifica a convergência do LMS-Newton em sinais correlacionados."""
@@ -11,7 +11,7 @@ def test_lms_newton_convergence(correlated_data, calculate_msd):
     # Matriz identidade escalada para o chute inicial da inversa
     init_inv = 10.0 * np.eye(order + 1)
     
-    model = LMS_Newton(filter_order=order, alpha=0.95, initial_inv_rx=init_inv, step=0.1)
+    model = LMSNewton(filter_order=order, alpha=0.95, initial_inv_rx=init_inv, step=0.1)
     model.optimize(x, d)
     
     # O MSD deve ser baixo após processar o sinal completo
@@ -30,7 +30,7 @@ def test_newton_superiority_on_colored_noise(correlated_data, calculate_msd):
     msd_lms = calculate_msd(h_true, model_lms.w)
     
     # LMS-Newton com alpha=0.9 para adaptação rápida da matriz de correlação
-    model_newton = LMS_Newton(filter_order=order, initial_inv_rx=init_inv, step=0.05, alpha=0.9)
+    model_newton = LMSNewton(filter_order=order, initial_inv_rx=init_inv, step=0.05, alpha=0.9)
     model_newton.optimize(x_short, d_short)
     msd_newton = calculate_msd(h_true, model_newton.w)
     
@@ -42,8 +42,8 @@ def test_tdomain_dft_vs_dct(correlated_data, calculate_msd):
     x, d, h_true, order = correlated_data
     
     # Parâmetros conforme o __init__ da sua classe TDomain_DFT
-    model_dft = TDomain_DFT(order, gamma=1e-4, alpha=0.1, initial_power=1.0, step=0.1)
-    model_dct = TDomain_DCT(order, gamma=1e-4, alpha=0.1, initial_power=1.0, step=0.1)
+    model_dft = TDomainDFT(order, gamma=1e-4, alpha=0.1, initial_power=1.0, step=0.1)
+    model_dct = TDomainDCT(order, gamma=1e-4, alpha=0.1, initial_power=1.0, step=0.1)
     
     model_dft.optimize(x, d)
     model_dct.optimize(x, d)
@@ -54,7 +54,7 @@ def test_tdomain_dft_vs_dct(correlated_data, calculate_msd):
 def test_tdomain_power_normalization(correlated_data):
     """Valida a estabilidade do vetor de potência (power_vector)."""
     x, d, _, order = correlated_data
-    model = TDomain_DFT(order, gamma=1e-4, alpha=0.1, initial_power=1.0, step=0.1)
+    model = TDomainDFT(order, gamma=1e-4, alpha=0.1, initial_power=1.0, step=0.1)
     model.optimize(x[:100], d[:100])
     
     # O atributo na sua classe é 'power_vector'
@@ -67,7 +67,7 @@ def test_power2_error_logic(correlated_data, calculate_msd):
     x, d, h_true, order = correlated_data
     x_real, d_real = np.real(x).astype(float), np.real(d).astype(float)
     
-    model = Power2_Error(filter_order=order, bd=8, tau=1e-3, step=0.01)
+    model = Power2ErrorLMS(filter_order=order, bd=8, tau=1e-3, step=0.01)
     model.optimize(x_real, d_real)
     
     # MSD para sinais reais
@@ -78,7 +78,7 @@ def test_newton_matrix_stability(correlated_data):
     x, d, _, order = correlated_data
     init_inv = np.eye(order + 1)
     
-    model = LMS_Newton(filter_order=order, alpha=0.9, initial_inv_rx=init_inv)
+    model = LMSNewton(filter_order=order, alpha=0.9, initial_inv_rx=init_inv)
     model.optimize(x[:100], d[:100])
     
     # Verificação de autovalores para garantir que é definida positiva
@@ -97,7 +97,7 @@ def test_newton_tracking_performance(system_data, calculate_msd):
     d_part2 = np.convolve(x[500:1000], -w_opt, mode='full')[:500]
     d_total = np.concatenate([d_part1, d_part2])
     
-    model = LMS_Newton(filter_order=order, alpha=0.95, initial_inv_rx=init_inv, step=0.1)
+    model = LMSNewton(filter_order=order, alpha=0.95, initial_inv_rx=init_inv, step=0.1)
     model.optimize(x[:1000], d_total)
     
     # Deve convergir para o novo estado (-w_opt)

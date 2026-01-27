@@ -1,4 +1,4 @@
-#  RLS.rls.py
+#  rls.rls.py
 #
 #       Implements the RLS algorithm for COMPLEX valued data.
 #       (Algorithm 5.3 - book: Adaptive Filtering: Algorithms and Practical
@@ -16,7 +16,7 @@
 import numpy as np
 from time import time
 from typing import Optional, Union, List, Dict
-from pydaptivefiltering.main import AdaptiveFilter
+from pydaptivefiltering.base import AdaptiveFilter
 
 class RLS(AdaptiveFilter):
     """
@@ -27,7 +27,7 @@ class RLS(AdaptiveFilter):
     providing fast convergence by using the Matrix Inversion Lemma to update 
     the inverse of the deterministic autocorrelation matrix.
     """
-
+    supports_complex: bool = True
     def __init__(
         self, 
         filter_order: int, 

@@ -1,6 +1,6 @@
 import warnings
 import numpy as np
-from pydaptivefiltering.LMS import LMS, NLMS, AffineProjection, SignError
+from pydaptivefiltering import LMS, NLMS, AffineProjection, SignError
 
 def test_nlms_zero_input_regularization(system_data):
     """Garante que o NLMS não sofre divisão por zero com entrada nula devido ao gamma."""

@@ -23,8 +23,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from time import time
-from pydaptivefiltering.LMS import AffineProjection
-from pydaptivefiltering.main import AdaptiveFilter
+from pydaptivefiltering.lms import AffineProjection
+from pydaptivefiltering.base import AdaptiveFilter
 
 # Define a Plant class to simulate the unknown system (Reference System)
 class Plant(AdaptiveFilter):

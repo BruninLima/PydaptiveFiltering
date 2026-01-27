@@ -1,4 +1,4 @@
-#  RLS_Alt.py
+#  rls.rls_alt.py
 #
 #       Implements the Alternative RLS algorithm for COMPLEX valued data.
 #       RLS_Alt differs from RLS in the number of computations. The RLS_Alt
@@ -18,9 +18,9 @@
 import numpy as np
 from time import time
 from typing import Optional, Union, List, Dict
-from pydaptivefiltering.main import AdaptiveFilter
+from pydaptivefiltering.base import AdaptiveFilter
 
-class RLS_Alt(AdaptiveFilter):
+class RLSAlt(AdaptiveFilter):
     """
     Description
     -----------
@@ -28,7 +28,7 @@ class RLS_Alt(AdaptiveFilter):
     This version (Algorithm 5.4) optimizes the computation of the inverse 
     correlation matrix using an auxiliary vector psi.
     """
-
+    supports_complex: bool = True
     def __init__(
         self, 
         filter_order: int, 

@@ -1,10 +1,10 @@
 import pytest
 import numpy as np
 from scipy.signal import lfilter
-from pydaptivefiltering.LatticeRLS.LRLS_pos import LatticeRLS
-from pydaptivefiltering.LatticeRLS.LRLS_priori import LatticeRLS_Priori
-from pydaptivefiltering.LatticeRLS.NLRLS_pos import NormalizedLatticeRLS
-from pydaptivefiltering.LatticeRLS.LRLS_EF import LatticeRLSErrorFeedback
+from pydaptivefiltering import LRLSPosteriori
+from pydaptivefiltering import LRLSPriori
+from pydaptivefiltering import NormalizedLRLS
+from pydaptivefiltering import LRLSErrorFeedback
 
 @pytest.fixture
 def identification_scenario():
@@ -24,10 +24,10 @@ def identification_scenario():
     return x, d, w_target
 
 @pytest.mark.parametrize("model_class, threshold", [
-    (LatticeRLS, 1e-3), 
-    (LatticeRLS_Priori, 1e-3), 
-    (NormalizedLatticeRLS, 6e-2), # NLRLS tem erro residual maior em sinais brancos
-    (LatticeRLSErrorFeedback, 5e-3) 
+    (LRLSPosteriori, 1e-3), 
+    (LRLSPriori, 1e-3), 
+    (NormalizedLRLS, 6e-2), # NLRLS tem erro residual maior em sinais brancos
+    (LRLSErrorFeedback, 5e-3) 
 ])
 def test_mse_convergence(model_class, threshold, identification_scenario):
     """Verifica se o MSE final é compatível com o ruído para todas as variantes."""
@@ -54,7 +54,7 @@ def test_lattice_performance_color_noise():
     w_target = np.array([0.8, -0.5])
     d = lfilter(w_target, [1.0], x_correlated) + 0.01 * np.random.randn(n)
     
-    model = LatticeRLSErrorFeedback(filter_order=1, lambda_factor=0.995, epsilon=0.1)
+    model = LRLSErrorFeedback(filter_order=1, lambda_factor=0.995, epsilon=0.1)
     res = model.optimize(x_correlated, d)
     
     mse_final = np.mean(np.abs(res["errors"][-500:])**2)
@@ -70,7 +70,7 @@ def test_normalized_lattice_tracking():
     d[:2000] = 0.5 * x[:2000]
     d[2000:] = -0.8 * x[2000:] # Degrau na amostra 2000
     
-    model = NormalizedLatticeRLS(filter_order=1, lambda_factor=0.98)
+    model = NormalizedLRLS(filter_order=1, lambda_factor=0.98)
     res = model.optimize(x, d)
     
     # Medimos o erro bem depois do degrau para garantir convergência

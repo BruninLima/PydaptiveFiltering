@@ -1,4 +1,4 @@
-#  LMS.Power2_Error.py
+#  lms.power2_error.py
 #
 #       Implements the Power-of-Two Error LMS algorithm for REAL valued data.
 #       (Modified version of Algorithm 4.1 - book: Adaptive Filtering: Algorithms and Practical
@@ -16,16 +16,17 @@
 import numpy as np
 from time import time
 from typing import Optional, Union, List, Dict
-from pydaptivefiltering.main import AdaptiveFilter
+from pydaptivefiltering.base import AdaptiveFilter
+from pydaptivefiltering.utils.validation import ensure_real_signals
 
-class Power2_Error(AdaptiveFilter):
+class Power2ErrorLMS(AdaptiveFilter):
     """
     Description
     -----------
         Implements the Power-of-Two Error LMS algorithm for REAL valued data.
         (Modified version of Algorithm 4.1 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
     """
-
+    supports_complex: bool = False
     def __init__(
         self, 
         filter_order: int, 
@@ -48,6 +49,7 @@ class Power2_Error(AdaptiveFilter):
         self.tau: float = tau
         self.step: float = step
 
+    @ensure_real_signals
     def optimize(
         self, 
         input_signal: Union[np.ndarray, list], 

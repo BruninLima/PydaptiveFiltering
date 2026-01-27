@@ -1,11 +1,11 @@
 import pytest
 import numpy as np
 from scipy import signal
-from pydaptivefiltering.LMS import LMS, NLMS, AffineProjection, SignData, SignError
-from pydaptivefiltering.LMS.LMS_Newton import LMS_Newton
-from pydaptivefiltering.LMS.TDomain_DFT import TDomain_DFT
-from pydaptivefiltering.LMS.TDomain_DCT import TDomain_DCT
-from pydaptivefiltering.LMS.Power2_Error import Power2_Error
+from pydaptivefiltering import LMS, NLMS, AffineProjection, SignData, SignError
+from pydaptivefiltering import LMSNewton
+from pydaptivefiltering import TDomainDFT
+from pydaptivefiltering import TDomainDCT
+from pydaptivefiltering import Power2ErrorLMS
 
 # --- FAMÍLIA PADRÃO ---
 
@@ -32,18 +32,18 @@ def test_affine_projection_implementation(system_data, calculate_msd):
 def test_lms_newton_accuracy(system_data, calculate_msd):
     delta = 1.0
     init_inv = delta * np.eye(system_data["order"] + 1)
-    newton = LMS_Newton(system_data["order"], alpha=0.99, initial_inv_rx=init_inv, step=0.1)
+    newton = LMSNewton(system_data["order"], alpha=0.99, initial_inv_rx=init_inv, step=0.1)
     newton.optimize(system_data["x"], system_data["d_ideal"])
     assert calculate_msd(system_data["w_optimal"], newton.w) < 1e-5
 
 def test_transform_domain_dft_accuracy(system_data, calculate_msd):
-    dft = TDomain_DFT(system_data["order"], step=0.1, gamma=1e-4, alpha=0.1, initial_power=1.0)
+    dft = TDomainDFT(system_data["order"], step=0.1, gamma=1e-4, alpha=0.1, initial_power=1.0)
     dft.optimize(system_data["x"], system_data["d_ideal"])
     assert calculate_msd(system_data["w_optimal"], dft.w) < 1e-3
 
 def test_transform_domain_dct_accuracy(system_data, calculate_msd):
     x_r, d_r = np.real(system_data["x"]), np.real(system_data["d_ideal"])
-    dct_filt = TDomain_DCT(system_data["order"], step=0.1, gamma=1e-4, alpha=0.1, initial_power=1.0)
+    dct_filt = TDomainDCT(system_data["order"], step=0.1, gamma=1e-4, alpha=0.1, initial_power=1.0)
     dct_filt.optimize(x_r, d_r)
     msd = calculate_msd(np.real(system_data["w_optimal"]), dct_filt.w)
     assert msd < 1e-3
@@ -64,7 +64,7 @@ def test_sign_error_implementation(system_data, calculate_msd):
 
 def test_power2_quantization_stability(system_data, calculate_msd):
     x_r, d_r = np.real(system_data["x"]), np.real(system_data["d_ideal"])
-    p2 = Power2_Error(filter_order=system_data["order"], step=0.01, bd=8, tau=1e-3)
+    p2 = Power2ErrorLMS(filter_order=system_data["order"], step=0.01, bd=8, tau=1e-3)
     res = p2.optimize(x_r, d_r)
     mse_final = np.mean(np.abs(res['errors'][-500:])**2)
     assert mse_final < 0.05

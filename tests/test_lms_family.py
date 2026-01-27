@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from pydaptivefiltering.LMS import LMS, NLMS, AffineProjection
+from pydaptivefiltering import LMS, NLMS, AffineProjection
 
 def test_lms_convergence(lms_data, calculate_msd):
     # lms_data é o dicionário retornado pela fixture no conftest.py

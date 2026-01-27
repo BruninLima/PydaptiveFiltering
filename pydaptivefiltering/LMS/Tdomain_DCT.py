@@ -1,4 +1,4 @@
-#  LMS.Tdomain_DCT.py
+#  lms.tdomain_dct.py
 #
 #       Implements the Transform-Domain LMS algorithm, based on the Discrete
 #       Cossine Transform (DCT) Matrix, for COMPLEX valued data.
@@ -18,9 +18,9 @@ import numpy as np
 from time import time
 from scipy.fftpack import dct
 from typing import Optional, Union, List, Dict
-from pydaptivefiltering.main import AdaptiveFilter
+from pydaptivefiltering.base import AdaptiveFilter
 
-class TDomain_DCT(AdaptiveFilter):
+class TDomainDCT(AdaptiveFilter):
     """
     Description
     -----------
@@ -28,7 +28,7 @@ class TDomain_DCT(AdaptiveFilter):
         Cossine Transform (DCT), for COMPLEX valued data.
         (Algorithm 4.4 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
     """
-
+    supports_complex: bool = True
     def __init__(
         self, 
         filter_order: int, 

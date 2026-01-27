@@ -1,4 +1,4 @@
-#  LMS.NLMS.py
+#  lms.nlms.py
 #
 #       Implements the Normalized LMS algorithm for COMPLEX valued data.
 #       (Algorithm 4.3 - book: Adaptive Filtering: Algorithms and Practical
@@ -16,7 +16,7 @@
 import numpy as np
 from time import time
 from typing import Optional, Union, List, Dict
-from pydaptivefiltering.main import AdaptiveFilter
+from pydaptivefiltering.base import AdaptiveFilter
 
 class NLMS(AdaptiveFilter):
     """
@@ -25,7 +25,7 @@ class NLMS(AdaptiveFilter):
         Implements the Normalized LMS algorithm for COMPLEX valued data.
         (Algorithm 4.3 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
     """
-
+    supports_complex: bool = True
     def __init__(
         self, 
         filter_order: int, 

@@ -1,4 +1,4 @@
-#  LMS.LMS.py
+#  lms.lms.py
 #
 #       Implements the Complex LMS algorithm for COMPLEX valued data.
 #       (Algorithm 3.2 - book: Adaptive Filtering: Algorithms and Practical
@@ -16,7 +16,7 @@
 import numpy as np
 from time import time
 from typing import Optional, Union, List, Dict
-from pydaptivefiltering.main import AdaptiveFilter
+from pydaptivefiltering.base import AdaptiveFilter
 
 class LMS(AdaptiveFilter):
     """
@@ -25,7 +25,7 @@ class LMS(AdaptiveFilter):
         Implements the Complex LMS algorithm for COMPLEX valued data.
         (Algorithm 3.2 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
     """
-
+    supports_complex: bool = True
     def __init__(
         self, 
         filter_order: int, 

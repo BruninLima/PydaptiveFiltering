@@ -1,75 +1,41 @@
 # pydaptivefiltering/__init__.py
-from .main import AdaptiveFilter
 
-from .LMS.LMS import LMS
-from .LMS.NLMS import NLMS
-from .LMS.AffineProjection import AffineProjection
-from .LMS.SignData import SignData
-from .LMS.SignError import SignError
-from .LMS.DualSign import DualSign
-from .LMS.LMS_Newton import LMS_Newton
-from .LMS.Power2_Error import Power2_Error
-from .LMS.TDomain import TDomain
-from .LMS.TDomain_DCT import TDomain_DCT
-from .LMS.TDomain_DFT import TDomain_DFT
+from .base import AdaptiveFilter
+from .lms import *
+from .rls import *
+from .set_membership import *
+from .lattice import *
+from .fast_rls import *
+from .qr_decomposition import *
+from .iir import *
+from .nonlinear import *
 
-from .RLS.RLS import RLS
-from .RLS.RLS_Alt import RLS_Alt
+from .subband.cfdlms import CFD_LMS
+from .subband.dlcllms import DLCL_LMS
+from .subband.olsblms import OLSB_LMS
 
-from .SetMembership.NLMS import SM_NLMS
-from .SetMembership.BNLMS import SM_BNLMS
-from .SetMembership.AP import SM_AP
-from .SetMembership.Simp_AP import SM_Simp_AP
-from .SetMembership.Simp_PUAP import SM_Simp_PUAP
+from .blind.Affine_Projection import Affine_Projection as Blind_Affine_Projection
+from .blind.CMA import CMA
+from .blind.Godard import Godard
+from .blind.Sato import Sato
 
-from .LatticeRLS.LRLS_pos import LatticeRLS
-from .LatticeRLS.LRLS_EF import LatticeRLSErrorFeedback
-from .LatticeRLS.LRLS_priori import LatticeRLS_Priori
-from .LatticeRLS.NLRLS_pos import NormalizedLatticeRLS
-
-from .Fast_Transversal_RLS.Fast_RLS import FastRLS
-from .Fast_Transversal_RLS.Stab_Fast_RLS import StabFastRLS
-
-from .QR.RLS import QR_RLS
-
-from .IIR_Filters.ErrorEquation import ErrorEquation
-from .IIR_Filters.GaussNewton import GaussNewton
-from .IIR_Filters.GaussNewton_GradientBased import GaussNewton_GradientBased
-from .IIR_Filters.RLS_IIR import RLS_IIR
-from .IIR_Filters.Steiglitz_McBride import Steiglitz_McBride
-
-from .NonlinearFilters.Bilinear_RLS import Bilinear_RLS
-from .NonlinearFilters.Complex_Radial_Basis_Function import Complex_Radial_Basis_Function
-from .NonlinearFilters.Multilayer_Perceptron import Multilayer_Perceptron
-from .NonlinearFilters.Radial_Basis_Function import Radial_Basis_Function
-from .NonlinearFilters.Volterra_LMS import Volterra_LMS
-from .NonlinearFilters.Volterra_RLS import Volterra_RLS
-
-from .SubbandFilters.cfdlms import CFD_LMS
-from .SubbandFilters.dlcllms import DLCL_LMS
-from .SubbandFilters.olsblms import OLSB_LMS
-
-from .BlindFilters.Affine_Projection import Affine_Projection as Blind_Affine_Projection
-from .BlindFilters.CMA import CMA
-from .BlindFilters.Godard import Godard
-from .BlindFilters.Sato import Sato
-
-__version__ = "0.2.0"
+__version__ = "0.7.0"
 __author__ = "BruninLima"
 
 __all__ = ["AdaptiveFilter",
     "LMS", "NLMS", "AffineProjection", "SignData", "SignError", "DualSign", 
-    "LMS_Newton", "Power2_Error", "TDomain", "TDomain_DCT", "TDomain_DFT",
-    "RLS", "RLS_Alt",
-    "SM_NLMS", "SM_BNLMS", "SM_AP", "SM_Simp_AP", "SM_Simp_PUAP",
-    "LatticeRLS", "LatticeRLSErrorFeedback", "LatticeRLS_Priori", "NormalizedLatticeRLS",
+    "LMSNewton", "Power2ErrorLMS", "TDomainLMS", "TDomainDCT", "TDomainDFT",
+    "RLS", "RLSAlt",
+    "SMNLMS", "SMBNLMS", "SMAP", "Simplified_SMAP", "Simplified_PUAP",
+    "LRLSPosteriori", "LRLSErrorFeedback", "LRLSPriori", "NormalizedLRLS",
     "FastRLS", "StabFastRLS",
-    "QR_RLS",
-    "ErrorEquation", "GaussNewton", "GaussNewton_GradientBased", "RLS_IIR", "Steiglitz_McBride",
-    "Bilinear_RLS", "Complex_Radial_Basis_Function", "Multilayer_Perceptron", "Radial_Basis_Function", "Volterra_LMS", "Volterra_RLS",
-    "CFD_LMS", "DLCL_LMS", "OLSB_LMS",
-    "Blind_Affine_Projection", "CMA", "Godard", "Sato",
+    "QRRLS",
+    "ErrorEquation", "GaussNewton", "GaussNewtonGradient", "RLSIIR", "SteiglitzMcBride",
+    "BilinearRLS", "ComplexRBF", "MultilayerPerceptron", "RBF", "VolterraLMS", "VolterraRLS",
+    "CFD_LMS", "DLCL_LMS", "OLSB_LMS", #todo subband
+    "Blind_Affine_Projection", "CMA", "Godard", "Sato", #todo blind
     "info"]
+
 
 def info():
     """Imprime informações sobre a cobertura de algoritmos da biblioteca."""

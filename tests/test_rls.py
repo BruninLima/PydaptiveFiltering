@@ -1,5 +1,5 @@
-from pydaptivefiltering.RLS.RLS import RLS
-from pydaptivefiltering.RLS.RLS_Alt import RLS_Alt
+from pydaptivefiltering import RLS
+from pydaptivefiltering import RLSAlt
 
 def test_rls_shapes(rls_test_data):
     """Verifica se as dimensões de saída do RLS Clássico estão corretas."""
@@ -20,7 +20,7 @@ def test_rls_alt_shapes(rls_test_data):
     order = rls_test_data["order"]
     n_samples = len(x)
     
-    model = RLS_Alt(filter_order=order, delta=0.1, lamb=0.98)
+    model = RLSAlt(filter_order=order, delta=0.1, lamb=0.98)
     res = model.optimize(x, d)
     
     assert len(res['outputs']) == n_samples

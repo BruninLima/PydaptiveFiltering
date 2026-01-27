@@ -1,4 +1,4 @@
-from pydaptivefiltering.RLS.RLS import RLS
-from pydaptivefiltering.RLS.RLS_Alt import RLS_Alt
+from .rls import RLS
+from .rls_alt import RLSAlt
 
-__all__ = ['RLS', 'RLS_Alt']
+__all__ = ['RLS', 'RLSAlt']
