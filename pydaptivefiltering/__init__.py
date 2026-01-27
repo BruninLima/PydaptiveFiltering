@@ -9,17 +9,10 @@ from .fast_rls import *
 from .qr_decomposition import *
 from .iir import *
 from .nonlinear import *
-
-from .subband.cfdlms import CFD_LMS
-from .subband.dlcllms import DLCL_LMS
-from .subband.olsblms import OLSB_LMS
-
-from .blind.Affine_Projection import Affine_Projection as Blind_Affine_Projection
-from .blind.CMA import CMA
-from .blind.Godard import Godard
-from .blind.Sato import Sato
-
-__version__ = "0.7.0"
+from .subband import *
+from .blind import *
+from .kalman import *
+__version__ = "0.9"
 __author__ = "BruninLima"
 
 __all__ = ["AdaptiveFilter",
@@ -32,8 +25,9 @@ __all__ = ["AdaptiveFilter",
     "QRRLS",
     "ErrorEquation", "GaussNewton", "GaussNewtonGradient", "RLSIIR", "SteiglitzMcBride",
     "BilinearRLS", "ComplexRBF", "MultilayerPerceptron", "RBF", "VolterraLMS", "VolterraRLS",
-    "CFD_LMS", "DLCL_LMS", "OLSB_LMS", #todo subband
-    "Blind_Affine_Projection", "CMA", "Godard", "Sato", #todo blind
+    "CFDLMS", "DLCLLMS", "OLSBLMS",
+    "AffineProjectionCM", "CMA", "Godard", "Sato",
+    "Kalman",
     "info"]
 
 
@@ -53,7 +47,8 @@ def info():
         "Cap 10 (IIR)": "Error Equation, Gauss-Newton, Steinglitz-McBride, RLS-IIR",
         "Cap 11 (Nonlinear)": "Volterra (LMS/RLS), MLP, RBF, Bilinear RLS",
         "Cap 12 (Subband)": "CFDLMS, DLCLLMS, OLSBLMS",
-        "Cap 13 (Blind)": "CMA, Godard, Sato, Blind Affine Projection"
+        "Cap 13 (Blind)": "CMA, Godard, Sato, Blind Affine Projection",
+        "Cap 17 (Kalman)": "Kalman Filter",
     }
     for cap, algs in sections.items():
         print(f"\n{cap:25}: {algs}")

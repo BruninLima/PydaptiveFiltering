@@ -1,4 +1,4 @@
-# LatticeRLS.NLRLS_pos.py
+# lattice.normalized_lrls.py
 #
 #      Implements the Normalized Lattice RLS algorithm based on a posteriori error.
 #      (Algorithm 7.6 - book: Adaptive Filtering: Algorithms and Practical
@@ -268,6 +268,4 @@ class NormalizedLRLS(AdaptiveFilter):
             "errors": e,
             "coefficients": self.w_history,
         }
-
-
 # EOF

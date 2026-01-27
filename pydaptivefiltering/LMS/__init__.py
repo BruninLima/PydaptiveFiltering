@@ -1,4 +1,4 @@
-# pydaptivefiltering/LMS/__init__.py
+# lms.__init__.py
 
 from .lms import LMS
 from .lms_newton import LMSNewton

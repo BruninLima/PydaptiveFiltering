@@ -1,4 +1,4 @@
-#  Volterra_RLS.py
+#  nonlinear.volterra_rls.py
 #
 #       Implements the Volterra RLS algorithm for REAL valued data.
 #       (Algorithm 11.2 - book: Adaptive Filtering: Algorithms and Practical
@@ -6,12 +6,13 @@
 #
 #       Authors:
 #        . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-#        . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilhermepinto7@gmail.com
+#        . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
 #        . Markus Vinícius Santos Lima    - mvsl20@gmailcom           & markus@lps.ufrj.br
 #        . Wallace Alves Martins          - wallace.wam@gmail.com     & wallace@lps.ufrj.br
 #        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
 #        . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
 
+# Imports
 import numpy as np
 from time import time
 from typing import Optional, Union, List, Dict
@@ -45,13 +46,10 @@ class VolterraRLS(AdaptiveFilter):
         self.memory: int = memory
         self.forgetting_factor: float = forgetting_factor
         
-        # Total coefficients calculation (same logic as Volterra LMS)
-        # For L=3, Nw = 9
         n_coeffs = memory + (memory * (memory + 1)) // 2
 
         super().__init__(m = n_coeffs-1, w_init=w_init)
         
-        # Initialize Inverse Correlation Matrix Sd = delta^-1 * I
         self.S_d: np.ndarray = np.eye(n_coeffs) / delta
 
     def _create_volterra_regressor(self, x_lin: np.ndarray) -> np.ndarray:
@@ -111,31 +109,22 @@ class VolterraRLS(AdaptiveFilter):
         y: np.ndarray = np.zeros(n_samples, dtype=float)
         e: np.ndarray = np.zeros(n_samples, dtype=float)
         
-        # Padding for linear delay line
         x_padded: np.ndarray = np.zeros(n_samples + self.memory - 1, dtype=float)
         x_padded[self.memory - 1:] = x
 
         for k in range(n_samples):
-            # 1. Linear delay line extraction
             x_lin = x_padded[k : k + self.memory][::-1]
             
-            # 2. Volterra regressor expansion (uxl)
             uxl = self._create_volterra_regressor(x_lin)
             
-            # 3. Prior Error (elinha)
-            # elinha(i) = d(i) - w(:,i)' * uxl(:,i)
             e_prior = d[k] - np.dot(self.w, uxl)
             
-            # 4. Update Inverse Correlation Matrix (Sd)
             psi = np.dot(self.S_d, uxl)
             den = self.forgetting_factor + np.dot(uxl, psi)
             self.S_d = (1.0 / self.forgetting_factor) * (self.S_d - np.outer(psi, psi) / den)
             
-            # 5. Weight Update
-            # w(:,i+1) = w(:,i) + elinha(i) * Sd * uxl(:,i)
             self.w = self.w + e_prior * np.dot(self.S_d, uxl)
             
-            # 6. Compute Output and Posterior Error
             y[k] = np.dot(self.w, uxl)
             e[k] = d[k] - y[k]
             
@@ -149,5 +138,4 @@ class VolterraRLS(AdaptiveFilter):
             'errors': e,
             'coefficients': self.w_history
         }
-
 # EOF

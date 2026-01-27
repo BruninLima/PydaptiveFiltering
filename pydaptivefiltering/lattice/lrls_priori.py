@@ -1,4 +1,4 @@
-# LatticeRLS.LRLS_priori.py
+# lattice.lrls_priori.py
 #
 #      Implements the Lattice RLS algorithm based on a priori errors.
 #      (Algorithm 7.4 - book: Adaptive Filtering: Algorithms and Practical
@@ -206,3 +206,4 @@ class LRLSPriori(AdaptiveFilter):
             "errors": e,
             "coefficients": self.w_history,
         }
+#EOF

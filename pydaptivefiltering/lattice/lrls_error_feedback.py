@@ -1,4 +1,4 @@
-# LatticeRLS.LRLS_EF.py
+# lattice.lrls_error_feedback.py
 #
 #      Implements the Lattice RLS algorithm based on a posteriori errors
 #      with Error Feedback.

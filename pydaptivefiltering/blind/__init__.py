@@ -1,4 +1,8 @@
-from pydaptivefiltering.blind.Affine_Projection import Affine_Projection
-from pydaptivefiltering.blind.CMA import CMA
-from pydaptivefiltering.blind.Godard import Godard
-from pydaptivefiltering.blind.Sato import Sato
+# blind.__init__.py
+
+from .affine_projection_cm import AffineProjectionCM
+from .constant_modulus import CMA
+from .godard import Godard
+from .sato import Sato
+
+__all__ = ['AffineProjectionCM', 'CMA', 'Godard', 'Sato']

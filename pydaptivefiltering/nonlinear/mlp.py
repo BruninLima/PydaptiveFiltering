@@ -1,4 +1,4 @@
-#  Multilayer_Perceptron.py
+#  nonlinear.mlp.py
 #
 #       Implements the Multilayer Perceptron algorithm for REAL valued data.
 #       (Algorithm 11.4 - book: Adaptive Filtering: Algorithms and Practical
@@ -13,6 +13,7 @@
 #        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
 #        . Paulo Sergio Ramirez Diniz    -                            diniz@lps.ufrj.br
 
+# Imports
 import numpy as np
 from time import time
 from typing import Optional, Union, List, Dict
@@ -58,8 +59,6 @@ class MultilayerPerceptron(AdaptiveFilter):
         self.step: float = step
         self.momentum: float = momentum
         
-        # --- Configuração das Funções de Ativação ---
-        # Usamos clip para evitar overflow numérico em exponenciais
         self._activation_map = {
             'tanh': (
                 lambda v: np.tanh(np.clip(v, -50, 50)), 
@@ -76,8 +75,6 @@ class MultilayerPerceptron(AdaptiveFilter):
             
         self.act_func, self.act_deriv = self._activation_map[activation]
 
-        # --- Inicialização de Pesos (Xavier/Glorot Initialization) ---
-        # Melhor que random puro para evitar saturação inicial em Tanh/Sigmoid
         limit_w1 = np.sqrt(6 / (input_dim + n_neurons))
         limit_w2 = np.sqrt(6 / (n_neurons + n_neurons))
         limit_w3 = np.sqrt(6 / (n_neurons + 1))
@@ -90,7 +87,6 @@ class MultilayerPerceptron(AdaptiveFilter):
         self.b2 = np.zeros(n_neurons)
         self.b3 = 0.0
 
-        # --- Buffers para Momentum (Histórico dos Gradientes) ---
         self.prev_dw1 = np.zeros_like(self.w1)
         self.prev_dw2 = np.zeros_like(self.w2)
         self.prev_dw3 = np.zeros_like(self.w3)
@@ -143,39 +139,31 @@ class MultilayerPerceptron(AdaptiveFilter):
         d_prev = 0.0
 
         for k in range(n_samples):
-            # Construção do regressor
             if is_multidim:
                 uxl = x_in[k]
             else:
                 uxl = np.array([x_in[k], d_prev, x_prev], dtype=float)
             
-            # --- Forward Pass ---
             v1 = np.dot(self.w1, uxl) - self.b1
             y1 = self.act_func(v1)
             
             v2 = np.dot(self.w2, y1) - self.b2
             y2 = self.act_func(v2)
             
-            # Camada de saída linear
             y[k] = np.dot(y2, self.w3) - self.b3
             e[k] = d_in[k] - y[k]
             
-            # --- Backward Pass ---
-            # Derivada da saída (linear) é 1, então propaga o erro direto
             er_hid2 = e[k] * self.w3 * self.act_deriv(v2)
             er_hid1 = np.dot(self.w2.T, er_hid2) * self.act_deriv(v1)
             
-            # --- Weight Updates with Momentum ---
-            # Atualização camada 3
             dw3 = 2 * self.step * e[k] * y2
             self.w3 += dw3 + self.momentum * self.prev_dw3
-            self.prev_dw3 = dw3 # Salva para o próximo passo
+            self.prev_dw3 = dw3 
 
             db3 = -2 * self.step * e[k]
             self.b3 += db3 + self.momentum * self.prev_db3
             self.prev_db3 = db3
             
-            # Atualização camada 2
             dw2 = 2 * self.step * np.outer(er_hid2, y1)
             self.w2 += dw2 + self.momentum * self.prev_dw2
             self.prev_dw2 = dw2
@@ -184,7 +172,6 @@ class MultilayerPerceptron(AdaptiveFilter):
             self.b2 += db2 + self.momentum * self.prev_db2
             self.prev_db2 = db2
             
-            # Atualização camada 1
             dw1 = 2 * self.step * np.outer(er_hid1, uxl)
             self.w1 += dw1 + self.momentum * self.prev_dw1
             self.prev_dw1 = dw1
@@ -193,7 +180,6 @@ class MultilayerPerceptron(AdaptiveFilter):
             self.b1 += db1 + self.momentum * self.prev_db1
             self.prev_db1 = db1
             
-            # Atualização das memórias para k+1
             x_prev = x_in[k] if not is_multidim else x_in[k, 0]
             d_prev = d_in[k]
             

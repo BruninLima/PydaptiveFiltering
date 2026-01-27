@@ -1,4 +1,4 @@
-# LatticeRLS.LRLS_pos.py
+# lattice.lrls_posteriori.py
 #
 #      Implements the Lattice RLS algorithm based on a posteriori errors.
 #      (Algorithm 7.1 - book: Adaptive Filtering: Algorithms and Practical

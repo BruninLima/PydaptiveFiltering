@@ -1,4 +1,4 @@
-#  SetMembership.Simp_AP.py
+#  set_membership.simplified_ap.py
 #
 #       Implements the Simplified Set-membership Affine-Projection (SM-Simp-AP) 
 #       algorithm for COMPLEX valued data.
@@ -142,5 +142,4 @@ class SimplifiedSMAP(AdaptiveFilter):
             'coefficients': self.w_history,
             'n_updates': self.n_updates
         }
-
 # EOF

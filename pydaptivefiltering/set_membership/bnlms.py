@@ -1,4 +1,4 @@
-#  SetMembership.BNLMS.py
+#  set_membership.bnlms.py
 #
 #       Implements the Set-membership Binormalized LMS algorithm for COMPLEX valued data.
 #       (Algorithm 6.5 - book: Adaptive Filtering: Algorithms and Practical
@@ -141,5 +141,4 @@ class SMBNLMS(AdaptiveFilter):
             'coefficients': self.w_history,
             'n_updates': self.n_updates
         }
-
 # EOF

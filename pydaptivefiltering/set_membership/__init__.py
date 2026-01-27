@@ -1,3 +1,5 @@
+# set_membership.__init__.py
+
 from .affine_projection import SMAP
 from .bnlms import SMBNLMS
 from .nlms import SMNLMS

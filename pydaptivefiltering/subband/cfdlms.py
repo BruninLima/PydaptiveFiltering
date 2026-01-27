@@ -5,13 +5,6 @@
 #       (Algorithm 12.4 - book: Adaptive Filtering: Algorithms and Practical
 #                                                        Implementation, Diniz)
 #
-#       Notes
-#       -----
-#       This implementation follows the reference Matlab script `cfdlms.m`
-#       provided by the user (toolbox baseline). The algorithm processes the
-#       input in overlapped blocks of length M, advancing by L samples per
-#       iteration (typically L = M/2). The adaptive filter is implemented in
-#       the frequency domain with one sub-filter per frequency bin.
 #
 #       Authors:
 #        . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
@@ -21,6 +14,7 @@
 #        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
 #        . Paulo Sergio Ramirez Diniz     -                             diniz@lps.ufrj.br
 
+# Imports
 from __future__ import annotations
 
 import numpy as np
@@ -100,7 +94,6 @@ class CFDLMS(AdaptiveFilter):
         smoothing: float = 0.01,
         w_init: Optional[Union[np.ndarray, list]] = None,
     ) -> None:
-        # AdaptiveFilter expects a "filter_order" concept; here we map it to Nw (subband order).
         super().__init__(filter_order, w_init=None)
 
         if n_subbands <= 0:
@@ -124,7 +117,6 @@ class CFDLMS(AdaptiveFilter):
         self.gamma: float = float(gamma)
         self.smoothing: float = float(smoothing)
 
-        # Initialize weights ww (M x (Nw+1))
         self.ww: np.ndarray = np.zeros((self.M, self.Nw + 1), dtype=np.complex128)
         if w_init is not None:
             w0 = np.asarray(w_init)
@@ -139,11 +131,9 @@ class CFDLMS(AdaptiveFilter):
                     )
                 self.ww = w0.reshape(self.M, self.Nw + 1).astype(np.complex128, copy=True)
 
-        # Internal state buffers
         self.uu: np.ndarray = np.zeros((self.M, self.Nw + 1), dtype=np.complex128)
         self.sig: np.ndarray = np.zeros(self.M, dtype=np.float64)
 
-        # History (kept separate because ww is matrix-shaped)
         self.ww_history: List[np.ndarray] = []
 
     @ensure_real_signals
@@ -214,24 +204,18 @@ class CFDLMS(AdaptiveFilter):
         L = self.L
         Nw = self.Nw
 
-        # Number of iterations limited by both desired length and available input for M-long blocks
-        # Need: k*L + M <= (len(x) + L) because we pad L zeros at the beginning.
         max_iters_from_x = int(np.floor((x.size + L - M) / L) + 1) if (x.size + L) >= M else 0
         max_iters_from_d = d.size // L
         n_iters = max(0, min(max_iters_from_x, max_iters_from_d))
 
-        # Outputs (time-aligned), length = n_iters * L
         out_len = n_iters * L
         y_out = np.zeros(out_len, dtype=np.float64)
         e_out = np.zeros(out_len, dtype=np.float64)
 
-        # Pad input with L zeros (as in Matlab xin = [zeros(1,L) xin])
         xpad = np.concatenate([np.zeros(L, dtype=np.float64), x])
 
-        # Reset/initialize histories
         self.ww_history = []
 
-        # Local references to avoid attribute lookups in loop
         uu = self.uu
         ww = self.ww
         sig = self.sig
@@ -241,72 +225,51 @@ class CFDLMS(AdaptiveFilter):
         sqrtM = np.sqrt(M)
 
         for k in range(n_iters):
-            # Time indices for this iteration
             start = k * L
-            seg_x = xpad[start: start + M]  # length M (oldest->newest)
+            seg_x = xpad[start: start + M]  
 
-            # Matlab reference reverses the block:
             x_p = seg_x[::-1].astype(np.complex128, copy=False)
 
-            # Desired block (L samples) and its reversed version (as in Matlab dsb)
             d_seg = d[start: start + L]
             d_p = d_seg[::-1].astype(np.complex128, copy=False)
 
-            # Analysis transform
-            ui = np.fft.fft(x_p) / sqrtM  # shape (M,)
+            ui = np.fft.fft(x_p) / sqrtM
 
-            # Update regressor buffer uu = [ui, uu(:,1:end-1)]
             uu[:, 1:] = uu[:, :-1]
             uu[:, 0] = ui
 
-            # Frequency-domain output per bin: uy[m] = uu[m,:] * ww[m,:].'
-            uy = np.sum(uu * ww, axis=1)  # shape (M,)
+            uy = np.sum(uu * ww, axis=1)
 
-            # Synthesis transform
-            y_block = np.fft.ifft(uy) * sqrtM  # shape (M,)
+            y_block = np.fft.ifft(uy) * sqrtM
 
-            # Keep first L time samples (Matlab uses y(1:L,k))
-            y_firstL = y_block[:L]  # reversed-time convention relative to d_p
+            y_firstL = y_block[:L]
 
-            # Error in Matlab's reversed convention
-            e_rev = d_p - y_firstL  # length L
+            e_rev = d_p - y_firstL
 
-            # Store outputs/errors in *time order* (reverse back)
             y_time = np.real(y_firstL[::-1])
             e_time = d_seg - y_time
 
             y_out[start: start + L] = y_time
             e_out[start: start + L] = e_time
 
-            # FFT of padded error: et = fft([e; zeros(M-L,1)])/sqrt(M)
             e_pad = np.concatenate([e_rev, np.zeros(M - L, dtype=np.complex128)])
-            et = np.fft.fft(e_pad) / sqrtM  # shape (M,)
+            et = np.fft.fft(e_pad) / sqrtM
 
-            # Unconstrained increment wwc (M x (Nw+1))
-            # wwc[m,:] = u/(gamma+(Nw+1)*sig[m]) * conj(uu[m,:]) * et[m]
-            # Update sig first: sig[m] = (1-a)*sig[m] + a*|ui[m]|^2
             sig[:] = (1.0 - a) * sig + a * (np.abs(ui) ** 2)
 
-            denom = gamma + (Nw + 1) * sig  # shape (M,)
-            gain = u_step / denom           # shape (M,)
+            denom = gamma + (Nw + 1) * sig
+            gain = u_step / denom
 
-            # Broadcasting: (M,1) * (M,Nw+1) * (M,1)
             wwc = (gain[:, None] * np.conj(uu) * et[:, None]).astype(np.complex128, copy=False)
 
-            # Constraint step (as in Matlab):
-            # waux = fft(wwc)/sqrt(M)    [FFT across subband index m]
-            # wwc  = sqrt(M)*ifft([waux(1:L,:); zeros(M-L,Nw+1)])
             waux = np.fft.fft(wwc, axis=0) / sqrtM
             waux[L:, :] = 0.0
             wwc_c = np.fft.ifft(waux, axis=0) * sqrtM
 
-            # Update weights
             ww = ww + wwc_c
 
-            # Record history (store a copy to avoid mutation)
             self.ww_history.append(ww.copy())
 
-        # Write back updated states
         self.uu = uu
         self.ww = ww
         self.sig = sig
@@ -319,5 +282,4 @@ class CFDLMS(AdaptiveFilter):
             "errors": e_out,
             "coefficients": self.ww_history,
         }
-
 # EOF

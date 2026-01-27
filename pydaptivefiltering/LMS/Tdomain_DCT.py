@@ -141,5 +141,4 @@ class TDomainDCT(AdaptiveFilter):
             'coefficients': self.w_history,
             'coefficientsDCT': self.w_history_dct
         }
-
 # EOF

@@ -131,5 +131,4 @@ class RLSAlt(AdaptiveFilter):
             'errors_posteriori': errors_post,
             'coefficients': self.w_history
         }
-
 # EOF

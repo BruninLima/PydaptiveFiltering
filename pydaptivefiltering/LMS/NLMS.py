@@ -128,5 +128,4 @@ class NLMS(AdaptiveFilter):
             'errors': e,
             'coefficients': self.w_history
         }
-
 # EOF

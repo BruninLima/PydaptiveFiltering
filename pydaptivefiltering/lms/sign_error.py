@@ -1,4 +1,4 @@
-#  LMS.SignError.py
+#  lms.sign_error.py
 #
 #       Implements the Sign-Error LMS algorithm for Real valued data.
 #       (Algorithm 4.1 - book: Adaptive Filtering: Algorithms and Practical

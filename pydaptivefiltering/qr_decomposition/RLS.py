@@ -1,4 +1,4 @@
-# pydaptivefiltering/QR/RLS.py
+# qr_decomposition.rls.py
 #
 #       Implements the QR-RLS algorithm for REAL valued data.
 #       (Algorithm 9.1 - book: Adaptive Filtering: Algorithms and Practical
@@ -75,7 +75,6 @@ class QRRLS(AdaptiveFilter):
 
         self.n_coeffs: int = self.m + 1
 
-        # MATLAB states
         self.ULineMatrix: np.ndarray = np.zeros((self.n_coeffs, self.n_coeffs), dtype=float)
         self.dLine_q2: np.ndarray = np.zeros(self.n_coeffs, dtype=float)
 
@@ -153,71 +152,38 @@ class QRRLS(AdaptiveFilter):
         n = self.n_coeffs
         M = self.m
 
-        # Need at least n samples to build initial matrices exactly as MATLAB
         if n_iterations < n:
             raise ValueError(
                 f"QR_RLS needs at least (filter_order+1) samples. "
                 f"Got n_samples={n_iterations}, filter_order={M} => n_coeffs={n}."
             )
 
-        # Pre-allocations like MATLAB
         y = np.zeros(n_iterations, dtype=float)
         error_vec = np.zeros(n_iterations, dtype=float)
 
-        # ============================================================
-        # Backsubstitution Procedure (MATLAB initialization of coefficients)
-        # ============================================================
-        # MATLAB uses coefficientVector(:,kt) for kt=1..n
-        # We will build w_history up to n-1 using the same recursion, but store
-        # full length-n vectors (pad zeros for not-yet-defined coefficients).
-        #
-        # WARNING: MATLAB assumes input(1) != 0; we guard with tiny epsilon.
         eps = 1e-18
         denom0 = x[0] if abs(x[0]) > eps else (eps if x[0] >= 0 else -eps)
 
-        # reset our history to match what we build here
         self.w_history = []
-        self.w = np.zeros(n, dtype=complex)  # keep base class shape; we use real values
-
-        # kt=1..n (1-based) => kt_idx=0..n-1 (0-based)
+        self.w = np.zeros(n, dtype=complex)  
         for kt_idx in range(n):
-            # coefficients for order kt_idx (meaning length kt_idx+1)
             w_tmp = np.zeros(n, dtype=float)
 
-            # coefficientVector(1,kt) = desired(1)/input(1)
             w_tmp[0] = d[0] / denom0
 
-            # for ct = 2:kt
-            # ( -input(2:ct)*coefficientVector(ct-1:-1:1,kt) + desired(ct))/input(1)
-            # In 0-based: ct_idx from 1..kt_idx
             for ct_idx in range(1, kt_idx + 1):
-                # input(2:ct) in MATLAB => x[1:ct_idx+1] in python
-                # coefficientVector(ct-1:-1:1) => w_tmp[ct_idx-1::-1]
                 num = -np.dot(x[1: ct_idx + 1], w_tmp[ct_idx - 1 :: -1]) + d[ct_idx]
                 w_tmp[ct_idx] = num / denom0
 
-            # store and set current w
             self.w = w_tmp.astype(float).astype(complex)
             self.w_history.append(self.w.copy())
 
-            # output estimate using current coefficients (consistent FIR TDL)
-            # For k=kt_idx we can form regressor x[k::-1] padded by zeros
             xk = np.zeros(n, dtype=float)
             start = max(0, kt_idx - M)
             seg = x[start : kt_idx + 1][::-1]
             xk[: seg.size] = seg
             y[kt_idx] = float(np.dot(w_tmp, xk))
-            # error_vec early positions are not defined by MATLAB loop, keep 0.0
 
-        # ============================================================
-        # Build Initial Matrices (ULineMatrix and dLine_q2) — MATLAB style
-        # ============================================================
-        # MATLAB:
-        # for it = 0:M
-        #   ULineMatrix(it+1,1:end-it) = (lambda^((it+1)/2))*input(n-it:-1:1);
-        #   dLine_q2(it+1)             = (lambda^((it+1)/2))*desired(n-it);
-        #
-        # Here input and desired are row vectors in MATLAB 1-based indexing.
         self.ULineMatrix[:] = 0.0
         self.dLine_q2[:] = 0.0
 
@@ -226,32 +192,18 @@ class QRRLS(AdaptiveFilter):
         for it in range(0, M + 1):
             scale = self.lamb ** ((it + 1) / 2.0)
 
-            # input(n-it:-1:1) => x[n-1-it : -1 : -1] then reversed length (n-it)
-            # In python: x[n-it-1::-1] gives x[n-it-1],...,x[0] (length n-it)
-            vec = x[(n - it - 1) :: -1]  # length n-it
+            vec = x[(n - it - 1) :: -1]
 
-            # place into columns 0 .. (n-it-1)
             self.ULineMatrix[it, 0 : (n - it)] = scale * vec
 
-            # desired(n-it) => d[n-it-1]
             self.dLine_q2[it] = scale * d[n - it - 1]
 
-        # ============================================================
-        # Main Loop — MATLAB: for kt = nCoefficients+1 : nIterations
-        # ============================================================
-        # 0-based: k = n .. n_iterations-1
         for k in range(n, n_iterations):
             gamma = 1.0
             d_line = float(d[k])
 
-            # regressorLine = input(kt:-1:kt-M)  (length n)
-            reg = x[k : k - M - 1 : -1].copy()  # x[k], x[k-1], ... x[k-M]
-
-            # Givens Rotations for rt = 0:M
+            reg = x[k : k - M - 1 : -1].copy()  
             for rt in range(0, M + 1):
-                # MATLAB indices:
-                # ULineMatrix(rt+1, n-rt)  and  regressorLine(end-rt)
-                # 0-based:
                 row_u = rt
                 col_u = n - 1 - rt
                 idx_r = n - 1 - rt
@@ -267,33 +219,22 @@ class QRRLS(AdaptiveFilter):
                     cos_t = u_val / cI
                     sin_t = r_val / cI
 
-                # Apply rotation to stacked [reg; ULineMatrix] affecting:
-                # - row 0   : reg
-                # - row rt+1: ULineMatrix[rt, :]
                 reg, self.ULineMatrix[row_u, :] = self._givens_rotate_rows(
                     reg, self.ULineMatrix[row_u, :], cos_t, sin_t
                 )
 
                 gamma *= cos_t
 
-                # Apply same rotation to stacked [d_line; dLine_q2] affecting:
-                # - element 0: d_line
-                # - element rt+1: dLine_q2[rt]
-                # new_d_line = cos*d_line - sin*dLine_q2[rt]
-                # new_dq2_rt = sin*d_line + cos*dLine_q2[rt]
                 dq2_rt = self.dLine_q2[row_u]
                 new_d_line = cos_t * d_line - sin_t * dq2_rt
                 new_dq2_rt = sin_t * d_line + cos_t * dq2_rt
                 d_line = new_d_line
                 self.dLine_q2[row_u] = new_dq2_rt
 
-            # Compute Coefficient Vector (MATLAB dBar = [dLine ; dLine_q2])
             d_bar = np.empty(n + 1, dtype=float)
             d_bar[0] = d_line
             d_bar[1:] = self.dLine_q2
 
-            # coefficientVector(1,kt) = dBar(n+1)/ULineMatrix(n,1)
-            # 0-based: w[0] = d_bar[n] / U[n-1,0]
             w_new = np.zeros(n, dtype=float)
 
             den = self.ULineMatrix[n - 1, 0]
@@ -301,11 +242,8 @@ class QRRLS(AdaptiveFilter):
                 den = eps if den >= 0 else -eps
             w_new[0] = d_bar[n] / den
 
-            # for it = 1:M
-            #   w(it+1) = ( -U(n-it, it:-1:1)*w(it:-1:1) + dBar(n+1-it) ) / U(n-it, 1+it)
             for it in range(1, M + 1):
                 row = n - 1 - it
-                # columns 0..it-1 reversed (matches it:-1:1 in MATLAB)
                 u_vec = self.ULineMatrix[row, 0:it][::-1]
                 w_vec = w_new[0:it][::-1]
                 num = -np.dot(u_vec, w_vec) + d_bar[n - it]
@@ -314,19 +252,14 @@ class QRRLS(AdaptiveFilter):
                     den = eps if den >= 0 else -eps
                 w_new[it] = num / den
 
-            # Update filter weights and history
             self.w = w_new.astype(complex)
             self.w_history.append(self.w.copy())
 
-            # Update Parameters (MATLAB scales at the end of iteration)
             self.dLine_q2 *= sqrt_lam
             self.ULineMatrix *= sqrt_lam
 
-            # MATLAB: errorVector(kt) = dLine * gamma  (A POSTERIORI error)
             error_vec[k] = d_line * gamma
 
-            # Provide an output estimate for completeness.
-            # We choose y[k] = d[k] - error_vec[k] so shapes are consistent and REAL.
             y[k] = d[k] - error_vec[k]
 
         if verbose:
@@ -337,6 +270,4 @@ class QRRLS(AdaptiveFilter):
             "errors": error_vec,          
             "coefficients": self.w_history,
         }
-
-
 # EOF

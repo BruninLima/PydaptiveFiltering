@@ -159,5 +159,4 @@ class SteiglitzMcBride(AdaptiveFilter):
             'coefficients': self.w_history,
             'errors_s': e_s
         }
-
 # EOF

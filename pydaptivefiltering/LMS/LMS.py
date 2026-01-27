@@ -121,5 +121,4 @@ class LMS(AdaptiveFilter):
             'errors': e,
             'coefficients': self.w_history
         }
-
 # EOF

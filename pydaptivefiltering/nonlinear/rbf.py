@@ -1,4 +1,4 @@
-#  Radial_Basis_Function.py
+#  nonlinear.rbf.py
 #
 #       Implements the Radial Basis Function algorithm for REAL valued data.
 #       (Algorithm 11.5 - book: Adaptive Filtering: Algorithms and Practical
@@ -12,6 +12,7 @@
 #        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
 #        . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
 
+# Imports
 import numpy as np
 from time import time
 from typing import Optional, Union, List, Dict
@@ -53,14 +54,11 @@ class RBF(AdaptiveFilter):
         self.uw: float = uw
         self.us: float = us
 
-        # Initialization (Weights, Centers, Spreads)
         if w_init is None:
             self.w = np.random.randn(n_neurons)
         
-        # Centers (Reference vectors) - Initialized with small random values
         self.vet: np.ndarray = 0.5 * np.random.randn(n_neurons, input_dim)
         
-        # Spreads (Sigma) - Initialized to ones
         self.sigma: np.ndarray = np.ones(n_neurons, dtype=float)
 
     @ensure_real_signals
@@ -104,7 +102,6 @@ class RBF(AdaptiveFilter):
 
         self._validate_inputs(x_in, d)
         
-        # Auto-regressor logic if 1D signal is provided
         if x_in.ndim == 1:
             n_samples = x_in.size
             x_padded = np.zeros(n_samples + self.input_dim - 1)
@@ -120,27 +117,19 @@ class RBF(AdaptiveFilter):
         for k in range(n_samples):
             uxl_k = regressors[k]
             
-            # 1. Compute Euclidean Distance Squared (dis^2)
             diff = uxl_k - self.vet
             dis_sq = np.sum(diff**2, axis=1)
             
-            # 2. Gaussian Activation Function (fdis)
             fdis = np.exp(-dis_sq / (self.sigma**2))
             
-            # 3. Output and Error Calculation
             y[k] = np.dot(self.w, fdis)
             e[k] = d[k] - y[k]
             
-            # 4. Update Weights (uw)
             self.w = self.w + 2 * self.uw * e[k] * fdis
             
-            # 5. Update Spread (us)
-            # Gradient: 2 * e * fdis * w * (dist^2 / sigma^3)
             self.sigma = self.sigma + 2 * self.us * e[k] * fdis * self.w * dis_sq / (self.sigma**3)
             
-            # 6. Update Reference Vectors / Centers (ur)
             for p in range(self.n_neurons):
-                # Gradient: 2 * e * w * fdis * (input - center) / sigma^2
                 self.vet[p] = self.vet[p] + 2 * self.ur * fdis[p] * e[k] * self.w[p] * (uxl_k - self.vet[p]) / (self.sigma[p]**2)
 
             self._record_history()
@@ -153,5 +142,4 @@ class RBF(AdaptiveFilter):
             'errors': e,
             'coefficients': self.w_history
         }
-
 # EOF

@@ -1,4 +1,4 @@
-#  RLS.FastRLS.py
+#  fast_rls.fast_rls.py
 #
 #       Implements the Fast Transversal RLS algorithm for COMPLEX valued data.
 #       (Algorithm 8.1 - book: Adaptive Filtering: Algorithms and Practical
@@ -158,5 +158,4 @@ class FastRLS(AdaptiveFilter):
             'outputs_posteriori': y_post,
             'errors_posteriori': e_post
         }
-
 # EOF

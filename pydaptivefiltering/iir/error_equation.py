@@ -1,4 +1,4 @@
-# IIR_Filters.ErrorEquation.py
+# iir.error_equation.py
 #
 #       Implements the Equation Error RLS algorithm for REAL valued data.
 #       (Algorithm 10.3 - book: Adaptive Filtering: Algorithms and Practical
@@ -155,5 +155,4 @@ class ErrorEquation(AdaptiveFilter):
             'coefficients': self.w_history,
             'errors_aux': e_aux
         }
-
 # EOF

@@ -121,5 +121,4 @@ class DualSign(AdaptiveFilter):
             'errors': self.errors,
             'coefficients': self.w_history
         }
-
 # EOF

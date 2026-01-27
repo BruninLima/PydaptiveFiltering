@@ -1,7 +1,8 @@
-# blind.sato.py
+# blind.affine_projection_cm.py
 #
-#       Implements the Sato algorithm for COMPLEX valued data.
-#       (Algorithm 13.3 - book: Adaptive Filtering: Algorithms and Practical
+#       Implements the Complex Affine-Projection Constant-Modulus algorithm 
+#       for COMPLEX valued data.
+#       (Algorithm 13.4 - book: Adaptive Filtering: Algorithms and Practical
 #                                                        Implementation, Diniz)
 #
 #
@@ -13,7 +14,6 @@
 #        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com          & wagner@lps.ufrj.br
 #        . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
 
-# Imports
 from __future__ import annotations
 
 import numpy as np
@@ -24,13 +24,13 @@ from pydaptivefiltering.base import AdaptiveFilter
 
 ArrayLike = Union[np.ndarray, list]
 
-class Sato(AdaptiveFilter):
+class AffineProjectionCM(AdaptiveFilter):
     """
     Description
     -----------
-        Implements the Sato algorithm for blind adaptive filtering 
-        with complex or real valued data.
-        (Algorithm 13.3 - book: Adaptive Filtering: Algorithms and Practical
+        Implements the Affine-Projection Constant-Modulus (AP-CM) algorithm 
+        for blind adaptive filtering with complex or real valued data.
+        (Algorithm 13.4 - book: Adaptive Filtering: Algorithms and Practical
         Implementation, Diniz)
 
     Attributes
@@ -44,7 +44,9 @@ class Sato(AdaptiveFilter):
     def __init__(
         self,
         filter_order: int = 5,
-        step: float = 0.01,
+        step: float = 0.1,
+        memory_length: int = 2,
+        gamma: float = 1e-6,
         w_init: Optional[Union[np.ndarray, list]] = None,
     ) -> None:
         """
@@ -54,11 +56,17 @@ class Sato(AdaptiveFilter):
                 Order of the FIR filter (N). Number of coefficients is filter_order + 1.
             step : float
                 Convergence (relaxation) factor (mu).
+            memory_length : int
+                Reuse data factor (referred as L in the textbook).
+            gamma : float
+                Regularization factor to avoid singularity in matrix inversion.
             w_init : array_like, optional
                 Initial filter coefficients. If None, initialized with zeros.
         """
         super().__init__(filter_order, w_init=w_init)
         self.step = float(step)
+        self.L = int(memory_length)
+        self.gamma = float(gamma)
         self.n_coeffs = int(filter_order + 1)
 
     def optimize(
@@ -69,9 +77,9 @@ class Sato(AdaptiveFilter):
         """
         Description
         -----------
-            Executes the adaptation process for the Sato algorithm.
-            This is a blind equalization algorithm, thus it does not require 
-            a desired signal.
+            Executes the adaptation process for the AP-CM algorithm.
+            This algorithm uses multiple past regressors to accelerate 
+            the blind equalization process.
 
         Inputs
         -------
@@ -84,9 +92,9 @@ class Sato(AdaptiveFilter):
         -------
             dictionary:
                 outputs : np.ndarray
-                    Estimated output y[n] of each iteration.
+                    Estimated output y[n] (first element of the output vector).
                 errors : np.ndarray
-                    Blind error e[n] for each iteration.
+                    Blind error e[n] (first element of the error vector).
                 coefficients : list[np.ndarray]
                     History of estimated coefficient vectors.
 
@@ -103,37 +111,48 @@ class Sato(AdaptiveFilter):
         x = np.asarray(input_signal).reshape(-1)
         n_iterations = int(x.size)
         
-        desired_level = np.mean(np.abs(x)**2) / np.mean(np.abs(x))
-
-        y = np.zeros(n_iterations, dtype=x.dtype)
-        e = np.zeros(n_iterations, dtype=x.dtype)
+        y_vec = np.zeros(n_iterations, dtype=x.dtype)
+        e_vec = np.zeros(n_iterations, dtype=x.dtype)
         self.w_history = []
 
-        x_state = np.zeros(self.n_coeffs, dtype=x.dtype)
+        regressor_matrix = np.zeros((self.n_coeffs, self.L + 1), dtype=x.dtype)
+        
+        I_reg = self.gamma * np.eye(self.L + 1)
 
         for it in range(n_iterations):
-            x_state[1:] = x_state[:-1]
-            x_state[0] = x[it]
+            regressor_matrix[:, 1:] = regressor_matrix[:, :-1]
+            
+            current_x = np.zeros(self.n_coeffs, dtype=x.dtype)
+            for i in range(self.n_coeffs):
+                if it - i >= 0:
+                    current_x[i] = x[it - i]
+            regressor_matrix[:, 0] = current_x
 
             self.w_history.append(self.w.copy())
 
-            y[it] = np.dot(np.conj(self.w), x_state)
-
-            if y[it] == 0:
-                sato_sign = 0
-            else:
-                sato_sign = y[it] / np.abs(y[it])
+            output_ap = np.dot(np.conj(regressor_matrix).T, self.w)
             
-            e[it] = y[it] - sato_sign * desired_level
+            desired_level_conj = np.zeros_like(output_ap)
+            for i in range(len(output_ap)):
+                if np.abs(output_ap[i]) > 0:
+                    desired_level_conj[i] = output_ap[i] / np.abs(output_ap[i])
+            
+            error_ap = desired_level_conj - output_ap
 
-            self.w = self.w - self.step * np.conj(e[it]) * x_state
+            inv_part = np.dot(np.conj(regressor_matrix).T, regressor_matrix) + I_reg
+            update_factor = np.linalg.solve(inv_part, error_ap)
+            
+            self.w = self.w + self.step * np.dot(regressor_matrix, update_factor)
+
+            y_vec[it] = output_ap[0]
+            e_vec[it] = error_ap[0]
 
         if verbose:
-            print(f"Sato Adaptation completed in {(time() - tic) * 1000:.03f} ms")
+            print(f"AP-CM Adaptation completed in {(time() - tic) * 1000:.03f} ms")
 
         return {
-            "outputs": y,
-            "errors": e,
+            "outputs": y_vec,
+            "errors": e_vec,
             "coefficients": self.w_history,
         }
 # EOF

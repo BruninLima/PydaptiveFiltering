@@ -24,8 +24,8 @@ The project is currently on its early stages (v0.7). The planned order of work f
 - [1/1] QR
 - [5/5] IIR Filters
 - [6/6] Nonlinear Filters
-- [0/3] Subband Filters
-- [0/4] BlindFilters
+- [3/3] Subband Filters
+- [4/4] BlindFilters
 - [0/?] Kalman Filters
 
 **PUAP:** The `SetMembership_Simp_PUAP` implementation is currently under technical review and may not exhibit expected convergence in this version.

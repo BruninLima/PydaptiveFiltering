@@ -147,5 +147,4 @@ class RLS(AdaptiveFilter):
             'errors_posteriori': self.errors_post,
             'coefficients': self.w_history
         }
-
 # EOF

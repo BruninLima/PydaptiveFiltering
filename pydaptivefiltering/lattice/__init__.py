@@ -1,4 +1,4 @@
-# pydaptivefiltering/LatticeRLS/__init__.py
+# lattice.__init__.py
 
 from .lrls_posteriori import LRLSPosteriori
 from .lrls_priori import LRLSPriori

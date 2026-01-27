@@ -1,4 +1,4 @@
-# IIR_Filters.RLS_IIR.py
+# iir.rls_iir.py
 #
 #       Implements the RLS version of the Output Error algorithm (also known 
 #       as RLS adaptive IIR filter) for REAL valued data.
@@ -165,5 +165,4 @@ class RLSIIR(AdaptiveFilter):
             'errors': e,
             'coefficients': self.w_history
         }
-
 # EOF

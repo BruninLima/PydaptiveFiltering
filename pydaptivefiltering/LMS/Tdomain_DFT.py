@@ -142,5 +142,4 @@ class TDomainDFT(AdaptiveFilter):
             'coefficients': self.w_history,
             'coefficientsDFT': self.w_history_dft
         }
-
 # EOF

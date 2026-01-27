@@ -1,4 +1,4 @@
-# IIR_Filters.GaussNewton.py
+# iir.gauss_newton.py
 #
 #       Implements the Gauss-Newton algorithm for REAL valued data.
 #       (Modified version of Algorithm 10.1 - book: Adaptive Filtering: Algorithms and 
@@ -166,5 +166,4 @@ class GaussNewton(AdaptiveFilter):
             'errors': e,
             'coefficients': self.w_history
         }
-
 # EOF

@@ -1,4 +1,4 @@
-#  SetMembership.NLMS.py
+#  set_membership.nlms.py
 #
 #       Implements the Set-membership Normalized LMS algorithm for COMPLEX valued data.
 #       (Algorithm 6.1 - book: Adaptive Filtering: Algorithms and Practical
@@ -130,5 +130,4 @@ class SMNLMS(AdaptiveFilter):
             'coefficients': self.w_history,
             'n_updates': self.n_updates
         }
-
 # EOF

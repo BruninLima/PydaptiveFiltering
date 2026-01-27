@@ -1,3 +1,5 @@
+# nonlinear.__init__.py
+
 from .bilinear_rls import BilinearRLS
 from .complex_rbf import ComplexRBF
 from .mlp import MultilayerPerceptron

@@ -1,4 +1,4 @@
-#  RLS.StabFastRLS_real.py
+#  fast_rls.stab_fast_rls.py
 #
 #       Implements the Stabilized Fast Transversal RLS algorithm for REAL valued data.
 #       (Algorithm 8.2 - book: Adaptive Filtering: Algorithms and Practical
@@ -90,14 +90,12 @@ class StabFastRLS(AdaptiveFilter):
         self.xi_floor: float = float(xi_floor) if xi_floor is not None else float(finfo.tiny * 1e6)
         self.gamma_clip: Optional[float] = float(gamma_clip) if gamma_clip is not None else None
 
-        # Ensure joint-process weights are real
         self.w = np.asarray(self.w, dtype=np.float64)
 
     @staticmethod
     def _clamp_denom(den: float, floor: float) -> float:
         """Clamp denominator away from 0 while preserving sign."""
         if not np.isfinite(den):
-            # fallback to signed floor
             return np.copysign(floor, den if den != 0 else 1.0)
         if abs(den) < floor:
             return np.copysign(floor, den if den != 0 else 1.0)
@@ -203,8 +201,8 @@ class StabFastRLS(AdaptiveFilter):
         self._validate_inputs(x, d)
         n_samples = x.size
 
-        n_taps = self.m + 1       # N+1
-        reg_len = self.m + 2      # N+2 (matches MATLAB)
+        n_taps = self.m + 1
+        reg_len = self.m + 2
 
         y = np.zeros(n_samples, dtype=np.float64)
         e_priori = np.zeros(n_samples, dtype=np.float64)
@@ -345,6 +343,4 @@ class StabFastRLS(AdaptiveFilter):
             print(f"StabFastRLS (REAL) completed in {(time() - tic)*1000:.03f} ms")
 
         return out
-
-
 # EOF

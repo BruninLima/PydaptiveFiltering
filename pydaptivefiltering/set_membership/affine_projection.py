@@ -150,5 +150,4 @@ class SMAP(AdaptiveFilter):
             'coefficients': self.w_history,
             'n_updates': self.n_updates
         }
-
 # EOF

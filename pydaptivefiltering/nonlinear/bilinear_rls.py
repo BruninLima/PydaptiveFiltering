@@ -1,4 +1,4 @@
-#  nonlinear.Bilinear_RLS.py
+#  nonlinear.bilinear_rls.py
 #
 #       Implements the Bilinear RLS algorithm for REAL valued data.
 #       (Algorithm 11.3 - book: Adaptive Filtering: Algorithms and Practical
@@ -46,7 +46,6 @@ class BilinearRLS(AdaptiveFilter):
         self.forgetting_factor: float = forgetting_factor
         self.delta: float = delta
         
-        # P matrix initialization (Sd in your Matlab code)
         self.P: np.ndarray = np.eye(filter_order) / delta
 
     @ensure_real_signals
@@ -105,7 +104,6 @@ class BilinearRLS(AdaptiveFilter):
         d_prev = 0.0
 
         for k in range(n_samples):
-            # Construção do regressor uxl
             uxl = np.array([
                 x[k], 
                 d_prev, 
@@ -113,24 +111,18 @@ class BilinearRLS(AdaptiveFilter):
                 x_prev * d_prev
             ], dtype=complex)
             
-            # Erro a priori: d(k) - w(k)' * uxl
-            # Usando .conj() para manter o padrão Diniz de números complexos
             e_priori = d_ref[k] - np.dot(self.w.conj(), uxl)
             
-            # Atualização da matriz P (ganho)
             psi = np.dot(self.P, uxl)
             den = self.forgetting_factor + np.dot(uxl.conj(), psi)
             self.P = (1.0 / self.forgetting_factor) * (self.P - np.outer(psi, psi.conj()) / den)
             
-            # Atualização dos pesos usando o ganho a posteriori
             k_gain = np.dot(self.P, uxl)
             self.w = self.w + e_priori * k_gain
             
-            # Saída e erro atuais
             y[k] = np.dot(self.w.conj(), uxl)
             e[k] = d_ref[k] - y[k]
             
-            # Atualização das memórias para k+1
             x_prev = x[k]
             d_prev = d_ref[k]
             

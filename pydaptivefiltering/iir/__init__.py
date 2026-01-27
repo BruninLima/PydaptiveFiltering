@@ -1,3 +1,5 @@
+#  iir.__init__.py
+
 from .error_equation import ErrorEquation
 from .gauss_newton import GaussNewton
 from .gauss_newton_gradient import GaussNewtonGradient

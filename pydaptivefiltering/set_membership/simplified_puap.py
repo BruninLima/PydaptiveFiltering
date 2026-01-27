@@ -1,4 +1,4 @@
-#  SetMembership.Simp_PUAP.py
+#  set_membership.simplified_puap.py
 #
 #       Implements the Simplified Set-membership Partial-Update 
 #       Affine-Projection (SM-Simp-PUAP) algorithm for COMPLEX valued data.

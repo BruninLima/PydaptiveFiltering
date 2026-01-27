@@ -1,7 +1,7 @@
-# blind.sato.py
+# blind.cma.py
 #
-#       Implements the Sato algorithm for COMPLEX valued data.
-#       (Algorithm 13.3 - book: Adaptive Filtering: Algorithms and Practical
+#       Implements the Constant-Modulus algorithm for COMPLEX valued data.
+#       (Algorithm 13.2 - book: Adaptive Filtering: Algorithms and Practical
 #                                                        Implementation, Diniz)
 #
 #
@@ -24,13 +24,13 @@ from pydaptivefiltering.base import AdaptiveFilter
 
 ArrayLike = Union[np.ndarray, list]
 
-class Sato(AdaptiveFilter):
+class CMA(AdaptiveFilter):
     """
     Description
     -----------
-        Implements the Sato algorithm for blind adaptive filtering 
-        with complex or real valued data.
-        (Algorithm 13.3 - book: Adaptive Filtering: Algorithms and Practical
+        Implements the Constant-Modulus Algorithm (CMA) for blind adaptive 
+        filtering with complex or real valued data.
+        (Algorithm 13.2 - book: Adaptive Filtering: Algorithms and Practical
         Implementation, Diniz)
 
     Attributes
@@ -69,9 +69,9 @@ class Sato(AdaptiveFilter):
         """
         Description
         -----------
-            Executes the adaptation process for the Sato algorithm.
-            This is a blind equalization algorithm, thus it does not require 
-            a desired signal.
+            Executes the adaptation process for the CMA algorithm.
+            As a blind algorithm, it targets a constant modulus property
+            of the output signal rather than a known desired signal.
 
         Inputs
         -------
@@ -86,7 +86,7 @@ class Sato(AdaptiveFilter):
                 outputs : np.ndarray
                     Estimated output y[n] of each iteration.
                 errors : np.ndarray
-                    Blind error e[n] for each iteration.
+                    CMA error e[n] for each iteration.
                 coefficients : list[np.ndarray]
                     History of estimated coefficient vectors.
 
@@ -103,7 +103,7 @@ class Sato(AdaptiveFilter):
         x = np.asarray(input_signal).reshape(-1)
         n_iterations = int(x.size)
         
-        desired_level = np.mean(np.abs(x)**2) / np.mean(np.abs(x))
+        desired_level = np.mean(np.abs(x)**4) / np.mean(np.abs(x)**2)
 
         y = np.zeros(n_iterations, dtype=x.dtype)
         e = np.zeros(n_iterations, dtype=x.dtype)
@@ -119,17 +119,14 @@ class Sato(AdaptiveFilter):
 
             y[it] = np.dot(np.conj(self.w), x_state)
 
-            if y[it] == 0:
-                sato_sign = 0
-            else:
-                sato_sign = y[it] / np.abs(y[it])
-            
-            e[it] = y[it] - sato_sign * desired_level
+            e[it] = np.abs(y[it])**2 - desired_level
 
-            self.w = self.w - self.step * np.conj(e[it]) * x_state
+            phi = 2.0 * e[it] * np.conj(y[it])
+            
+            self.w = self.w - self.step * phi * x_state
 
         if verbose:
-            print(f"Sato Adaptation completed in {(time() - tic) * 1000:.03f} ms")
+            print(f"CMA Adaptation completed in {(time() - tic) * 1000:.03f} ms")
 
         return {
             "outputs": y,

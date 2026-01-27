@@ -1,4 +1,4 @@
-#  Volterra_LMS.py
+#  nonlinear.volterra_lms.py
 #
 #       Implements the Volterra LMS algorithm for REAL valued data.
 #       (Algorithm 11.1 - book: Adaptive Filtering: Algorithms and Practical
@@ -12,6 +12,7 @@
 #        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
 #        . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
 
+# Imports
 import numpy as np
 from time import time
 from typing import Optional, Union, List, Dict
@@ -47,7 +48,6 @@ class VolterraLMS(AdaptiveFilter):
         
         super().__init__(m=n_coeffs - 1, w_init=w_init)
         
-        # Step can be a scalar or a vector for individual term adjustment
         self.step: Union[float, np.ndarray] = np.asarray(step) if isinstance(step, (list, np.ndarray)) else step
 
     def _create_volterra_regressor(self, x_lin: np.ndarray) -> np.ndarray:
@@ -56,7 +56,6 @@ class VolterraLMS(AdaptiveFilter):
         
         Sequence: [x(k), ..., x(k-L+1), x(k)^2, x(k)x(k-1), ..., x(k-L+1)^2]
         """
-        # Quadratic terms (i <= j to avoid redundant terms and match Matlab uxl)
         quad_terms = []
         for i in range(self.memory):
             for j in range(i, self.memory):
@@ -115,23 +114,17 @@ class VolterraLMS(AdaptiveFilter):
         y: np.ndarray = np.zeros(n_samples, dtype=complex)
         e: np.ndarray = np.zeros(n_samples, dtype=complex)
         
-        # Padding para lidar com a linha de atraso de tamanho 'memory'
         x_padded: np.ndarray = np.zeros(n_samples + self.memory - 1, dtype=complex)
         x_padded[self.memory - 1:] = x
 
         for k in range(n_samples):
-            # 1. Extração da linha de atraso linear: [x(k), x(k-1), ..., x(k-L+1)]
             x_lin = x_padded[k : k + self.memory][::-1]
             
-            # 2. Construção do regressor expandido
             uxl = self._create_volterra_regressor(x_lin)
             
-            # 3. Cálculo da saída (usando conjugado para compatibilidade complexa)
             y[k] = np.dot(self.w.conj(), uxl)
             e[k] = d[k] - y[k]
 
-            # 4. Atualização dos pesos: w(k+1) = w(k) + 2 * mu * e * uxl
-            # Se mu for vetor, a multiplicação elemento a elemento funciona aqui
             self.w = self.w + 2 * self.step * e[k] * uxl
             
             self._record_history()

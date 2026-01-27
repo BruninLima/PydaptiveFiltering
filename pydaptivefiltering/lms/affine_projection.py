@@ -148,5 +148,4 @@ class AffineProjection(AdaptiveFilter):
             'errors': e_out,
             'coefficients': self.w_history
         }
-
 # EOF
