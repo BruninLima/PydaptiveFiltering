@@ -27,7 +27,7 @@ The project is currently on its early stages (v0.7). The planned order of work f
 - [0/3] Subband Filters
 - [0/4] BlindFilters
 - [0/?] Kalman Filters
-- 
+
 **PUAP:** The `SetMembership_Simp_PUAP` implementation is currently under technical review and may not exhibit expected convergence in this version.
 
 **StabFastRLS:** The `Fast_TransversalRLS.StabFastRLS` implementation is currently under technical review and may exhibit unexpected warnings in this version.
@@ -47,11 +47,6 @@ To install the package with pip:
 ```
 pip install pydaptivefiltering
 ```
-To install the package with conda:
-```
-conda install pydaptivefiltering
-```
-
 ---
 ## ☕ Examples of uses
 
