@@ -47,6 +47,7 @@ To install the package with pip:
 ```
 pip install pydaptivefiltering
 ```
+
 ---
 ## ☕ Examples of uses
 
@@ -73,22 +74,7 @@ filt = pdf.VolterraRLS(memory=3, forgetting_factor=0.99)
 results = filt.optimize(x, d)
 print(f"Final MSE: {np.mean(results['errors'][-100:]**2)}")
 ```
----
 
-## 🧪 Technical Validation
-
-The package uses rigorous unit testing to ensure the mathematical integrity of each structure. We currently maintain **70+ automated tests** covering:
-
-1. **Numerical Stability:** Floating-point operations for complex structures (Lattice/QR).
-2. **Convergence Accuracy:** Verification of steady-state MSE (Mean Square Error) against system noise levels.
-3. **Tracking Performance:** Capability of algorithms to adapt to abrupt system changes (Step response).
-
-To run tests locally:
-
-```bash
-pytest
-
-```
 
 
 ---
@@ -127,6 +113,22 @@ plt.plot(10*np.log10(res['errors']**2), alpha=0.5, label='Squared Error (dB)')
 plt.title(f"MLP Convergence (Final MSE: {np.mean(res['errors'][-500:]**2):.5f})")
 plt.legend()
 plt.show()
+```
+---
+
+## 🧪 Technical Validation
+
+The package uses rigorous unit testing to ensure the mathematical integrity of each structure. We currently maintain **70+ automated tests** covering:
+
+1. **Numerical Stability:** Floating-point operations for complex structures (Lattice/QR).
+2. **Convergence Accuracy:** Verification of steady-state MSE (Mean Square Error) against system noise levels.
+3. **Tracking Performance:** Capability of algorithms to adapt to abrupt system changes (Step response).
+
+To run tests locally:
+
+```bash
+pytest
+
 ```
 
 ---
