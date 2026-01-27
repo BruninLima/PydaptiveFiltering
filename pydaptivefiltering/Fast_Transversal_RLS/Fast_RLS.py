@@ -1,141 +1,162 @@
-#  RLS.rls.py
+#  RLS.FastRLS.py
 #
-#      Implements the Fast Transversal RLS algorithm for REAL valued data.
-#      (Algorithm 8.1 - book: Adaptive Filtering: Algorithms and Practical
+#       Implements the Fast Transversal RLS algorithm for COMPLEX valued data.
+#       (Algorithm 8.1 - book: Adaptive Filtering: Algorithms and Practical
 #                                                       Implementation, Diniz)
 #
-#      Authors:
-#       . Bruno Ramos Lima Netto        - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-#       . Guilherme de Oliveira Pinto   - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-#       . Markus Vinícius Santos Lima   - mvsl20@gmailcom           & markus@lps.ufrj.br
-#       . Wallace Alves Martins         - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-#       . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com          & wagner@lps.ufrj.br
-#       . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
+#       Authors:
+#        . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
+#        . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
+#        . Markus Vinícius Santos Lima    - mvsl20@gmailcom           & markus@lps.ufrj.br
+#        . Wallace Alves Martins         - wallace.wam@gmail.com      & wallace@lps.ufrj.br
+#        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
+#        . Paulo Sergio Ramirez Diniz    -                               diniz@lps.ufrj.br
 
 # Imports
 import numpy as np
 from time import time
+from typing import Optional, Union, List, Dict
+from pydaptivefiltering.main import AdaptiveFilter
 
-
-def Fast_RLS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, Lambda: float, N: int, Epsilon: float, verbose: bool = False) -> dict:
+class FastRLS(AdaptiveFilter):
     """
     Description
     -----------
-        Implements the Fast Transversal RLS algorithm for REAL valued data. 
+        Implements the Fast Transversal RLS algorithm for COMPLEX valued data.
         (Algorithm 8.1 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
-
-    Syntax
-    ------
-    OutputDictionary = Fast_RLS(Filter, desired_signal, input_signal, Delta, Lambda, verbose)
-
-    Inputs
-    -------
-        filter  : Adaptive Filter                                      filter object
-        desired : Desired signal                                       numpy array (row vector)
-        input   : Input signal to feed filter                          numpy array (row vector)
-        Lambda  : Forgetting factor                                    float
-        N       : predictor Order                                      int
-        Epsilon : Initialization of xiMin_backward and xiMin_forward   float 
-        verbose : Verbose boolean                                      bool
-
-    Outputs
-    -------
-        dictionary:
-            outputs      : Store the estimated output of each iteration.        numpy array (column vector)
-            errors       : Store the error for each iteration.                  numpy array (column vector)
-            coefficients : Store the estimated coefficients for each iteration  numpy array (column vector)
-            outputs_posteriori : Store the a posteriori estimated output of each iteration. (column vector)
-            errors_posteriori  : Store the a posteriori error for each iteration.           (column vector)
-
-    Main Variables
-    --------- 
-        regressor
-        outputs_vector[k] represents the output errors at iteration k    
-        FIR error vectors. 
-        error_vector[k] represents the output errors at iteration k.
-
-    Misc Variables
-    --------------
-        tic
-        nIterations
-
-
-    Authors
-    -------
-        . Bruno Ramos Lima Netto        - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-        . Guilherme de Oliveira Pinto   - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-        . Markus Vinícius Santos Lima   - mvsl20@gmailcom           & markus@lps.ufrj.br
-        . Wallace Alves Martins         - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com          & wagner@lps.ufrj.br
-        . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
-
     """
 
-    # Initialization
-    tic = time()
-    nIterations = input_signal.size
-    nCoefficients = Filter.filter_order + 1
+    def __init__(
+        self, 
+        filter_order: int, 
+        lamb: float = 0.99, 
+        epsilon: float = 0.1,
+        w_init: Optional[Union[np.ndarray, list]] = None
+    ) -> None:
+        """
+        Inputs
+        -------
+            filter_order : int (The order of the filter M)
+            lamb         : float (Forgetting factor lambda, 0 << lambda <= 1)
+            epsilon      : float (Initialization of xiMin_backward and xiMin_forward)
+            w_init       : array_like, optional (Initial coefficients)
+        """
+        super().__init__(filter_order, w_init)
+        self.lamb: float = lamb
+        self.epsilon: float = epsilon
 
-    # Pre Allocations
-    coefficientVector = np.zeros((nCoefficients, nIterations + 1))
-    errorVector = np.zeros((nIterations,))
-    outputVector = np.zeros((nIterations,))
-    errorPriori = np.zeros((nIterations,))
-    errorPosteriori = np.zeros((nIterations,))
-    xiMin_f_Curr = 0
-    xiMin_f_Prev = Epsilon
-    xiMin_b = Epsilon
-    gamma_Np1 = 0
-    gamma_N = 1
-    w_f = np.zeros(nCoefficients,)
-    w_b = np.zeros(nCoefficients,)
-    error_f = 0
-    error_f_line = 0
-    error_b = 0
-    error_b_line = 0
-    phiHatN = np.zeros(nCoefficients, 1)
-    phiHatNPlus1 = np.zeros(nCoefficients+1,)
+    def optimize(
+        self, 
+        input_signal: Union[np.ndarray, list], 
+        desired_signal: Union[np.ndarray, list], 
+        verbose: bool = False
+    ) -> Dict[str, Union[np.ndarray, List[np.ndarray]]]:
+        """
+        Description
+        -----------
+            Executes the weight update process for the Fast RLS algorithm.
 
-    regressor = np.zeros(Filter.filter_order+1, dtype=input_signal.dtype)
+        Inputs
+        -------
+            input_signal   : np.ndarray | list (Input vector x)
+            desired_signal : np.ndarray | list (Desired vector d)
+            verbose        : bool (Verbose boolean)
 
-    # Main Loop
-    for it in range(nIterations):
+        Outputs
+        -------
+            dictionary:
+                outputs            : Store the estimated output (priori) of each iteration.
+                errors             : Store the priori error for each iteration.
+                coefficients       : Store the estimated coefficients for each iteration.
+                outputs_posteriori : Store the a posteriori estimated output.
+                errors_posteriori  : Store the a posteriori error.
 
-        regressor = np.concatenate(([input_signal[it]], regressor))[
-            :Filter.filter_order+1]
+        Main Variables
+        --------- 
+            w_f, w_b       : Forward and backward predictor coefficients.
+            xi_min_f, b    : Minimum forward and backward squared errors.
+            phi_hat_n      : Gain vector.
+            gamma_n        : Conversion factor.
 
-        error_f_line = regressor.T.conj() @ (-1*w_f)
-        error_f = error_f_line * gamma_N
-        xiMin_f_Curr = Lambda * xiMin_f_Prev + error_f_line * error_f
-        phiHatNPlus1 = np.concatenate((np.array([0]), phiHatN)) + 1/(
-            Lambda * xiMin_f_Prev) * error_f_line * np.concatenate((np.array([1]), -1 * w_f))
-        w_f = w_f + phiHatN*error_f
-        gamma_Np1 = (Lambda * xiMin_f_Prev * gamma_N) / xiMin_f_Curr
-        error_b_line = Lambda * xiMin_b * phiHatNPlus1[-1]
-        gamma_N = 1 / (1 / (gamma_Np1) - phiHatNPlus1[-1]*error_b_line)
+        Authors
+        -------
+            . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
+            . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
+            . Markus Vinícius Santos Lima    - mvsl20@gmailcom           & markus@lps.ufrj.br
+            . Wallace Alves Martins         - wallace.wam@gmail.com      & wallace@lps.ufrj.br
+            . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
+            . Paulo Sergio Ramirez Diniz    -                               diniz@lps.ufrj.br
+        """
+        tic: float = time()
+        
+        x: np.ndarray = np.asarray(input_signal, dtype=complex)
+        d: np.ndarray = np.asarray(desired_signal, dtype=complex)
 
-        error_b = error_b_line * gamma_N
-        xiMin_b = Lambda * xiMin_b + error_b*error_b_line
-        w_b = w_b + phiHatN * error_b
+        self._validate_inputs(x, d)
+        n_samples: int = x.size
+        m_plus_1: int = self.m + 1 
+        
+        y_priori: np.ndarray = np.zeros(n_samples, dtype=complex)
+        e_priori: np.ndarray = np.zeros(n_samples, dtype=complex)
+        y_post: np.ndarray = np.zeros(n_samples, dtype=complex)
+        e_post: np.ndarray = np.zeros(n_samples, dtype=complex)
 
-        # Joint Process Estimation
+        w_f: np.ndarray = np.zeros(m_plus_1, dtype=complex)
+        w_b: np.ndarray = np.zeros(m_plus_1, dtype=complex)
+        phi_hat_n: np.ndarray = np.zeros(m_plus_1, dtype=complex)
+        gamma_n: float = 1.0
+        xi_min_f_prev: float = self.epsilon
+        xi_min_b: float = self.epsilon
 
-        errorPriori[it] = desired_signal[it] - \
-            regressor.T.conj() @ coefficientVector[:, it]
-        errorPosteriori[it] = errorPriori[it] * gamma_N
-        coefficientVector[:, it + 1] = coefficientVector[:,
-                                                         it] + phiHatN * errorPosteriori[it]
+        x_padded: np.ndarray = np.zeros(n_samples + m_plus_1, dtype=complex)
+        x_padded[m_plus_1:] = x
 
-        Filter.coefficients = coefficientVector[:, it + 1]
-        Filter.coefficients_history = coefficientVector[:, it + 1]
+        for k in range(n_samples):
+            regressor: np.ndarray = x_padded[k : k + m_plus_1 + 1][::-1]
+            
+            e_f_priori = regressor[0] - np.dot(w_f.conj(), regressor[1:])
+            e_f_post = e_f_priori * gamma_n
+            
+            xi_min_f_curr = self.lamb * xi_min_f_prev + e_f_priori * np.conj(e_f_post)
+            
+            phi_gain = e_f_priori / (self.lamb * xi_min_f_prev)
+            phi_hat_n_plus_1 = np.zeros(m_plus_1 + 1, dtype=complex)
+            phi_hat_n_plus_1[1:] = phi_hat_n
+            phi_hat_n_plus_1[0] += phi_gain
+            phi_hat_n_plus_1[1:] -= phi_gain * w_f
+            
+            w_f = w_f + phi_hat_n * np.conj(e_f_post)
+            
+            gamma_n_plus_1 = (self.lamb * xi_min_f_prev * gamma_n) / xi_min_f_curr
+            e_b_priori = self.lamb * xi_min_b * phi_hat_n_plus_1[-1]
+            gamma_n = 1.0 / ( (1.0 / gamma_n_plus_1) - (phi_hat_n_plus_1[-1] * np.conj(e_b_priori)) )
+            
+            e_b_post = e_b_priori * gamma_n
+            xi_min_b = self.lamb * xi_min_b + e_b_post * np.conj(e_b_priori)
+            
+            phi_hat_n = phi_hat_n_plus_1[:-1] + phi_hat_n_plus_1[-1] * w_b
+            w_b = w_b + phi_hat_n * np.conj(e_b_post)
 
-        # K - 1 Info
-        xiMin_f_Prev = xiMin_f_Curr
+            y_priori[k] = np.dot(self.w.conj(), regressor[:-1])
+            e_priori[k] = d[k] - y_priori[k]
+            
+            e_post[k] = e_priori[k] * gamma_n
+            y_post[k] = d[k] - e_post[k]
+            
+            self.w = self.w + phi_hat_n * np.conj(e_post[k])
+            
+            xi_min_f_prev = xi_min_f_curr
+            self._record_history()
 
-    if verbose == True:
-        print(" ")
-        print('Total runtime {:.03} ms'.format((time() - tic)*1000))
+        if verbose:
+            print(f"Fast RLS Adaptation completed in {(time() - tic)*1000:.03f} ms")
 
-    return errorPosteriori, errorPriori, coefficientVector
+        return {
+            'outputs': y_priori,
+            'errors': e_priori,
+            'coefficients': self.w_history,
+            'outputs_posteriori': y_post,
+            'errors_posteriori': e_post
+        }
 
-#   EOF
+# EOF

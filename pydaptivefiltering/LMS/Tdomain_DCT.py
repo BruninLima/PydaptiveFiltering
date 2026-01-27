@@ -1,143 +1,145 @@
 #  LMS.Tdomain_DCT.py
 #
-#      Implements the Transform-Domain LMS algorithm, based on the Discrete
-#      Cossine Transform (DCT) Matrix, for COMPLEX valued data.
-#      (Algorithm 4.4 - book: Adaptive Filtering: Algorithms and Practical
-#                                                      Implementation, Diniz)
+#       Implements the Transform-Domain LMS algorithm, based on the Discrete
+#       Cossine Transform (DCT) Matrix, for COMPLEX valued data.
+#       (Algorithm 4.4 - book: Adaptive Filtering: Algorithms and Practical
+#                                                              Implementation, Diniz)
 #
-#      Authors:
-#       . Bruno Ramos Lima Netto        - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-#       . Guilherme de Oliveira Pinto   - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-#       . Markus Vinícius Santos Lima   - mvsl20@gmailcom           & markus@lps.ufrj.br
-#       . Wallace Alves Martins         - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-#       . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com          & wagner@lps.ufrj.br
-#       . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
+#       Authors:
+#        . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
+#        . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
+#        . Markus Vinícius Santos Lima    - mvsl20@gmailcom           & markus@lps.ufrj.br
+#        . Wallace Alves Martins          - wallace.wam@gmail.com     & wallace@lps.ufrj.br
+#        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
+#        . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
 
 # Imports
 import numpy as np
 from time import time
 from scipy.fftpack import dct
+from typing import Optional, Union, List, Dict
+from pydaptivefiltering.main import AdaptiveFilter
 
-
-def Tdomain_DCT(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, gamma: float, alpha: float, initialPower: float,  step: float = 1e-2, verbose: bool = False) -> dict:
+class TDomain_DCT(AdaptiveFilter):
     """
     Description
     -----------
         Implements the Transform-Domain LMS algorithm, based on the Discrete
-        Cossine Transform (DCT) Matrix, for COMPLEX valued data.
-        (Algorithm 4.4 - book: Adaptive Filtering: Algorithms and Practical
-                                                        Implementation, Diniz)
-
-    Syntax
-    ------
-    OutputDictionary = Tdomain_DCT(Filter, desired_signal, input_signal, step, verbose)
-
-    Inputs
-    -------
-        filter  : Adaptive Filter                       filter object
-        desired : Desired signal                        numpy array (row vector)
-        input   : Input signal to feed filter           numpy array (row vector)
-        gamma   : Regularization factor.                float
-                    (small positive constant to avoid singularity)
-        alpha   : Used to estimate eigenvalues of Ru    float
-                    (0 << alpha << 0.1)
-        initialPower: Initial Power.                    float
-        step    : Convergence (relaxation) factor.      float
-        verbose : Verbose boolean                       bool
-
-    Outputs
-    -------
-        dictionary:
-            outputs      : Store the estimated output of each iteration.        numpy array (collumn vector)
-            errors       : Store the error for each iteration.                  numpy array (collumn vector)
-            coefficients : Store the estimated coefficients for each iteration  numpy array (collumn vector)
-                                in the ORIGINAL domain.
-            coefficientsDCT: Store the estimated coefficients for each iteration numpy array (collumn vector)
-                                in the TRANSFORM domain.
-
-    Main Variables
-    --------- 
-        regressor
-        outputs_vector[k] represents the output errors at iteration k    
-        FIR error vectors. 
-        error_vector[k] represents the output errors at iteration k.
-
-    Comments:
-    --------
-        The adaptive filter is implemented in the Transform-Domain (DCT). Therefore, the first
-        three output variables are calculated in this TRANSFORMED domain. The last output
-        variable, coefficientVector, corresponds to the adaptive filter coefficients in the
-        ORIGINAL domain (the coefficientVector is the Inverse Discrete Cossine Transform
-        aplied to the coefficientVectorDCT) and is only calculated in order to facilitate
-        comparisons, i.e., for implementation purposes just coefficientVectorDCT matters.
-
-
-    Authors
-    -------
-        . Bruno Ramos Lima Netto        - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-        . Guilherme de Oliveira Pinto   - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-        . Markus Vinícius Santos Lima   - mvsl20@gmailcom           & markus@lps.ufrj.br
-        . Wallace Alves Martins         - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com          & wagner@lps.ufrj.br
-        . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
-
+        Cossine Transform (DCT), for COMPLEX valued data.
+        (Algorithm 4.4 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
     """
 
-    # Initialization
-    tic = time()
-    nIterations = desired_signal.size
+    def __init__(
+        self, 
+        filter_order: int, 
+        gamma: float, 
+        alpha: float, 
+        initial_power: float, 
+        step: float = 1e-2, 
+        w_init: Optional[Union[np.ndarray, list]] = None
+    ) -> None:
+        """
+        Inputs
+        -------
+            filter_order  : int (The order of the filter M)
+            gamma         : float (Regularization factor to avoid singularity)
+            alpha         : float (Smoothing factor for power estimation)
+            initial_power : float (Initial power estimate for all bins)
+            step          : float (Convergence factor mu)
+            w_init        : array_like, optional (Initial coefficients)
+        """
+        super().__init__(filter_order, w_init)
+        self.gamma: float = gamma
+        self.alpha: float = alpha
+        self.step: float = step
+        
+        self.N = filter_order + 1
+        self.T = dct(np.eye(self.N), norm='ortho', axis=0)
+        
+        self.w_dct = self.T @ self.w
+        self.power_vector = np.full(self.N, initial_power, dtype=float)
+        self.w_history_dct = [self.w_dct.copy()]
 
-    regressor = np.zeros(Filter.filter_order+1, dtype=input_signal.dtype)
-    error_vector = np.array([])
-    outputs_vector = np.array([])
-    coefficientVectorDCT = np.zeros(
-        (nIterations+1, Filter.filter_order + 1), dtype=input_signal.dtype)
+    def optimize(
+        self, 
+        input_signal: Union[np.ndarray, list], 
+        desired_signal: Union[np.ndarray, list], 
+        verbose: bool = False
+    ) -> Dict[str, Union[np.ndarray, List[np.ndarray]]]:
+        """
+        Description
+        -----------
+            Executes the weight update process for the TDomain-DCT algorithm.
 
-    N = Filter.filter_order+1
-    T = dct(np.eye(N), norm='ortho', axis=0)
-    coefficientVectorDCT[0] = T@Filter.coefficients
+        Inputs
+        -------
+            input_signal   : np.ndarray | list (Input vector x)
+            desired_signal : np.ndarray | list (Desired vector d)
+            verbose        : bool (Verbose boolean)
 
-    powerVector = np.ones(Filter.filter_order+1,
-                          dtype=input_signal.dtype)*initialPower
+        Outputs
+        -------
+            dictionary:
+                outputs         : Store the estimated output of each iteration.
+                errors          : Store the error for each iteration.
+                coefficients    : Store the estimated coefficients (Original Domain).
+                coefficientsDCT : Store the estimated coefficients (Transform Domain).
 
-    coefficientsDCT = T@Filter.coefficients
-    coefficientVectorDCT[0] = coefficientsDCT
+        Main Variables
+        --------- 
+            regressor    : Vector containing the tapped delay line (x_k).
+            regressorDCT : DCT of the regressor (z_k = T * x_k).
+            power_vector : Recursive estimate of the power in each DCT bin.
 
-    # Main Loop
-    for it in range(nIterations):
+        Authors
+        -------
+            . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
+            . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
+            . Markus Vinícius Santos Lima    - mvsl20@gmailcom           & markus@lps.ufrj.br
+            . Wallace Alves Martins          - wallace.wam@gmail.com     & wallace@lps.ufrj.br
+            . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
+            . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
+        """
+        tic: float = time()
+        
+        x_in: np.ndarray = np.asarray(input_signal, dtype=complex)
+        d_in: np.ndarray = np.asarray(desired_signal, dtype=complex)
 
-        regressor = np.concatenate(([input_signal[it]], regressor))[
-            :Filter.filter_order+1]
+        self._validate_inputs(x_in, d_in)
+        n_samples: int = d_in.size
+        
+        y: np.ndarray = np.zeros(n_samples, dtype=complex)
+        e: np.ndarray = np.zeros(n_samples, dtype=complex)
 
-    regressorDCT = np.dot(T, regressor)
+        
 
-    powerVector = alpha*(regressorDCT * regressorDCT.conj()
-                         ) + (1 - alpha)*(powerVector)
+        for k in range(n_samples):
+            self.regressor = np.roll(self.regressor, 1)
+            self.regressor[0] = x_in[k]
 
-    output_it = np.dot(regressorDCT.conj(), coefficientVectorDCT[it])
+            regressorDCT = self.T @ self.regressor
 
-    error_it = desired_signal[it] - output_it
+            self.power_vector = (self.alpha * np.real(regressorDCT * regressorDCT.conj()) + 
+                                (1.0 - self.alpha) * self.power_vector)
 
-    next_coefficients = coefficientsDCT + step * \
-        error_it.conj() * regressorDCT / (gamma + powerVector)
+            y[k] = np.dot(self.w_dct.conj(), regressorDCT)
+            e[k] = d_in[k] - y[k]
 
-    error_vector = np.append(error_vector, error_it)
+            self.w_dct = self.w_dct + self.step * e[k].conj() * regressorDCT / (self.gamma + self.power_vector)
+            
+            self.w = self.T.T @ self.w_dct
+            
+            self._record_history()
+            self.w_history_dct.append(self.w_dct.copy())
 
-    outputs_vector = np.append(outputs_vector, output_it)
+        if verbose:
+            print(f"[TD-LMS-DCT] Completed in {(time() - tic)*1000:.03f} ms")
 
-    coefficientVectorDCT[it + 1] = next_coefficients
-
-    coeffs = np.dot(T.conj().T, coefficientVectorDCT[it])
-    Filter.coefficients = coeffs
-    Filter.coefficients_history.append(coeffs)
-
-    if verbose == True:
-        print(" ")
-        print('Total runtime {:0.2f} seconds'.format(time() - tic))
-
-    return {'outputs': outputs_vector,
-            'errors': error_vector,
-            'coefficients': Filter.coefficients,
-            'coefficientsDCT': coefficientVectorDCT}
+        return {
+            'outputs': y,
+            'errors': e,
+            'coefficients': self.w_history,
+            'coefficientsDCT': self.w_history_dct
+        }
 
 # EOF

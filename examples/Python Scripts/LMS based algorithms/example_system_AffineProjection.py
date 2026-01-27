@@ -1,5 +1,5 @@
 #################################################################################
-#                        Example: System Identification                         #
+#                         Example: System Identification                        #
 #################################################################################
 #                                                                               #
 #  In this example we have a typical system identification scenario. We want    #
@@ -15,92 +15,110 @@
 # 3)  Choose an adaptive filtering algorithm to govern the rules of coefficient #
 #   updating.                                                                   #
 #                                                                               #
-#     Adaptive Algorithm used here: AffineProjection                            #
+#     Adaptive Algorithm used here: Affine Projection                           #
 #                                                                               #
 #################################################################################
 
 # Imports
 import numpy as np
 import matplotlib.pyplot as plt
-import pydaptivefiltering as pdf
+from time import time
+from pydaptivefiltering.LMS import AffineProjection
+from pydaptivefiltering.main import AdaptiveFilter
 
+# Define a Plant class to simulate the unknown system (Reference System)
+class Plant(AdaptiveFilter):
+    def optimize(self, **kwargs): 
+        """The Plant represents the static unknown system and does not update."""
+        pass
 
-def AffineProjection_example():
+def run_affine_projection_example():
     """
-    Types:
-    ------
-    None -> '(Filter, dictionary["outputs", "errors", "coefficients"])'
-
-    Example for the AP algorithm. 
-
+    Example for the Affine Projection (AP) algorithm.
+    Algorithm 4.6 - Adaptive Filtering: Algorithms and Practical Implementation, Diniz.
     """
-    # Parameters
-    K = 70                  # Number of iterations
-    H = np.array([0.32+0.21*1j, -0.3+0.7*1j, 0.5-0.8*1j, 0.2+0.5*1j])
-    Wo = H                  # Unknown System
-    sigma_n2 = 0.04         # Noise Power
-    N = 4                   # Number of coefficients of the adaptive filter
-    gamma = 1e-8            # Small constant to avoid division by zero
-    L = 2               # Reuse data factor
-    mu = 0.1                # Convergence factor (step) (0 < μ < 1)
+    # 1. Experiment Parameters
+    n_samples = 800
+    # Unknown complex coefficients (Wo)
+    h_unknown = np.array([0.32+0.21*1j, -0.3+0.7*1j, 0.5-0.8*1j, 0.2+0.5*1j])
+    filter_order = len(h_unknown) - 1
+    sigma_n2 = 0.04  # Noise power
+    mu = 0.1         # Step size
+    L = 2            # Reuse data factor
+    gamma = 1e-8     # Regularization factor (avoid division by zero)
 
-    # Initializing
-    W = np.ones(shape=(N, K+1))
-    # Input at a certain iteration (tapped delay line)
-    X = np.zeros(N)
-    x = (np.random.randn(K) + np.random.randn(K)*1j)/np.sqrt(2)
-    # complex noise
-    n = np.sqrt(sigma_n2/2) * (np.random.randn(K) +
-                               np.random.randn(K)*1j)
-    d = []
+    # 2. Signal Generation
+    # Input x(k): Complex white noise
+    x = (np.random.randn(n_samples) + 1j * np.random.randn(n_samples)) / np.sqrt(2)
+    
+    # Complex Additive White Gaussian Noise (AWGN)
+    noise = np.sqrt(sigma_n2/2) * (np.random.randn(n_samples) + 1j * np.random.randn(n_samples))
+    
+    # Generate Desired Signal d(k) = Wo^H * x(k) + n(k)
+    plant = Plant(filter_order, w_init=h_unknown)
+    d = plant.filter_signal(x) + noise
 
-    for k in range(K):
+    # 3. Adaptive Filtering Execution
+    ap_filter = AffineProjection(filter_order=filter_order, step=mu, L=L, gamma=gamma)
+    
+    print("-" * 60)
+    print(f"Starting Affine Projection Adaptation (L={L})")
+    print(f"Number of Samples: {n_samples} | Step size: {mu}")
+    
+    tic = time()
+    results = ap_filter.optimize(input_signal=x, desired_signal=d, verbose=False)
+    runtime = (time() - tic) * 1000
+    
+    print(f"Adaptation Finished in {runtime:.03f} ms")
+    print("-" * 60)
 
-        # input signal (tapped delay line)
-        X = np.concatenate(([x[k]], X))[:N]
-        d.append(np.dot(Wo.conj(), X))
+    # 4. Graphical Visualization
+    plt.figure(figsize=(14, 10))
+    
+    # --- Subplot 1: MSE Learning Curve ---
+    plt.subplot(2, 2, 1)
+    # Calculate Squared Error Magnitude
+    mse = np.abs(results['errors'])**2
+    plt.semilogy(mse, label='AP MSE')
+    plt.axhline(y=sigma_n2, color='r', linestyle='--', label='Noise Floor')
+    plt.title('Learning Curve: MSE [Magnitude]')
+    plt.xlabel('Iterations')
+    plt.ylabel('MSE')
+    plt.grid(True, which='both', alpha=0.3)
+    plt.legend()
 
-    # Desired signal
-    d = np.array(d) + n
+    # --- Subplot 2: Noise Power Analysis ---
+    plt.subplot(2, 2, 2)
+    noise_power = np.abs(noise)**2
+    plt.semilogy(noise_power, color='orange', alpha=0.4, label='Complex Noise Power')
+    plt.title('Instantaneous Noise Power')
+    plt.xlabel('Samples')
+    plt.grid(True, which='both', alpha=0.3)
+    plt.legend()
 
-    # Adaptive Filter
-    Filter = pdf.AdaptiveFilter(W[:, 1])
-    print(" Adapting with Affine Projection\n")
-    # Adapting
-    Output = pdf.LMS.AffineProjection(Filter, d, x, gamma, L, mu)
+    # --- Subplot 3: Coefficients Evolution (Real Part) ---
+    plt.subplot(2, 2, 3)
+    weights_hist = np.array(results['coefficients'])
+    plt.plot(weights_hist.real)
+    for val in h_unknown.real:
+        plt.axhline(y=val, color='black', linestyle=':', linewidth=1, alpha=0.6)
+    plt.title('Coefficients Evolution (Real Part)')
+    plt.xlabel('Iterations')
+    plt.grid(True, alpha=0.3)
 
-    return (Filter, Output, n)
+    # --- Subplot 4: Coefficients Evolution (Imaginary Part) ---
+    plt.subplot(2, 2, 4)
+    plt.plot(weights_hist.imag)
+    for val in h_unknown.imag:
+        plt.axhline(y=val, color='black', linestyle=':', linewidth=1, alpha=0.6)
+    plt.title('Coefficients Evolution (Imaginary Part)')
+    plt.xlabel('Iterations')
+    plt.grid(True, alpha=0.3)
 
+    plt.tight_layout()
+    plt.show()
 
 if __name__ == "__main__":
-    # Running the model
-    Filter, Output, ComplexNoise = AffineProjection_example()
-
-    # Plotting
-    plt.figure(figsize=(16, 16))
-
-    plt.subplot(221)
-    plt.gca().set_title('Learning Curve for MSE [dB]')
-    MSE = [abs(err)**2 for err in Output['errors']]
-    plt.gca().semilogy(MSE)
-    plt.grid()
-    plt.subplot(222)
-    plt.gca().set_title('Learning Curve for MSEmin [dB]')
-    MSEmin = [abs(n)**2 for n in ComplexNoise]
-    plt.gca().semilogy(MSEmin)
-    plt.grid()
-    plt.subplot(223)
-    plt.gca().set_title('Evolution of the Coefficients (Real Part)')
-    real_part = [coef.real for coef in Output['coefficients']]
-    plt.gca().plot(real_part)
-    plt.grid()
-    plt.subplot(224)
-    plt.gca().set_title('Evolution of the Coefficients (Imaginary Part)')
-    imag_part = [coef.imag for coef in Output['coefficients']]
-    plt.gca().plot(imag_part)
-    plt.grid()
-
-    plt.tight_layout(pad=4.0)
-    plt.show()
+    run_affine_projection_example()
 
 # EOF

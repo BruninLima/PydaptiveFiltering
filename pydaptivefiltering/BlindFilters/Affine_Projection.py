@@ -17,7 +17,7 @@ import numpy as np
 from time import time
 
 
-def affine_projection(Filter, input_signal: np.ndarray, gamma: float, L: int, step: float = 1e-2, verbose: bool = False) -> dict:
+def Affine_Projection(Filter, input_signal: np.ndarray, gamma: float, L: int, step: float = 1e-2, verbose: bool = False) -> dict:
     """
     Description
     -----------

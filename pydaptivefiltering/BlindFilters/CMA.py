@@ -17,7 +17,7 @@ import numpy as np
 from time import time
 
 
-def cma(Filter, input_signal: np.ndarray, step: float = 1e-2, verbose: bool = False) -> dict:
+def CMA(Filter, input_signal: np.ndarray, step: float = 1e-2, verbose: bool = False) -> dict:
     """
     Description
     -----------

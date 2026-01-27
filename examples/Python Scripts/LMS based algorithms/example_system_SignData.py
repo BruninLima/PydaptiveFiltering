@@ -1,5 +1,5 @@
 #################################################################################
-#                        Example: System Identification                         #
+#                         Example: System Identification                        #
 #################################################################################
 #                                                                               #
 #  In this example we have a typical system identification scenario. We want    #
@@ -15,88 +15,97 @@
 # 3)  Choose an adaptive filtering algorithm to govern the rules of coefficient #
 #   updating.                                                                   #
 #                                                                               #
-#     Adaptive Algorithm used here: SignData                                    #
+#     Adaptive Algorithm used here: Sign-Data LMS                               #
 #                                                                               #
 #################################################################################
 
 # Imports
 import numpy as np
 import matplotlib.pyplot as plt
-import pydaptivefiltering as pdf
+from time import time
+from pydaptivefiltering.LMS import SignData
+from pydaptivefiltering.main import AdaptiveFilter
 
+# Define a Plant class to simulate the unknown system
+class Plant(AdaptiveFilter):
+    def optimize(self, **kwargs): 
+        """The Plant represents the static unknown system and does not update."""
+        pass
 
-def SignData_example():
+def run_sign_data_example():
     """
-
-    Types:
-    ------
-    None -> '(Filter, dictionary["outputs", "errors", "coefficients"])'
-
-    Example for the SignData algorithm. 
-
+    Example for the Sign-Data LMS algorithm.
+    Useful for reduced computational complexity by using the sign of the input.
     """
-    # Parameters
-    K = 70                  # Number of iterations
-    H = np.array([0.32,-0.3,0.5,0.2])
-    Wo = H                  # Unknown System
-    sigma_n2 = 0.04         # Noise Power
-    N = 4                   # Number of coefficients of the adaptive filter
-    mu = 0.1                # Convergence factor (step) (0 < μ < 1)
+    # 1. Experiment Parameters
+    # Sign algorithms often require more samples to converge than standard LMS
+    n_samples = 1000  
+    h_unknown = np.array([0.32, -0.3, 0.5, 0.2]) # Real coefficients for standard Sign-Data
+    filter_order = len(h_unknown) - 1
+    sigma_n2 = 0.01  
+    mu = 0.01        # Smaller step size is often needed for stability in Sign algorithms
 
-    # Initializing
-    W = np.ones(shape=(N, K+1))
-    # Input at a certain iteration (tapped delay line)
-    X = np.zeros(N)
-    x = (np.random.randn(K) + np.random.randn(K)*1j)/np.sqrt(2)
-    # complex noise
-    n = np.sqrt(sigma_n2/2) * (np.random.randn(K) +
-                               np.random.randn(K)*1j)
-    d = []
+    # 2. Signal Generation
+    x = np.random.randn(n_samples) # Real input for standard Sign-Data
+    noise = np.sqrt(sigma_n2) * np.random.randn(n_samples)
+    
+    # Generate Desired Signal d(k)
+    plant = Plant(filter_order, w_init=h_unknown)
+    d = plant.filter_signal(x) + noise
 
-    for k in range(K):
+    # 3. Adaptive Filtering Execution
+    # Standard Sign-Data update: w(k+1) = w(k) + 2 * mu * e(k) * sgn(x(k))
+    sd_filter = SignData(filter_order=filter_order, step=mu)
+    
+    print("-" * 60)
+    print(f"Starting Sign-Data LMS Adaptation")
+    print(f"Number of Samples: {n_samples} | Step size: {mu}")
+    
+    tic = time()
+    results = sd_filter.optimize(input_signal=x, desired_signal=d, verbose=False)
+    runtime = (time() - tic) * 1000
+    
+    print(f"Adaptation Finished in {runtime:.03f} ms")
+    print("-" * 60)
 
-        # input signal (tapped delay line)
-        X = np.concatenate(([x[k]], X))[:N]
-        d.append(np.dot(Wo.conj(), X))
+    # 4. Graphical Visualization
+    plt.figure(figsize=(14, 10))
+    
+    # --- Subplot 1: MSE Learning Curve ---
+    plt.subplot(2, 2, 1)
+    mse = np.abs(results['errors'])**2
+    plt.semilogy(mse, label='Sign-Data MSE', alpha=0.6)
+    # Moving average to see convergence trend clearly
+    plt.semilogy(np.convolve(mse, np.ones(50)/50, mode='valid'), label='Smoothed MSE', color='black')
+    plt.axhline(y=sigma_n2, color='r', linestyle='--', label='Noise Floor')
+    plt.title('Learning Curve: MSE')
+    plt.xlabel('Iterations')
+    plt.ylabel('MSE')
+    plt.grid(True, which='both', alpha=0.3)
+    plt.legend()
 
-    # desired signal
-    d = np.array(d) + n
+    # --- Subplot 2: Error Signal ---
+    plt.subplot(2, 2, 2)
+    plt.plot(results['errors'], color='green', alpha=0.5)
+    plt.title('Estimation Error e(k)')
+    plt.xlabel('Samples')
+    plt.grid(True, alpha=0.3)
 
-    # Instantiating the adaptive filter
-    Filter = pdf.AdaptiveFilter(W[:, 1])
-    print("Adapting with SignData algorithm")
-    # Adapting with SignData algorithm
-    Output = pdf.LMS.SignData(Filter, d, x, mu)
+    # --- Subplot 3: Coefficients Evolution ---
+    plt.subplot(2, 1, 2)
+    weights_hist = np.array(results['coefficients'])
+    plt.plot(weights_hist)
+    for val in h_unknown:
+        plt.axhline(y=val, color='black', linestyle=':', linewidth=1.2)
+    plt.title('Coefficients Evolution')
+    plt.xlabel('Iterations')
+    plt.ylabel('Weight Value')
+    plt.grid(True, alpha=0.3)
 
-    return (Filter, Output, n)
-
+    plt.tight_layout()
+    plt.show()
 
 if __name__ == "__main__":
-    # Running the model
-    Filter, Output, ComplexNoise = SignData_example()
-
-    # Plotting the results
-    plt.figure(figsize=(16, 16))
-
-    plt.subplot(221)
-    plt.gca().set_title("Learning Curve for SignData [dB]")
-    MSE = [abs(err)**2 for err in Output["errors"]]
-    plt.gca().semilogy(MSE)
-    plt.grid()
-    plt.subplot(222)
-    plt.gca().set_title("Learning Curve for MSEmin [dB]")
-    MSEmin = [abs(n)**2 for n in ComplexNoise]
-    plt.gca().semilogy(MSEmin)
-    plt.grid()
-    plt.subplot(223)
-    plt.gca().set_title("Evolution of the Coefficients (Real Part)")
-    plt.gca().plot(np.real(Output["coefficients"]))
-    plt.grid()
-    plt.subplot(224)
-    plt.gca().set_title("Evolution of the Coefficients (Imaginary Part)")
-    plt.gca().plot(np.imag(Output["coefficients"]))
-    plt.grid()
-    plt.tight_layout(pad=4.0)
-    plt.show()
+    run_sign_data_example()
 
 # EOF

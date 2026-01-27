@@ -17,7 +17,7 @@ import numpy as np
 from time import time
 
 
-def bilinear_RLS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: float = 1e-2, verbose: bool = False) -> dict:
+def Bilinear_RLS(Filter, desired_signal: np.ndarray, input_signal: np.ndarray, step: float = 1e-2, verbose: bool = False) -> dict:
     """
     Description
     -----------

@@ -17,7 +17,7 @@ import numpy as np
 from time import time
 
 
-def bilinear_RLS(Filter, input_signal: np.ndarray, Lambda: float, step: float = 1e-2, verbose: bool = False) -> dict:
+def Complex_Radial_Basis_Function(Filter, input_signal: np.ndarray, Lambda: float, step: float = 1e-2, verbose: bool = False) -> dict:
     """
     Description
     -----------

@@ -17,7 +17,7 @@ import numpy as np
 from time import time
 
 
-def godard(Filter, input_signal: np.ndarray, pExponent: float, qExponent: float, step: float = 1e-2, verbose: bool = False) -> dict:
+def Godard(Filter, input_signal: np.ndarray, pExponent: float, qExponent: float, step: float = 1e-2, verbose: bool = False) -> dict:
     """
     Description
     -----------
