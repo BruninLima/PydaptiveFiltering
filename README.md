@@ -17,25 +17,6 @@
   </a>
 </p>
 
-## Algorithms (overview)
-
-> This is an overview. For the full list, check the documentation: <a href="https://BruninLima.github.io/pydaptivefiltering/index.html">Docs</a>
-Algorithms categories are based on the chapters of the book <em>Adaptive Filtering: Algorithms and Practical Implementation</em> (Paulo S. R. Diniz).
-
-| Module / Category | Examples (classes) | Data type | Notes |
-|---|---|---|---|
-| `lms/` (LMS family) | `LMS`, `NLMS`, `AP`, … | Real/Complex | Classic LMS and normalized/projection variants. |
-| `rls/` (RLS family) | `RLS`, `RLSAlt`, … | Complex | Standard RLS + alternative recursion variants. |
-| `fast_rls/` (Fast transversal RLS) | `FastRLS`, `StabFastRLS`, … | Real/Complex | Fast transversal implementations; stability-oriented variants. |
-| `qr_decomposition/` (QR-RLS) | `QRRLS` | Real | Numerically stable RLS via Givens rotations / QR-style recursion. |
-| `set_membership/` (Set-membership) | `SMNLMS`, `SMBNLMS`, `SMAffineProjection`, `SimplifiedSMAP` | Complex | Updates only when \|e(k)\| exceeds a threshold (`gamma_bar`). |
-| `nonlinear/` (Nonlinear) | `VolterraLMS`, `VolterraRLS`, `RBF`, `MultilayerPerceptron`, … | Real | Volterra (2nd-order), RBF networks, adaptive MLP with momentum. |
-| `subband/` (Subband / frequency-domain) | `OLSBLMS`, `DLCLLMS`, `CFDLMS` | Real | Block/subband processing; some internals use complex FFT but I/O is real. |
-| `lattice/` (Lattice-based RLS) | <!-- e.g., `LatticeRLS`, `...` --> | Real/Complex | Lattice/QR-like numerically stable structures (fill with your class names). |
-| `iir/` (IIR adaptive filters) | <!-- e.g., `IIRLMS`, `...` --> | Real/Complex | Adaptive IIR structures (fill with your class names). |
-| `blind/` (Blind filtering) | <!-- e.g., `CMA`, `...` --> | Complex | Blind/adaptive criteria without desired signal (fill with your class names). |
-| `kalman/` (Kalman filters) | `Kalman`, … | Real | State-space filtering (and parameter estimation if supported). |
----
 
 ## 📌 Table of Contents
 * [Algorithms & Progress](#-project-status--algorithms)
@@ -146,15 +127,25 @@ plt.show()
 
 ---
 
+## Algorithms (overview)
 
-## Project status
+> This is an overview. For the full list, check the documentation: <a href="https://BruninLima.github.io/pydaptivefiltering/index.html">Docs</a>
+Algorithms categories are based on the chapters of the book <em>Adaptive Filtering: Algorithms and Practical Implementation</em> (Paulo S. R. Diniz).
 
-Current release: **v<!-- VERSION -->** (<!-- STABILITY: e.g., early-stage / stable -->)
-
-Roadmap for each algorithm family:
-1) implementation  
-2) examples  
-3) notebooks
+| Module / Category | Examples (classes) | Data type |
+|---|---|---|
+| `lms/` (LMS family) | `LMS`, `NLMS`, `AP`, … | Real/Complex |
+| `rls/` (RLS family) | `RLS`, `RLSAlt`, … | Complex |
+| `fast_rls/` (Fast transversal RLS) | `FastRLS`, `StabFastRLS`, … | Real/Complex |
+| `qr_decomposition/` (QR-RLS) | `QRRLS` | Real |
+| `set_membership/` (Set-membership) | `SMNLMS`, `SMBNLMS`, `SMAffineProjection`, `SimplifiedSMAP` | Complex |
+| `nonlinear/` (Nonlinear) | `VolterraLMS`, `VolterraRLS`, `RBF`, `MultilayerPerceptron`, … | Real |
+| `subband/` (Subband / frequency-domain) | `OLSBLMS`, `DLCLLMS`, `CFDLMS` | Real |
+| `lattice/` (Lattice-based RLS) | <!-- e.g., `LatticeRLS`, `...` --> | Real/Complex |
+| `iir/` (IIR adaptive filters) | <!-- e.g., `IIRLMS`, `...` --> | Real/Complex |
+| `blind/` (Blind filtering) | <!-- e.g., `CMA`, `...` --> | Complex |
+| `kalman/` (Kalman filters) | `Kalman`, … | Real |
+---
 
 ### Known limitations (this release)
 
@@ -163,9 +154,8 @@ Roadmap for each algorithm family:
 
 ---
 
-## Documentation
+## Notebooks
 
-- 📖 API reference (pdoc): [Docs](docs/pydaptivefiltering.html)
 - 🧪 Examples and notebooks: [Notebooks](examples/Jupyter%20Notebooks/)
 
 ---
