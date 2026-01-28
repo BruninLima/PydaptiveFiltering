@@ -1,5 +1,5 @@
 import pytest
-from pydaptivefiltering import SMNLMS, SMAP, SMBNLMS, SimplifiedSMAP
+from pydaptivefiltering import SMNLMS, SMAffineProjection, SMBNLMS, SimplifiedSMAP
 
 def test_sm_nlms_basic(system_data):
     """Valida a estrutura básica e ocorrência de atualizações no SM-NLMS."""
@@ -28,7 +28,7 @@ def test_sm_ap_structure():
     L = 2
     order = 4
     # Note: gamma_bar_vector pode ser passado como lista, evitando import do numpy
-    filt = SMAP(filter_order=order, gamma_bar=0.1, gamma_bar_vector=[0.0, 0.0, 0.0], L=L, gamma=1e-3)
+    filt = SMAffineProjection(filter_order=order, gamma_bar=0.1, gamma_bar_vector=[0.0, 0.0, 0.0], L=L, gamma=1e-3)
     
     # X_matrix armazena L+1 vetores regressores de tamanho M+1
     assert filt.X_matrix.shape == (order + 1, L + 1)

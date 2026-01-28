@@ -1,136 +1,143 @@
-# blind.cma.py
+# blind.constant_modulus.py
 #
 #       Implements the Constant-Modulus algorithm for COMPLEX valued data.
 #       (Algorithm 13.2 - book: Adaptive Filtering: Algorithms and Practical
-#                                                        Implementation, Diniz)
-#
+#                                                              Implementation, Diniz)
 #
 #       Authors:
 #        . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-#        . Guilherme de Oliveira Pinto   - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-#        . Markus Vinícius Santos Lima   - mvsl20@gmailcom           & markus@lps.ufrj.br
-#        . Wallace Alves Martins         - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-#        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com          & wagner@lps.ufrj.br
-#        . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
+#        . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilhermepinto7@lps.ufrj.br
+#        . Markus Vinícius Santos Lima    - mvsl20@gmail.com          & markus@lps.ufrj.br
+#        . Wallace Alves Martins          - wallace.wam@gmail.com     & wallace@lps.ufrj.br
+#        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
+#        . Paulo Sergio Ramirez Diniz    -                                diniz@lps.ufrj.br
 
-# Imports
 from __future__ import annotations
 
 import numpy as np
 from time import time
-from typing import Optional, Union, List, Dict
+from typing import Any, Dict, Optional, Union
 
-from pydaptivefiltering.base import AdaptiveFilter
+from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult
 
-ArrayLike = Union[np.ndarray, list]
 
 class CMA(AdaptiveFilter):
     """
-    Description
-    -----------
-        Implements the Constant-Modulus Algorithm (CMA) for blind adaptive 
-        filtering with complex or real valued data.
-        (Algorithm 13.2 - book: Adaptive Filtering: Algorithms and Practical
-        Implementation, Diniz)
+    Implements the Constant-Modulus Algorithm (CMA) for blind adaptive filtering.
 
-    Attributes
-    ----------
-        supports_complex : bool
-            True (The algorithm supports complex-valued data).
+    Notes
+    -----
+    - This is a BLIND algorithm: it does not require desired_signal.
+    - We keep `desired_signal=None` in `optimize` only for API standardization.
     """
-
     supports_complex: bool = True
+
+    step_size: float
+    n_coeffs: int
 
     def __init__(
         self,
         filter_order: int = 5,
-        step: float = 0.01,
+        step_size: float = 0.01,
         w_init: Optional[Union[np.ndarray, list]] = None,
     ) -> None:
-        """
-        Inputs
-        -------
-            filter_order : int
-                Order of the FIR filter (N). Number of coefficients is filter_order + 1.
-            step : float
-                Convergence (relaxation) factor (mu).
-            w_init : array_like, optional
-                Initial filter coefficients. If None, initialized with zeros.
-        """
         super().__init__(filter_order, w_init=w_init)
-        self.step = float(step)
+        self.step_size = float(step_size)
         self.n_coeffs = int(filter_order + 1)
 
     def optimize(
         self,
-        input_signal: ArrayLike,
+        input_signal: Union[np.ndarray, list],
+        desired_signal: Optional[Union[np.ndarray, list]] = None,
         verbose: bool = False,
-    ) -> Dict[str, Union[np.ndarray, List[np.ndarray]]]:
+        return_internal_states: bool = False,
+        safe_eps: float = 1e-12,
+    ) -> OptimizationResult:
         """
-        Description
-        -----------
-            Executes the adaptation process for the CMA algorithm.
-            As a blind algorithm, it targets a constant modulus property
-            of the output signal rather than a known desired signal.
+        Executes the Constant-Modulus Algorithm (CMA) weight update process.
 
-        Inputs
-        -------
-            input_signal : np.ndarray | list
-                Signal fed into the adaptive filter.
-            verbose : bool
-                Verbose boolean.
+        Parameters
+        ----------
+        input_signal:
+            Input signal to be filtered.
+        desired_signal:
+            Ignored (kept only for API standardization).
+        verbose:
+            If True, prints runtime.
+        return_internal_states:
+            If True, includes internal signals in result.extra.
+        safe_eps:
+            Small epsilon to avoid division by zero when estimating the dispersion constant.
 
-        Outputs
+        Returns
         -------
-            dictionary:
-                outputs : np.ndarray
-                    Estimated output y[n] of each iteration.
-                errors : np.ndarray
-                    CMA error e[n] for each iteration.
-                coefficients : list[np.ndarray]
-                    History of estimated coefficient vectors.
+        OptimizationResult
+            outputs:
+                Filter output y[k].
+            errors:
+                CMA error (|y[k]|^2 - R2).
+            coefficients:
+                History of coefficients stored in the base class.
+            error_type:
+                "blind_constant_modulus".
 
-        Authors
-        -------
-            . Guilherme de Oliveira Pinto   - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-            . Markus Vinícius Santos Lima   - mvsl20@gmailcom           & markus@lps.ufrj.br
-            . Wallace Alves Martins         - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-            . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com          & wagner@lps.ufrj.br
-            . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
+        Extra (when return_internal_states=True)
+        --------------------------------------
+        extra["dispersion_constant"]:
+            R2 used by CMA.
+        extra["instantaneous_phi"]:
+            Trajectory of phi[k] = 2*e[k]*conj(y[k]) (complex), length N.
         """
-        tic = time()
+        tic: float = time()
 
-        x = np.asarray(input_signal).reshape(-1)
-        n_iterations = int(x.size)
-        
-        desired_level = np.mean(np.abs(x)**4) / np.mean(np.abs(x)**2)
+        x: np.ndarray = np.asarray(input_signal, dtype=complex).ravel()
+        n_samples: int = int(x.size)
 
-        y = np.zeros(n_iterations, dtype=x.dtype)
-        e = np.zeros(n_iterations, dtype=x.dtype)
-        self.w_history = []
+        outputs: np.ndarray = np.zeros(n_samples, dtype=complex)
+        errors: np.ndarray = np.zeros(n_samples, dtype=float)
+        denom: float = float(np.mean(np.abs(x) ** 2))
+        if denom < safe_eps:
+            desired_level: float = 0.0
+        else:
+            desired_level = float(np.mean(np.abs(x) ** 4) / (denom + safe_eps))
 
-        x_state = np.zeros(self.n_coeffs, dtype=x.dtype)
+        phi_track: Optional[np.ndarray] = np.zeros(n_samples, dtype=complex) if return_internal_states else None
 
-        for it in range(n_iterations):
-            x_state[1:] = x_state[:-1]
-            x_state[0] = x[it]
+        x_padded: np.ndarray = np.zeros(n_samples + self.filter_order, dtype=complex)
+        x_padded[self.filter_order:] = x
 
-            self.w_history.append(self.w.copy())
+        for k in range(n_samples):
+            x_k: np.ndarray = x_padded[k : k + self.filter_order + 1][::-1]
 
-            y[it] = np.dot(np.conj(self.w), x_state)
+            y_k: complex = complex(np.dot(np.conj(self.w), x_k))
+            outputs[k] = y_k
 
-            e[it] = np.abs(y[it])**2 - desired_level
+            e_k: float = float((np.abs(y_k) ** 2) - desired_level)
+            errors[k] = e_k
 
-            phi = 2.0 * e[it] * np.conj(y[it])
-            
-            self.w = self.w - self.step * phi * x_state
+            phi_k: complex = complex(2.0 * e_k * np.conj(y_k))
+            if return_internal_states and phi_track is not None:
+                phi_track[k] = phi_k
 
+            self.w = self.w - self.step_size * phi_k * x_k
+            self._record_history()
+
+        runtime_s: float = float(time() - tic)
         if verbose:
-            print(f"CMA Adaptation completed in {(time() - tic) * 1000:.03f} ms")
+            print(f"[CMA] Completed in {runtime_s * 1000:.02f} ms")
 
-        return {
-            "outputs": y,
-            "errors": e,
-            "coefficients": self.w_history,
-        }
+        extra: Optional[Dict[str, Any]] = None
+        if return_internal_states:
+            extra = {
+                "dispersion_constant": desired_level,
+                "instantaneous_phi": phi_track,
+            }
+
+        return self._pack_results(
+            outputs=outputs,
+            errors=errors,
+            runtime_s=runtime_s,
+            error_type="blind_constant_modulus",
+            extra=extra,
+        )
 # EOF

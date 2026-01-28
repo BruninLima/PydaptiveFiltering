@@ -2,143 +2,170 @@
 #
 #       Implements the Godard algorithm for COMPLEX valued data.
 #       (Algorithm 13.1 - book: Adaptive Filtering: Algorithms and Practical
-#                                                        Implementation, Diniz)
-#
+#                                                              Implementation, Diniz)
 #
 #       Authors:
 #        . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-#        . Guilherme de Oliveira Pinto   - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-#        . Markus Vinícius Santos Lima   - mvsl20@gmailcom           & markus@lps.ufrj.br
-#        . Wallace Alves Martins         - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-#        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com          & wagner@lps.ufrj.br
-#        . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
+#        . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilhermepinto7@lps.ufrj.br
+#        . Markus Vinícius Santos Lima    - mvsl20@gmail.com          & markus@lps.ufrj.br
+#        . Wallace Alves Martins          - wallace.wam@gmail.com     & wallace.wam@gmail.com
+#        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
+#        . Paulo Sergio Ramirez Diniz    -                                diniz@lps.ufrj.br
 
-# Imports
 from __future__ import annotations
 
 import numpy as np
 from time import time
-from typing import Optional, Union, List, Dict
+from typing import Any, Dict, Optional, Union
 
-from pydaptivefiltering.base import AdaptiveFilter
+from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult
 
-ArrayLike = Union[np.ndarray, list]
 
 class Godard(AdaptiveFilter):
     """
-    Description
-    -----------
-        Implements the Godard algorithm for blind adaptive filtering 
-        with complex or real valued data.
-        (Algorithm 13.1 - book: Adaptive Filtering: Algorithms and Practical
-        Implementation, Diniz)
+    Implements the Godard algorithm for blind adaptive filtering with complex-valued data.
 
-    Attributes
-    ----------
-        supports_complex : bool
-            True (The algorithm supports complex-valued data).
+    This is a blind adaptation criterion that does not require a desired signal.
+    A `desired_signal=None` parameter is accepted only to keep a unified API signature
+    across the library.
     """
-
     supports_complex: bool = True
+
+    step_size: float
+    p: int
+    q: int
+    n_coeffs: int
 
     def __init__(
         self,
         filter_order: int = 5,
-        step: float = 0.01,
+        step_size: float = 0.01,
         p_exponent: int = 2,
         q_exponent: int = 2,
         w_init: Optional[Union[np.ndarray, list]] = None,
     ) -> None:
         """
-        Inputs
-        -------
-            filter_order : int
-                Order of the FIR filter (N). Number of coefficients is filter_order + 1.
-            step : float
-                Convergence (relaxation) factor (mu).
-            p_exponent : int
-                Godard-error's exponent (p).
-            q_exponent : int
-                Exponent used to define the desired output level (q).
-            w_init : array_like, optional
-                Initial filter coefficients. If None, initialized with zeros.
+        Parameters
+        ----------
+        filter_order:
+            FIR filter order (number of taps - 1). Number of coefficients is filter_order + 1.
+        step_size:
+            Adaptation step size.
+        p_exponent:
+            Exponent p used by the Godard cost (typically p=2).
+        q_exponent:
+            Exponent q used by the Godard cost (typically q=2).
+        w_init:
+            Optional initial coefficient vector. If None, initializes to zeros.
         """
         super().__init__(filter_order, w_init=w_init)
-        self.step = float(step)
+        self.step_size = float(step_size)
         self.p = int(p_exponent)
         self.q = int(q_exponent)
         self.n_coeffs = int(filter_order + 1)
 
     def optimize(
         self,
-        input_signal: ArrayLike,
+        input_signal: Union[np.ndarray, list],
+        desired_signal: Optional[Union[np.ndarray, list]] = None,
         verbose: bool = False,
-    ) -> Dict[str, Union[np.ndarray, List[np.ndarray]]]:
+        return_internal_states: bool = False,
+        safe_eps: float = 1e-12,
+    ) -> OptimizationResult:
         """
-        Description
-        -----------
-            Executes the adaptation process for the Godard algorithm.
-            This is a blind equalization algorithm, thus it does not require 
-            a desired signal.
+        Executes the Godard adaptive algorithm.
 
-        Inputs
-        -------
-            input_signal : np.ndarray | list
-                Signal fed into the adaptive filter.
-            verbose : bool
-                Verbose boolean.
+        Parameters
+        ----------
+        input_signal:
+            Input signal to be filtered.
+        desired_signal:
+            Ignored (kept only for API standardization).
+        verbose:
+            If True, prints runtime.
+        return_internal_states:
+            If True, returns internal signals in result.extra.
+        safe_eps:
+            Small epsilon used to avoid divisions by zero and unstable powers.
 
-        Outputs
+        Returns
         -------
-            dictionary:
-                outputs : np.ndarray
-                    Estimated output y[n] of each iteration.
-                errors : np.ndarray
-                    Godard error e[n] for each iteration.
-                coefficients : list[np.ndarray]
-                    History of estimated coefficient vectors.
+        OptimizationResult
+            outputs:
+                Filter output y[k].
+            errors:
+                Godard error defined here as: e[k] = |y[k]|^q - Rq.
+            coefficients:
+                History of coefficients stored in the base class.
+            error_type:
+                "blind_godard".
 
-        Authors
-        -------
-            . Guilherme de Oliveira Pinto   - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-            . Markus Vinícius Santos Lima   - mvsl20@gmailcom           & markus@lps.ufrj.br
-            . Wallace Alves Martins         - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-            . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com          & wagner@lps.ufrj.br
-            . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
+        Extra (when return_internal_states=True)
+        --------------------------------------
+        extra["phi_gradient"]:
+            Trajectory of the instantaneous gradient term used for weight update, length N.
+        extra["dispersion_constant"]:
+            Scalar Rq used by the criterion.
         """
-        tic = time()
+        tic: float = time()
 
-        x = np.asarray(input_signal).reshape(-1)
-        n_iterations = int(x.size)
-        
-        desired_level = np.mean(np.abs(x)**(2 * self.q)) / np.mean(np.abs(x)**self.q)
+        x: np.ndarray = np.asarray(input_signal, dtype=complex).ravel()
+        n_samples: int = int(x.size)
 
-        y = np.zeros(n_iterations, dtype=x.dtype)
-        e = np.zeros(n_iterations, dtype=x.dtype)
-        self.w_history = []
+        num: float = float(np.mean(np.abs(x) ** (2 * self.q)))
+        den: float = float(np.mean(np.abs(x) ** self.q))
+        desired_level: float = float(num / (den + safe_eps)) if den > safe_eps else 0.0
 
-        x_state = np.zeros(self.n_coeffs, dtype=x.dtype)
+        outputs: np.ndarray = np.zeros(n_samples, dtype=complex)
+        errors: np.ndarray = np.zeros(n_samples, dtype=float)
 
-        for it in range(n_iterations):
-            x_state[1:] = x_state[:-1]
-            x_state[0] = x[it]
+        phi_track: Optional[np.ndarray] = np.zeros(n_samples, dtype=complex) if return_internal_states else None
 
-            self.w_history.append(self.w.copy())
+        x_padded: np.ndarray = np.zeros(n_samples + self.filter_order, dtype=complex)
+        x_padded[self.filter_order:] = x
 
-            y[it] = np.dot(np.conj(self.w), x_state)
+        for k in range(n_samples):
+            x_k: np.ndarray = x_padded[k : k + self.filter_order + 1][::-1]
 
-            e[it] = np.abs(y[it])**self.q - desired_level
+            y_k: complex = complex(np.dot(np.conj(self.w), x_k))
+            outputs[k] = y_k
 
-            phi = (self.p * self.q * (e[it]**(self.p - 1)) * (np.abs(y[it])**(self.q - 2)) * np.conj(y[it]))
-            
-            self.w = self.w - (self.step * phi * x_state) / 2.0
+            e_k: float = float((np.abs(y_k) ** self.q) - desired_level)
+            errors[k] = e_k
 
+            if np.abs(y_k) > safe_eps:
+                phi_k: complex = complex(
+                    self.p
+                    * self.q
+                    * (e_k ** (self.p - 1))
+                    * (np.abs(y_k) ** (self.q - 2))
+                    * np.conj(y_k)
+                )
+            else:
+                phi_k = 0.0 + 0.0j
+
+            if return_internal_states and phi_track is not None:
+                phi_track[k] = phi_k
+
+            self.w = self.w - (self.step_size * phi_k * x_k) / 2.0
+            self._record_history()
+
+        runtime_s: float = float(time() - tic)
         if verbose:
-            print(f"Godard Adaptation completed in {(time() - tic) * 1000:.03f} ms")
+            print(f"[Godard] Completed in {runtime_s * 1000:.02f} ms")
 
-        return {
-            "outputs": y,
-            "errors": e,
-            "coefficients": self.w_history,
-        }
+        extra: Optional[Dict[str, Any]] = None
+        if return_internal_states:
+            extra = {
+                "phi_gradient": phi_track,
+                "dispersion_constant": desired_level,
+            }
+
+        return self._pack_results(
+            outputs=outputs,
+            errors=errors,
+            runtime_s=runtime_s,
+            error_type="blind_godard",
+            extra=extra,
+        )
 # EOF

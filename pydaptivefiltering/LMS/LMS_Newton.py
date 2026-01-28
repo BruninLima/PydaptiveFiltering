@@ -12,111 +12,172 @@
 #        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
 #        . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
 
-# Imports
+from __future__ import annotations
+
+from time import perf_counter
+from typing import Optional, Union
+
 import numpy as np
-from time import time
-from typing import Optional, Union, List, Dict
-from pydaptivefiltering.base import AdaptiveFilter
+
+from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate_input
+
+ArrayLike = Union[np.ndarray, list]
+
 
 class LMSNewton(AdaptiveFilter):
     """
-    Description
-    -----------
-    Implements the LMS-Newton algorithm for COMPLEX valued data.
-    This algorithm approximates the Newton method by using a recursive estimate 
-    of the inverse correlation matrix of the input signal to decorrelate the 
-    data and speed up convergence.
+    LMS-Newton (complex-valued).
+
+    This algorithm approximates a Newton step by maintaining a recursive estimate of
+    the inverse input correlation matrix, which tends to accelerate convergence in
+    correlated-input scenarios.
+
+    Notes
+    -----
+    - Complex-valued implementation (supports_complex = True).
+    - Uses the unified base API via `@validate_input`:
+        * optimize(input_signal=..., desired_signal=...)
+        * optimize(x=..., d=...)
+        * optimize(x, d)
+
+    Recursion (one common form)
+    ---------------------------
+    Let P[k] approximate R_x^{-1}. With forgetting factor alpha (0 < alpha < 1),
+    and regressor x_k (shape (M+1,)), define:
+
+        phi = x_k^H P x_k
+        denom = (1-alpha)/alpha + phi
+        P <- (P - (P x_k x_k^H P)/denom) / (1-alpha)
+        w <- w + mu * conj(e[k]) * (P x_k)
+
+    where e[k] = d[k] - w^H x_k.
     """
+
     supports_complex: bool = True
+
+    alpha: float
+    step_size: float
+    inv_rx: np.ndarray
+
     def __init__(
-        self, 
-        filter_order: int, 
-        alpha: float, 
-        initial_inv_rx: np.ndarray, 
-        step: float = 1e-2, 
-        w_init: Optional[Union[np.ndarray, list]] = None
+        self,
+        filter_order: int,
+        alpha: float,
+        initial_inv_rx: np.ndarray,
+        step: float = 1e-2,
+        w_init: Optional[ArrayLike] = None,
+        *,
+        safe_eps: float = 1e-12,
     ) -> None:
         """
-        Inputs
-        -------
-            filter_order   : int (The order of the filter M)
-            alpha          : float (Forgetting factor 0 < alpha < 1)
-            initial_inv_rx : np.ndarray (Initial inverse correlation matrix M+1 x M+1)
-            step           : float (Convergence factor mu)
-            w_init         : array_like, optional (Initial coefficients)
+        Parameters
+        ----------
+        filter_order:
+            FIR order M (number of taps is M+1).
+        alpha:
+            Forgetting factor (0 < alpha < 1).
+        initial_inv_rx:
+            Initial inverse correlation matrix P[0], shape (M+1, M+1).
+        step:
+            Step-size mu.
+        w_init:
+            Optional initial coefficients (length M+1). If None, zeros.
+        safe_eps:
+            Small epsilon used to guard denominators.
         """
-        super().__init__(filter_order, w_init)
-        self.alpha: float = alpha
-        self.inv_rx: np.ndarray = np.array(initial_inv_rx, dtype=complex)
-        self.step: float = step
+        super().__init__(filter_order=int(filter_order), w_init=w_init)
 
+        self.alpha = float(alpha)
+        if not (0.0 < self.alpha < 1.0):
+            raise ValueError(f"alpha must satisfy 0 < alpha < 1. Got alpha={self.alpha}.")
+
+        P0 = np.asarray(initial_inv_rx, dtype=complex)
+        n_taps = int(filter_order) + 1
+        if P0.shape != (n_taps, n_taps):
+            raise ValueError(
+                f"initial_inv_rx must have shape {(n_taps, n_taps)}. Got {P0.shape}."
+            )
+        self.inv_rx = P0
+
+        self.step_size = float(step)
+        self._safe_eps = float(safe_eps)
+
+    @validate_input
     def optimize(
-        self, 
-        input_signal: Union[np.ndarray, list], 
-        desired_signal: Union[np.ndarray, list], 
-        verbose: bool = False
-    ) -> Dict[str, Union[np.ndarray, List[np.ndarray]]]:
+        self,
+        input_signal: np.ndarray,
+        desired_signal: np.ndarray,
+        verbose: bool = False,
+    ) -> OptimizationResult:
         """
-        Description
-        -----------
-            Executes the weight update process for the LMS-Newton algorithm.
+        Run LMS-Newton adaptation.
 
-        Inputs
-        -------
-            input_signal   : np.ndarray | list (Input vector x)
-            desired_signal : np.ndarray | list (Desired vector d)
-            verbose        : bool (Verbose boolean)
+        Parameters
+        ----------
+        input_signal:
+            Input signal x[k].
+        desired_signal:
+            Desired signal d[k].
+        verbose:
+            If True, prints runtime.
 
-        Outputs
+        Returns
         -------
-            dictionary:
-                outputs      : Store the estimated output of each iteration.
-                errors       : Store the error for each iteration.
-                coefficients : Store the estimated coefficients for each iteration.
+        OptimizationResult
+            outputs:
+                Filter output y[k].
+            errors:
+                A priori error e[k] = d[k] - y[k].
+            coefficients:
+                History of coefficients stored in the base class.
+            error_type:
+                "a_priori".
         """
-        tic: float = time()
-        
-        x_in: np.ndarray = np.asarray(input_signal, dtype=complex)
-        d_in: np.ndarray = np.asarray(desired_signal, dtype=complex)
-        
-        self._validate_inputs(x_in, d_in)
-        n_iterations: int = d_in.size
-        
-        self.errors: np.ndarray = np.zeros(n_iterations, dtype=complex)
-        self.outputs: np.ndarray = np.zeros(n_iterations, dtype=complex)
+        tic: float = perf_counter()
 
-        
+        x: np.ndarray = np.asarray(input_signal, dtype=complex).ravel()
+        d: np.ndarray = np.asarray(desired_signal, dtype=complex).ravel()
 
-        for k in range(n_iterations):
-            self.regressor = np.roll(self.regressor, 1)
-            self.regressor[0] = x_in[k]
+        n_samples: int = int(x.size)
+        m: int = int(self.filter_order)
 
-            self.outputs[k] = np.dot(self.w.conj(), self.regressor)
+        outputs: np.ndarray = np.zeros(n_samples, dtype=complex)
+        errors: np.ndarray = np.zeros(n_samples, dtype=complex)
 
-            self.errors[k] = d_in[k] - self.outputs[k]
+        x_padded: np.ndarray = np.zeros(n_samples + m, dtype=complex)
+        x_padded[m:] = x
 
-            x_vec: np.ndarray = self.regressor.reshape(-1, 1)
-            x_h: np.ndarray = x_vec.conj().T
-            
-            phi = (x_h @ self.inv_rx @ x_vec).item()
-            aux_den = ((1.0 - self.alpha) / self.alpha) + phi
-            
-            num = (self.inv_rx @ x_vec) @ (x_h @ self.inv_rx)
-            
-            self.inv_rx = (self.inv_rx - (num / aux_den)) / (1.0 - self.alpha)
+        for k in range(n_samples):
+            x_k: np.ndarray = x_padded[k : k + m + 1][::-1]
 
-            update_vector = self.step * self.errors[k].conj() * (self.inv_rx @ self.regressor)
-            self.w = self.w + update_vector
-            
+            y_k: complex = complex(np.vdot(self.w, x_k))
+            outputs[k] = y_k
+
+            e_k: complex = d[k] - y_k
+            errors[k] = e_k
+
+            x_col: np.ndarray = x_k.reshape(-1, 1)
+            Px: np.ndarray = self.inv_rx @ x_col
+            phi: complex = (x_col.conj().T @ Px).item()
+
+            denom: complex = ((1.0 - self.alpha) / self.alpha) + phi
+            if abs(denom) < self._safe_eps:
+                denom = denom + (self._safe_eps + 0.0j)
+
+            self.inv_rx = (self.inv_rx - (Px @ Px.conj().T) / denom) / (1.0 - self.alpha)
+
+            self.w = self.w + self.step_size * np.conj(e_k) * Px.ravel()
+
             self._record_history()
 
+        runtime_s: float = perf_counter() - tic
         if verbose:
-            runtime: float = (time() - tic) * 1000
-            print(f"[LMS-Newton] Adaptation completed in {runtime:.3f} ms.")
+            print(f"[LMSNewton] Completed in {runtime_s * 1000:.03f} ms")
 
-        return {
-            'outputs': self.outputs,
-            'errors': self.errors,
-            'coefficients': self.w_history
-        }
+        return self._pack_results(
+            outputs=outputs,
+            errors=errors,
+            runtime_s=runtime_s,
+            error_type="a_priori",
+        )
 # EOF

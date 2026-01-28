@@ -1,6 +1,6 @@
 #  set_membership.affine_projection.py
 #
-#       Implements the Set-membership Affine-Projection (SM-AP) algorithm 
+#       Implements the Set-membership Affine-Projection (SM-AP) algorithm
 #       for COMPLEX valued data.
 #       (Algorithm 6.2 - book: Adaptive Filtering: Algorithms and Practical
 #                                                              Implementation, Diniz)
@@ -13,141 +13,195 @@
 #        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
 #        . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
 
-# Imports
+from __future__ import annotations
+
 import numpy as np
 from time import time
-from typing import Optional, Union, List, Dict
-from pydaptivefiltering.base import AdaptiveFilter
+from typing import Any, Dict, Optional, Union
 
-class SMAP(AdaptiveFilter):
+from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate_input
+
+
+class SMAffineProjection(AdaptiveFilter):
     """
-    Description
-    -----------
-    Implements the Set-membership Affine-Projection (SM-AP) algorithm for COMPLEX valued data.
-    (Algorithm 6.2 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
+    Implements the Set-membership Affine-Projection (SM-AP) algorithm for complex-valued data.
+
+    This is a supervised algorithm, i.e., it requires both input_signal and desired_signal.
     """
     supports_complex: bool = True
+
+    gamma_bar: float
+    gamma_bar_vector: np.ndarray
+    gamma: float
+    L: int
+    n_coeffs: int
+
     def __init__(
-        self, 
-        filter_order: int, 
-        gamma_bar: float, 
-        gamma_bar_vector: np.ndarray, 
-        gamma: float, 
+        self,
+        filter_order: int,
+        gamma_bar: float,
+        gamma_bar_vector: Union[np.ndarray, list],
+        gamma: float,
         L: int,
-        w_init: Optional[Union[np.ndarray, list]] = None
+        w_init: Optional[Union[np.ndarray, list]] = None,
     ) -> None:
         """
-        Inputs
-        -------
-            filter_order     : int (Filter order M)
-            gamma_bar        : float (Upper bound for the error modulus)
-            gamma_bar_vector : np.ndarray (Target posteriori error vector, size L+1)
-            gamma            : float (Regularization factor)
-            L                : int (Reuse data factor / constraint length)
-            w_init           : array_like, optional (Initial weights)
+        Parameters
+        ----------
+        filter_order:
+            FIR filter order (number of taps - 1). Number of coefficients is filter_order + 1.
+        gamma_bar:
+            Upper bound for the (a-priori) error magnitude used by set-membership criterion.
+        gamma_bar_vector:
+            Target a-posteriori error vector, size (L+1,). (Algorithm-dependent)
+        gamma:
+            Regularization factor for the AP correlation matrix.
+        L:
+            Reuse data factor / constraint length (projection order).
+        w_init:
+            Optional initial coefficient vector. If None, initializes to zeros.
         """
-        super().__init__(filter_order, w_init)
-        self.gamma_bar = gamma_bar
-        self.gamma_bar_vector = np.asarray(gamma_bar_vector, dtype=complex).reshape(-1, 1)
-        self.gamma = gamma
-        self.L = L
-        self.n_updates = 0
-        self.regressor_matrix = np.zeros((self.m + 1, self.L + 1), dtype=complex)
-        self.X_matrix = self.regressor_matrix
+        super().__init__(filter_order=filter_order, w_init=w_init)
 
+        self.gamma_bar = float(gamma_bar)
+        self.gamma = float(gamma)
+        self.L = int(L)
+
+        self.n_coeffs = int(self.filter_order + 1)
+
+        gvec = np.asarray(gamma_bar_vector, dtype=complex).ravel()
+        if gvec.size != (self.L + 1):
+            raise ValueError(
+                f"gamma_bar_vector must have size L+1 = {self.L + 1}, got {gvec.size}"
+            )
+        self.gamma_bar_vector = gvec.reshape(-1, 1)
+
+        self.regressor_matrix = np.zeros((self.n_coeffs, self.L + 1), dtype=complex)
+
+        self.n_updates: int = 0
+
+    @validate_input
     def optimize(
-        self, 
-        input_signal: Union[np.ndarray, list], 
-        desired_signal: Union[np.ndarray, list], 
-        verbose: bool = False
-    ) -> Dict[str, Union[np.ndarray, List[np.ndarray], int]]:
+        self,
+        input_signal: np.ndarray,
+        desired_signal: np.ndarray,
+        verbose: bool = False,
+        return_internal_states: bool = False,
+    ) -> OptimizationResult:
         """
-        Description
-        -----------
-            Executes the optimization process for the SM-AP algorithm for COMPLEX valued data.
-            (Algorithm 6.2 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
+        Executes the SM-AP adaptation.
 
-        Inputs
+        Parameters
+        ----------
+        input_signal:
+            Input signal x[k].
+        desired_signal:
+            Desired signal d[k].
+        verbose:
+            If True, prints runtime and update count.
+        return_internal_states:
+            If True, includes additional internal trajectories in result.extra.
+
+        Returns
         -------
-            input_signal   : np.ndarray | list (Input vector x)
-            desired_signal : np.ndarray | list (Desired vector d)
-            verbose        : bool (Verbose boolean)
+        OptimizationResult
+            outputs:
+                A-priori output y[k].
+            errors:
+                A-priori error e[k] = d[k] - y[k] (first component of AP error vector).
+            coefficients:
+                History of coefficients stored in the base class.
+            error_type:
+                "a_priori".
 
-        Outputs
-        -------
-            dictionary:
-                outputs      : Store the estimated output of each iteration.
-                errors       : Store the error for each iteration.
-                coefficients : Store the estimated coefficients for each iteration.
-                n_updates    : Number of filter coefficient updates.
+        Extra (always)
+        -------------
+        extra["n_updates"]:
+            Number of coefficient updates (iterations where |e(k)| > gamma_bar).
+        extra["update_mask"]:
+            Boolean array marking which iterations performed updates.
 
-        Main Variables
-        --------- 
-            regressor_matrix : Matrix containing current and past input vectors.
-            error_ap_conj    : A priori error vector (conjugate).
-            n_updates        : Count of iterations where |e(k)| > gamma_bar.
-
-        Authors
-        -------
-            . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-            . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-            . Markus Vinícius Santos Lima    - mvsl20@gmailcom           & markus@lps.ufrj.br
-            . Wallace Alves Martins          - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-            . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
-            . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
+        Extra (when return_internal_states=True)
+        --------------------------------------
+        extra["errors_vector"]:
+            Full AP a-priori error vector over time, shape (N, L+1).
         """
-        tic = time()
-        x_in = np.asarray(input_signal, dtype=complex)
-        d_in = np.asarray(desired_signal, dtype=complex)
-        self._validate_inputs(x_in, d_in)
+        tic: float = time()
 
-        n_iterations = d_in.size
-        n_coeffs = self.m + 1
-        
-        self.outputs = np.zeros(n_iterations, dtype=complex)
-        self.errors = np.zeros(n_iterations, dtype=complex)
+        x: np.ndarray = np.asarray(input_signal, dtype=complex).ravel()
+        d: np.ndarray = np.asarray(desired_signal, dtype=complex).ravel()
+
+        n_samples: int = int(d.size)
+        n_coeffs: int = int(self.n_coeffs)
+        Lp1: int = int(self.L + 1)
+
+        outputs: np.ndarray = np.zeros(n_samples, dtype=complex)
+        errors: np.ndarray = np.zeros(n_samples, dtype=complex)
+        update_mask: np.ndarray = np.zeros(n_samples, dtype=bool)
+
+        errors_vec_track: Optional[np.ndarray] = (
+            np.zeros((n_samples, Lp1), dtype=complex) if return_internal_states else None
+        )
+
         self.n_updates = 0
+        w_current: np.ndarray = self.w.astype(complex, copy=False).reshape(-1, 1)
 
-        prefixed_input = np.concatenate([np.zeros(n_coeffs - 1, dtype=complex), x_in])
-        prefixed_desired = np.concatenate([np.zeros(self.L, dtype=complex), d_in])
+        prefixed_input: np.ndarray = np.concatenate([np.zeros(n_coeffs - 1, dtype=complex), x])
+        prefixed_desired: np.ndarray = np.concatenate([np.zeros(self.L, dtype=complex), d])
 
-        w_current = self.w.reshape(-1, 1)
-
-        for it in range(n_iterations):
+        for k in range(n_samples):
             self.regressor_matrix[:, 1:] = self.regressor_matrix[:, :-1]
-            start_idx = it + n_coeffs - 1
-            self.regressor_matrix[:, 0] = prefixed_input[start_idx : (it - 1 if it > 0 else None) : -1]
+
+            start_idx = k + n_coeffs - 1
+            stop = (k - 1) if (k > 0) else None
+            self.regressor_matrix[:, 0] = prefixed_input[start_idx:stop:-1]
 
             output_ap_conj = (self.regressor_matrix.conj().T) @ w_current
 
-            desired_slice = prefixed_desired[it + self.L : (it - 1 if it > 0 else None) : -1]
+            desired_slice = prefixed_desired[k + self.L : stop : -1]
             error_ap_conj = desired_slice.conj().reshape(-1, 1) - output_ap_conj
 
-            if np.abs(error_ap_conj[0, 0]) > self.gamma_bar:
+            yk = output_ap_conj[0, 0]
+            ek = error_ap_conj[0, 0]
+
+            outputs[k] = yk
+            errors[k] = ek
+            if return_internal_states and errors_vec_track is not None:
+                errors_vec_track[k, :] = error_ap_conj.ravel()
+
+            if np.abs(ek) > self.gamma_bar:
                 self.n_updates += 1
-                
-                R = (self.regressor_matrix.conj().T @ self.regressor_matrix) + self.gamma * np.eye(self.L + 1)
+                update_mask[k] = True
+
+                R = (self.regressor_matrix.conj().T @ self.regressor_matrix) + self.gamma * np.eye(Lp1)
                 b = error_ap_conj - self.gamma_bar_vector.conj()
-                
+
                 try:
                     step = np.linalg.solve(R, b)
-                    w_current = w_current + (self.regressor_matrix @ step)
                 except np.linalg.LinAlgError:
-                    w_current = w_current + (self.regressor_matrix @ (np.linalg.pinv(R) @ b))
+                    step = np.linalg.pinv(R) @ b
 
-            self.outputs[it] = output_ap_conj[0, 0]
-            self.errors[it] = error_ap_conj[0, 0]
-            self.w = w_current.flatten()
+                w_current = w_current + (self.regressor_matrix @ step)
+
+            self.w = w_current.ravel()
             self._record_history()
 
+        runtime_s: float = float(time() - tic)
         if verbose:
-            runtime = (time() - tic) * 1000
-            print(f"[SM-AP] Updates: {self.n_updates}/{n_iterations} | Runtime: {runtime:.2f} ms")
+            print(f"[SM-AP] Updates: {self.n_updates}/{n_samples} | Runtime: {runtime_s * 1000:.02f} ms")
 
-        return {
-            'outputs': self.outputs,
-            'errors': self.errors,
-            'coefficients': self.w_history,
-            'n_updates': self.n_updates
+        extra: Dict[str, Any] = {
+            "n_updates": int(self.n_updates),
+            "update_mask": update_mask,
         }
+        if return_internal_states:
+            extra["errors_vector"] = errors_vec_track
+
+        return self._pack_results(
+            outputs=outputs,
+            errors=errors,
+            runtime_s=runtime_s,
+            error_type="a_priori",
+            extra=extra,
+        )
 # EOF

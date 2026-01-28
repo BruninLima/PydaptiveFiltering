@@ -2,157 +2,207 @@
 #
 #       Implements the Equation Error RLS algorithm for REAL valued data.
 #       (Algorithm 10.3 - book: Adaptive Filtering: Algorithms and Practical
-#                                                       Implementation, 3rd Ed., Diniz)
+#                               Implementation, 3rd Ed., Diniz)
 #
 #       Authors:
 #        . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-#        . Guilherme de Oliveira Pinto   - guilhermepinto7@gmail.com  &  guilherme@lps.ufrj.br
-#        . Markus Vinícius Santos Lima   - mvsl20@gmailcom            &  markus@lps.ufrj.br
-#        . Wallace Alves Martins         - wallace.wam@gmail.com      &  wallace@lps.ufrj.br
-#        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           &  wagner@lps.ufrj.br
-#        . Paulo Sergio Ramirez Diniz    -                               diniz@lps.ufrj.br
+#        . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
+#        . Markus Vinícius Santos Lima    - mvsl20@gmailcom            & markus@lps.ufrj.br
+#        . Wallace Alves Martins          - wallace.wam@gmail.com      & wallace@lps.ufrj.br
+#        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com            & wagner@lps.ufrj.br
+#        . Paulo Sergio Ramirez Diniz    -                                diniz@lps.ufrj.br
 
-# Imports
+from __future__ import annotations
+
 import numpy as np
 from time import time
-from typing import Optional, Union, List, Dict
-from pydaptivefiltering.base import AdaptiveFilter
+from typing import Any, Dict, Optional, Union
+
+from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate_input
 from pydaptivefiltering.utils.validation import ensure_real_signals
+
 
 class ErrorEquation(AdaptiveFilter):
     """
-    Description
-    -----------
-        Implements the Equation Error RLS algorithm for REAL valued data.
-        (Algorithm 10.3 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
+    Implements the Equation Error RLS algorithm for real-valued IIR adaptive filtering.
     """
     supports_complex: bool = False
+
+    zeros_order: int
+    poles_order: int
+    forgetting_factor: float
+    epsilon: float
+    n_coeffs: int
+    Sd: np.ndarray
+    y_buffer: np.ndarray
+    d_buffer: np.ndarray
+
     def __init__(
-        self, 
-        M: int, 
-        N: int, 
-        lambda_hat: float = 0.99, 
-        delta: float = 1e-3, 
-        w_init: Optional[Union[np.ndarray, list]] = None
+        self,
+        zeros_order: int,
+        poles_order: int,
+        forgetting_factor: float = 0.99,
+        epsilon: float = 1e-3,
+        w_init: Optional[Union[np.ndarray, list]] = None,
     ) -> None:
         """
-        Inputs
-        -------
-            M          : int (Order of the numerator/zeros)
-            N          : int (Order of the denominator/poles)
-            lambda_hat : float (Forgetting factor)
-            delta      : float (Regularization factor)
-            w_init     : array_like, optional (Initial coefficients)
+        Parameters
+        ----------
+        zeros_order:
+            Numerator order (number of zeros).
+        poles_order:
+            Denominator order (number of poles).
+        forgetting_factor:
+            Forgetting factor (lambda), typically close to 1.
+        epsilon:
+            Regularization / initialization parameter for the inverse correlation matrix.
+        w_init:
+            Optional initial coefficient vector. If None, initializes to zeros.
+
+        Notes
+        -----
+        Coefficient vector convention:
+        - First `poles_order` entries correspond to denominator (pole) parameters.
+        - Remaining entries correspond to numerator (zero) parameters.
         """
-        total_order = M + N 
-        super().__init__(total_order, w_init)
-        
-        self.M: int = M
-        self.N: int = N
-        self.lambda_hat: float = lambda_hat
-        self.delta: float = delta
-        
-        self.n_coeffs: int = M + 1 + N
-        self.w: np.ndarray = np.zeros(self.n_coeffs, dtype=float)
-        self.Sd: np.ndarray = (1.0 / delta) * np.eye(self.n_coeffs)
-        
-        self.y_buffer: np.ndarray = np.zeros(N, dtype=float)
-        self.d_buffer: np.ndarray = np.zeros(N, dtype=float)
+        super().__init__(filter_order=zeros_order + poles_order, w_init=w_init)
+
+        self.zeros_order = int(zeros_order)
+        self.poles_order = int(poles_order)
+        self.forgetting_factor = float(forgetting_factor)
+        self.epsilon = float(epsilon)
+
+        self.n_coeffs = int(self.poles_order + 1 + self.zeros_order)
+        self.w = np.zeros(self.n_coeffs, dtype=np.float64)
+
+        self.Sd = (1.0 / self.epsilon) * np.eye(self.n_coeffs, dtype=np.float64)
+
+        self.y_buffer = np.zeros(self.poles_order, dtype=np.float64)
+        self.d_buffer = np.zeros(self.poles_order, dtype=np.float64)
 
     def _stability_procedure(self, a_coeffs: np.ndarray) -> np.ndarray:
         """
-        Garante a estabilidade do filtro IIR refletindo polos externos.
+        Enforces IIR stability by reflecting poles outside the unit circle back inside.
         """
-        poly_coeffs = np.concatenate(([1], -a_coeffs))
-        poles = np.roots(poly_coeffs)
-        mask = np.abs(poles) > 1
-        poles[mask] = 1.0 / np.conj(poles[mask])
-        new_poly = np.poly(poles)
-        return -np.real(new_poly[1:])
+        poly_coeffs: np.ndarray = np.concatenate(([1.0], -a_coeffs))
+        poles: np.ndarray = np.roots(poly_coeffs)
+        mask: np.ndarray = np.abs(poles) > 1.0
+
+        if np.any(mask):
+            poles[mask] = 1.0 / np.conj(poles[mask])
+            new_poly: np.ndarray = np.poly(poles)
+            return -np.real(new_poly[1:])
+        return a_coeffs
 
     @ensure_real_signals
+    @validate_input
     def optimize(
-        self, 
-        input_signal: Union[np.ndarray, list], 
-        desired_signal: Union[np.ndarray, list], 
-        verbose: bool = False
-    ) -> Dict[str, Union[np.ndarray, List[np.ndarray]]]:
+        self,
+        input_signal: np.ndarray,
+        desired_signal: np.ndarray,
+        verbose: bool = False,
+        return_internal_states: bool = False,
+    ) -> OptimizationResult:
         """
-        Description
-        -----------
-            Executes the weight update process for the Equation Error RLS algorithm.
+        Executes the Equation Error RLS algorithm for IIR filters.
 
-        Inputs
-        -------
-            input_signal   : np.ndarray | list (Input vector x)
-            desired_signal : np.ndarray | list (Desired vector d)
-            verbose         : bool (Verbose boolean)
+        Parameters
+        ----------
+        input_signal:
+            Input signal x[k].
+        desired_signal:
+            Desired signal d[k].
+        verbose:
+            If True, prints runtime.
+        return_internal_states:
+            If True, returns pole coefficients trajectory in result.extra.
 
-        Outputs
+        Returns
         -------
-            dictionary:
-                outputs      : Store the estimated output of each iteration.
-                errors       : Store the error for each iteration.
-                coefficients : Store the estimated coefficients for each iteration.
-                errors_aux   : Store the auxiliary error (e_e).
+        OptimizationResult
+            outputs:
+                Filter output y[k] computed from the output equation.
+            errors:
+                Output error e[k] = d[k] - y[k].
+            coefficients:
+                History of coefficients stored in the base class.
+            error_type:
+                "equation_error".
 
-        Authors
-        -------
-            . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-            . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-            . Markus Vinícius Santos Lima    - mvsl20@gmailcom            & markus@lps.ufrj.br
-            . Wallace Alves Martins          - wallace.wam@gmail.com      & wallace@lps.ufrj.br
-            . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
-            . Paulo Sergio Ramirez Diniz    -                               diniz@lps.ufrj.br
+        Extra (always)
+        -------------
+        extra["auxiliary_errors"]:
+            Equation-error based auxiliary error sequence.
+
+        Extra (when return_internal_states=True)
+        --------------------------------------
+        extra["a_coefficients"]:
+            Trajectory of denominator (pole) coefficients, shape (N, poles_order).
         """
         tic: float = time()
-        
-        x: np.ndarray = np.asarray(input_signal, dtype=float)
-        d: np.ndarray = np.asarray(desired_signal, dtype=float)
-        
-        self._validate_inputs(x, d)
-        n_samples: int = x.size
-        
-        y: np.ndarray = np.zeros(n_samples, dtype=float)
-        e: np.ndarray = np.zeros(n_samples, dtype=float)
-        e_aux: np.ndarray = np.zeros(n_samples, dtype=float)
-        
-        x_padded: np.ndarray = np.zeros(n_samples + self.M, dtype=float)
-        x_padded[self.M:] = x
+
+        x: np.ndarray = np.asarray(input_signal, dtype=np.float64)
+        d: np.ndarray = np.asarray(desired_signal, dtype=np.float64)
+
+        n_samples: int = int(x.size)
+
+        outputs: np.ndarray = np.zeros(n_samples, dtype=np.float64)
+        errors: np.ndarray = np.zeros(n_samples, dtype=np.float64)
+        errors_aux: np.ndarray = np.zeros(n_samples, dtype=np.float64)
+
+        a_track: Optional[np.ndarray] = (
+            np.zeros((n_samples, self.poles_order), dtype=np.float64)
+            if (return_internal_states and self.poles_order > 0)
+            else None
+        )
+
+        x_padded: np.ndarray = np.zeros(n_samples + self.zeros_order, dtype=np.float64)
+        x_padded[self.zeros_order:] = x
 
         for k in range(n_samples):
-            regressor_x = x_padded[k : k + self.M + 1][::-1]
-            
-            regressor = np.concatenate((self.y_buffer, regressor_x))
-            
-            regressor_e = np.concatenate((self.d_buffer, regressor_x))
-            
-            y[k] = np.dot(self.w, regressor)
-            y_e = np.dot(self.w, regressor_e)
-            
-            e[k] = d[k] - y[k]
-            e_aux[k] = d[k] - y_e
-            
-            num = self.Sd @ np.outer(regressor_e, regressor_e) @ self.Sd
-            den = self.lambda_hat + regressor_e.T @ self.Sd @ regressor_e
-            self.Sd = (1.0 / self.lambda_hat) * (self.Sd - (num / den))
-            
-            self.w = self.w + self.Sd @ regressor_e * e_aux[k]
-            
-            if self.N > 0:
-                self.w[:self.N] = self._stability_procedure(self.w[:self.N])
-                self.y_buffer = np.concatenate(([y[k]], self.y_buffer[:-1]))
+            reg_x: np.ndarray = x_padded[k : k + self.zeros_order + 1][::-1]
+            reg_y: np.ndarray = np.concatenate((self.y_buffer, reg_x))
+            reg_e: np.ndarray = np.concatenate((self.d_buffer, reg_x))
+
+            y_out: float = float(np.dot(self.w, reg_y))
+            y_equation: float = float(np.dot(self.w, reg_e))
+
+            outputs[k] = y_out
+            errors[k] = float(d[k] - y_out)
+            errors_aux[k] = float(d[k] - y_equation)
+
+            psi: np.ndarray = self.Sd @ reg_e
+            den: float = float(self.forgetting_factor + reg_e.T @ psi)
+
+            self.Sd = (1.0 / self.forgetting_factor) * (self.Sd - np.outer(psi, psi) / den)
+            self.w += (self.Sd @ reg_e) * errors_aux[k]
+
+            if self.poles_order > 0:
+                self.w[: self.poles_order] = self._stability_procedure(self.w[: self.poles_order])
+
+                if return_internal_states and a_track is not None:
+                    a_track[k, :] = self.w[: self.poles_order]
+
+                self.y_buffer = np.concatenate(([y_out], self.y_buffer[:-1]))
                 self.d_buffer = np.concatenate(([d[k]], self.d_buffer[:-1]))
-            
+
             self._record_history()
 
+        runtime_s: float = float(time() - tic)
         if verbose:
-            print(f"Error Equation Adaptation completed in {(time() - tic)*1000:.03f} ms")
+            print(f"[ErrorEquation] Completed in {runtime_s * 1000:.02f} ms")
 
-        return {
-            'outputs': y,
-            'errors': e,
-            'coefficients': self.w_history,
-            'errors_aux': e_aux
+        extra: Dict[str, Any] = {
+            "auxiliary_errors": errors_aux,
         }
+        if return_internal_states:
+            extra["a_coefficients"] = a_track
+
+        return self._pack_results(
+            outputs=outputs,
+            errors=errors,
+            runtime_s=runtime_s,
+            error_type="equation_error",
+            extra=extra,
+        )
 # EOF

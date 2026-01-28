@@ -1,63 +1,43 @@
-#  fast_rls.stab_fast_rls.py
+# fast_rls.stab_fast_rls.py
 #
 #       Implements the Stabilized Fast Transversal RLS algorithm for REAL valued data.
 #       (Algorithm 8.2 - book: Adaptive Filtering: Algorithms and Practical
-#                                                       Implementation, Diniz)
+#                                                              Implementation, Diniz)
 #
 #       Authors:
 #        . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-#        . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilhermepinto7@gmail.com
-#        . Markus Vinícius Santos Lima    - mvsl20@gmailcom
-#        . Wallace Alves Martins          - wallace.wam@gmail.com
-#        . Luiz Wagner Pereira Biscainho  - cpneqs@gmail.com
-#        . Paulo Sergio Ramirez Diniz     - diniz@lps.ufrj.br
+#        . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilhermepinto7@lps.ufrj.br
+#        . Markus Vinícius Santos Lima    - mvsl20@gmail.com          & markus@lps.ufrj.br
+#        . Wallace Alves Martins          - wallace.wam@gmail.com     & wallace@lps.ufrj.br
+#        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
+#        . Paulo Sergio Ramirez Diniz    -                                diniz@lps.ufrj.br
 
-#Imports
+from __future__ import annotations
+
 import numpy as np
 from time import time
-from typing import Optional, Union, List, Dict, Any
-from pydaptivefiltering.base import AdaptiveFilter
+from typing import Any, Dict, Optional, Union
+
+from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate_input
 from pydaptivefiltering.utils.validation import ensure_real_signals
+
 
 class StabFastRLS(AdaptiveFilter):
     """
-    Description
-    -----------
-        Implements the Stabilized Fast Transversal RLS algorithm for REAL valued data.
-        (Algorithm 8.2 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
-
-    Notes
-    -----
-    - This implementation is REAL-only (float64).
-    - Includes numerical safeguards against division by zero / NaN:
-        * denominator clamping in all critical inversions
-        * floor on xiMin_f / xiMin_b
-        * optional clipping on gamma values
-    - Avoids per-iteration array concatenations (pre-allocation and slicing instead).
-
-    Parameters
-    ----------
-        filter_order : int
-            N in the textbook (adaptive filter has N+1 taps).
-        forgetting_factor : float
-            lambda, with 0 < lambda < 1.
-        epsilon : float
-            Initialization for xiMin_backward and xiMin_forward (small positive).
-        kappa1, kappa2, kappa3 : float
-            Stabilization constants (default: 1.5, 2.5, 1.0).
-        w_init : array_like, optional
-            Initial coefficients for the joint-process estimation weight vector w(k,N).
-
-    Authors
-    -------
-        . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-        . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilhermepinto7@gmail.com
-        . Markus Vinícius Santos Lima    - mvsl20@gmailcom
-        . Wallace Alves Martins          - wallace.wam@gmail.com
-        . Luiz Wagner Pereira Biscainho  - cpneqs@gmail.com
-        . Paulo Sergio Ramirez Diniz     - diniz@lps.ufrj.br
+    Implements the Stabilized Fast Transversal RLS algorithm for real-valued data.
     """
     supports_complex: bool = False
+
+    lambda_: float
+    epsilon: float
+    kappa1: float
+    kappa2: float
+    kappa3: float
+    denom_floor: float
+    xi_floor: float
+    gamma_clip: Optional[float]
+    n_coeffs: int
+
     def __init__(
         self,
         filter_order: int,
@@ -71,276 +51,237 @@ class StabFastRLS(AdaptiveFilter):
         xi_floor: Optional[float] = None,
         gamma_clip: Optional[float] = None,
     ) -> None:
-        super().__init__(filter_order, w_init)
+        """
+        Parameters
+        ----------
+        filter_order:
+            FIR filter order (number of taps - 1). Number of coefficients is filter_order + 1.
+        forgetting_factor:
+            Forgetting factor (lambda), typically close to 1.
+        epsilon:
+            Regularization / initial prediction error energy (positive).
+        kappa1, kappa2, kappa3:
+            Stabilization parameters from the stabilized FTRLS formulation.
+        w_init:
+            Optional initial coefficient vector. If None, initializes to zeros.
+        denom_floor:
+            Floor for denominators used in safe inversions. If None, a tiny float-based default is used.
+        xi_floor:
+            Floor for prediction error energies. If None, a tiny float-based default is used.
+        gamma_clip:
+            Optional clipping threshold for gamma (if provided).
+        """
+        super().__init__(filter_order=filter_order, w_init=w_init)
 
-        if not (0.0 < forgetting_factor < 1.0):
-            raise ValueError("forgetting_factor (lambda) must satisfy 0 < lambda < 1.")
-        if epsilon <= 0:
-            raise ValueError("epsilon must be a small positive constant.")
+        self.filter_order = int(filter_order)
+        self.n_coeffs = int(self.filter_order + 1)
 
-        self.lambda_: float = float(forgetting_factor)
-        self.epsilon: float = float(epsilon)
-
-        self.kappa1: float = float(kappa1)
-        self.kappa2: float = float(kappa2)
-        self.kappa3: float = float(kappa3)
+        self.lambda_ = float(forgetting_factor)
+        self.epsilon = float(epsilon)
+        self.kappa1 = float(kappa1)
+        self.kappa2 = float(kappa2)
+        self.kappa3 = float(kappa3)
 
         finfo = np.finfo(np.float64)
-        self.denom_floor: float = float(denom_floor) if denom_floor is not None else float(finfo.tiny * 1e3)
-        self.xi_floor: float = float(xi_floor) if xi_floor is not None else float(finfo.tiny * 1e6)
-        self.gamma_clip: Optional[float] = float(gamma_clip) if gamma_clip is not None else None
+        self.denom_floor = float(denom_floor) if denom_floor is not None else float(finfo.tiny * 1e3)
+        self.xi_floor = float(xi_floor) if xi_floor is not None else float(finfo.tiny * 1e6)
+        self.gamma_clip = float(gamma_clip) if gamma_clip is not None else None
 
         self.w = np.asarray(self.w, dtype=np.float64)
 
     @staticmethod
     def _clamp_denom(den: float, floor: float) -> float:
-        """Clamp denominator away from 0 while preserving sign."""
-        if not np.isfinite(den):
-            return np.copysign(floor, den if den != 0 else 1.0)
-        if abs(den) < floor:
-            return np.copysign(floor, den if den != 0 else 1.0)
-        return den
+        if (not np.isfinite(den)) or (abs(den) < floor):
+            return float(np.copysign(floor, den if den != 0 else 1.0))
+        return float(den)
 
     def _safe_inv(self, den: float, floor: float, clamp_counter: Dict[str, int], key: str) -> float:
-        """Compute 1/den with clamping; increments clamp counter when used."""
-        den2 = self._clamp_denom(den, floor)
-        if den2 != den:
+        den_clamped = self._clamp_denom(den, floor)
+        if den_clamped != den:
             clamp_counter[key] = clamp_counter.get(key, 0) + 1
-        return 1.0 / den2
-
-    def _maybe_clip_gamma(self, g: float) -> float:
-        """Optionally clip gamma magnitude."""
-        if self.gamma_clip is None:
-            return g
-        return float(np.clip(g, -self.gamma_clip, self.gamma_clip))
+        return 1.0 / den_clamped
 
     @ensure_real_signals
+    @validate_input
     def optimize(
         self,
-        input_signal: Union[np.ndarray, list],
-        desired_signal: Union[np.ndarray, list],
+        input_signal: np.ndarray,
+        desired_signal: np.ndarray,
         verbose: bool = False,
         return_internal_states: bool = False,
-        return_debug_info: bool = True,
-    ) -> Dict[str, Union[np.ndarray, List[np.ndarray], Dict[str, Any]]]:
+    ) -> OptimizationResult:
         """
-        Description
-        -----------
-            Executes the weight update process for the Stabilized Fast Transversal RLS algorithm
-            (Algorithm 8.2 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz).
+        Executes the Stabilized Fast Transversal RLS algorithm.
 
-        Inputs
+        Parameters
+        ----------
+        input_signal:
+            Input signal x[k].
+        desired_signal:
+            Desired signal d[k].
+        verbose:
+            If True, prints runtime.
+        return_internal_states:
+            If True, returns internal trajectories and clamping stats in result.extra.
+
+        Returns
         -------
-            input_signal   : np.ndarray | list
-                Input vector x (REAL).
-            desired_signal : np.ndarray | list
-                Desired vector d (REAL).
-            verbose        : bool
-                Verbose boolean (prints runtime).
-            return_internal_states : bool
-                If True, returns internal scalar trajectories (xiMin_f, xiMin_b, gamma_N_3).
-            return_debug_info : bool
-                If True, returns clamp counters and final internal values for diagnostics.
+        OptimizationResult
+            outputs:
+                A-priori output y[k].
+            errors:
+                A-priori error e[k] = d[k] - y[k].
+            coefficients:
+                History of coefficients stored in the base class.
+            error_type:
+                "a_priori".
 
-        Outputs
-        -------
-            dictionary:
-                outputs            : Store the estimated output y(k) for each iteration (REAL).
-                priori_errors      : Store the a priori error e(k) for each iteration (REAL).
-                posteriori_errors  : Store the a posteriori error ε(k) for each iteration (REAL).
-                coefficients       : Store the estimated coefficients for each iteration (list of arrays).
-                internal_states    : (optional) trajectories of internal scalars.
-                debug_info         : (optional) clamp counters and final internal scalar values.
+        Extra (always)
+        -------------
+        extra["errors_posteriori"]:
+            A-posteriori error sequence e_post[k] = gamma[k] * e[k].
+        extra["clamp_stats"]:
+            Dictionary with counters of how many times each denominator was clamped.
 
-        Main Variables
-        --------------
-            regressor (r)     : Vector containing the tapped delay line with MATLAB-matching reversal (length N+2).
-            w (self.w)        : Joint-process coefficient vector (length N+1).
-            w_f, w_b          : Forward/backward predictor coefficient vectors (length N+1).
-            phiHatN, phiHatNp1: Gain-related vectors in Algorithm 8.2.
-            gamma_*           : Scalar normalization terms (susceptible to numerical issues).
-            xiMin_*           : Scalar forward/backward minimum prediction error powers (must remain positive).
-
-        Numerical Safeguards
-        --------------------
-            - All critical inversions are protected by denominator clamping:
-                * gamma_Np1_1 update
-                * xiMin_f update
-                * gamma_N_2 update
-                * gamma_N_3 update
-            - xiMin_f and xiMin_b are floored to remain positive.
-            - Optional |gamma| clipping via gamma_clip (disabled by default).
-
-        Misc Variables
-        --------------
-            tic               : Initial time for runtime calculation.
-            n_samples         : Number of iterations based on signal size.
-
-        Authors
-        -------
-            . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-            . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilhermepinto7@gmail.com
-            . Markus Vinícius Santos Lima    - mvsl20@gmailcom
-            . Wallace Alves Martins          - wallace.wam@gmail.com
-            . Luiz Wagner Pereira Biscainho  - cpneqs@gmail.com
-            . Paulo Sergio Ramirez Diniz     - diniz@lps.ufrj.br
+        Extra (when return_internal_states=True)
+        --------------------------------------
+        extra["xi_min_f"]:
+            Forward prediction error energy trajectory.
+        extra["xi_min_b"]:
+            Backward prediction error energy trajectory.
+        extra["gamma"]:
+            Conversion factor trajectory.
         """
-        tic = time()
+        tic: float = time()
 
-        x = np.asarray(input_signal)
-        d = np.asarray(desired_signal)
+        x: np.ndarray = np.asarray(input_signal, dtype=np.float64)
+        d: np.ndarray = np.asarray(desired_signal, dtype=np.float64)
 
-        if np.iscomplexobj(x):
-            x = np.real(x)
-        if np.iscomplexobj(d):
-            d = np.real(d)
+        n_samples: int = int(x.size)
+        n_taps: int = int(self.filter_order + 1)
+        reg_len: int = int(self.filter_order + 2)
 
-        x = x.astype(np.float64, copy=False)
-        d = d.astype(np.float64, copy=False)
+        outputs: np.ndarray = np.zeros(n_samples, dtype=np.float64)
+        errors: np.ndarray = np.zeros(n_samples, dtype=np.float64)
+        errors_post: np.ndarray = np.zeros(n_samples, dtype=np.float64)
 
-        self._validate_inputs(x, d)
-        n_samples = x.size
+        xi_min_f: float = float(self.epsilon)
+        xi_min_b: float = float(self.epsilon)
+        gamma_n_3: float = 1.0
 
-        n_taps = self.m + 1
-        reg_len = self.m + 2
+        xi_f_track: Optional[np.ndarray] = np.zeros(n_samples, dtype=np.float64) if return_internal_states else None
+        xi_b_track: Optional[np.ndarray] = np.zeros(n_samples, dtype=np.float64) if return_internal_states else None
+        gamma_track: Optional[np.ndarray] = np.zeros(n_samples, dtype=np.float64) if return_internal_states else None
 
-        y = np.zeros(n_samples, dtype=np.float64)
-        e_priori = np.zeros(n_samples, dtype=np.float64)
-        e_post = np.zeros(n_samples, dtype=np.float64)
+        w_f: np.ndarray = np.zeros(n_taps, dtype=np.float64)
+        w_b: np.ndarray = np.zeros(n_taps, dtype=np.float64)
+        phi_hat_n: np.ndarray = np.zeros(n_taps, dtype=np.float64)
+        phi_hat_np1: np.ndarray = np.zeros(reg_len, dtype=np.float64)
 
-        xiMin_f = float(self.epsilon)
-        xiMin_b = float(self.epsilon)
-
-        gamma_Np1_1 = 0.0
-        gamma_N_2 = 0.0
-        gamma_N_3 = 1.0
-
-        w_f = np.zeros(n_taps, dtype=np.float64)
-        w_b = np.zeros(n_taps, dtype=np.float64)
-
-        phiHatN = np.zeros(n_taps, dtype=np.float64)
-        phiHatNp1 = np.zeros(reg_len, dtype=np.float64)  
-
-        self.w = np.asarray(self.w, dtype=np.float64).reshape(-1)
-        if self.w.size != n_taps:
-            raise ValueError(f"w_init must have length {n_taps} (got {self.w.size}).")
-
-        x_padded = np.zeros(n_samples + n_taps, dtype=np.float64)
+        x_padded: np.ndarray = np.zeros(n_samples + n_taps, dtype=np.float64)
         x_padded[n_taps:] = x
 
-        lam = self.lambda_
-        k1, k2, k3 = self.kappa1, self.kappa2, self.kappa3
-
-        clamp_counter: Dict[str, int] = {}  
-
-        internal: Dict[str, Any] = {}
-        if return_internal_states:
-            internal = {
-                "xiMin_f": np.zeros(n_samples, dtype=np.float64),
-                "xiMin_b": np.zeros(n_samples, dtype=np.float64),
-                "gamma_N_3": np.zeros(n_samples, dtype=np.float64),
-            }
+        clamp_counter: Dict[str, int] = {}
 
         for k in range(n_samples):
-            r = x_padded[k: k + reg_len][::-1].copy()
+            r: np.ndarray = x_padded[k : k + reg_len][::-1]
 
-            error_f_line = float(r[0] - np.dot(w_f, r[1:]))
+            e_f_priori: float = float(r[0] - np.dot(w_f, r[1:]))
+            e_f_post: float = float(e_f_priori * gamma_n_3)
 
-            error_f = float(error_f_line * gamma_N_3)
+            scale: float = self._safe_inv(self.lambda_ * xi_min_f, self.denom_floor, clamp_counter, "inv_lam_xi_f")
+            phi_hat_np1[0] = scale * e_f_priori
+            phi_hat_np1[1:] = phi_hat_n - phi_hat_np1[0] * w_f
 
-            phiHatNp1[0] = 0.0
-            phiHatNp1[1:] = phiHatN
+            inv_g3: float = self._safe_inv(gamma_n_3, self.denom_floor, clamp_counter, "inv_g3")
+            gamma_np1_1: float = self._safe_inv(
+                inv_g3 + phi_hat_np1[0] * e_f_priori, self.denom_floor, clamp_counter, "inv_g_np1"
+            )
 
-            den_scale = lam * xiMin_f
-            scale = self._safe_inv(den_scale, self.denom_floor, clamp_counter, "inv(lam*xiMin_f)")
+            if self.gamma_clip is not None:
+                gamma_np1_1 = float(np.clip(gamma_np1_1, -self.gamma_clip, self.gamma_clip))
 
-            phiHatNp1[0] += scale * error_f_line
-            phiHatNp1[1:] += scale * (-w_f) * error_f_line
+            inv_xi_f_lam: float = self._safe_inv(
+                xi_min_f * self.lambda_, self.denom_floor, clamp_counter, "inv_xi_f"
+            )
+            xi_min_f = max(
+                self._safe_inv(
+                    inv_xi_f_lam - gamma_np1_1 * (phi_hat_np1[0] ** 2),
+                    self.denom_floor,
+                    clamp_counter,
+                    "inv_den_xi_f",
+                ),
+                self.xi_floor,
+            )
 
-            inv_gammaN3 = self._safe_inv(gamma_N_3, self.denom_floor, clamp_counter, "inv(gamma_N_3)")
-            den_gNp1 = inv_gammaN3 + phiHatNp1[0] * error_f_line
-            gamma_Np1_1 = self._safe_inv(den_gNp1, self.denom_floor, clamp_counter, "inv(den_gamma_Np1_1)")
-            gamma_Np1_1 = self._maybe_clip_gamma(gamma_Np1_1)
+            w_f += phi_hat_n * e_f_post
 
-            inv_xi_f_lam = self._safe_inv(xiMin_f * lam, self.denom_floor, clamp_counter, "inv(xiMin_f*lam)")
-            den_xi_f = inv_xi_f_lam - gamma_Np1_1 * (phiHatNp1[0] ** 2)
-            xiMin_f = self._safe_inv(den_xi_f, self.denom_floor, clamp_counter, "inv(den_xiMin_f)")
-            if xiMin_f < self.xi_floor:
-                xiMin_f = self.xi_floor
-                clamp_counter["floor(xiMin_f)"] = clamp_counter.get("floor(xiMin_f)", 0) + 1
+            e_b_line1: float = float(self.lambda_ * xi_min_b * phi_hat_np1[-1])
+            e_b_line2: float = float(r[-1] - np.dot(w_b, r[:-1]))
 
-            w_f += phiHatN * error_f
+            eb3_1: float = float(e_b_line2 * self.kappa1 + e_b_line1 * (1.0 - self.kappa1))
+            eb3_2: float = float(e_b_line2 * self.kappa2 + e_b_line1 * (1.0 - self.kappa2))
+            eb3_3: float = float(e_b_line2 * self.kappa3 + e_b_line1 * (1.0 - self.kappa3))
 
-            error_b_line_1 = float(lam * xiMin_b * phiHatNp1[-1])
-            error_b_line_2 = float(-np.dot(w_b, r[:-1]) + r[-1])
+            inv_g_np1_1: float = self._safe_inv(gamma_np1_1, self.denom_floor, clamp_counter, "inv_g_np1_1")
+            gamma_n_2: float = self._safe_inv(
+                inv_g_np1_1 - phi_hat_np1[-1] * eb3_3, self.denom_floor, clamp_counter, "inv_g_n2"
+            )
 
-            eb3_line_1 = error_b_line_2 * k1 + error_b_line_1 * (1.0 - k1)
-            eb3_line_2 = error_b_line_2 * k2 + error_b_line_1 * (1.0 - k2)
-            eb3_line_3 = error_b_line_2 * k3 + error_b_line_1 * (1.0 - k3)
+            xi_min_b = max(
+                float(self.lambda_ * xi_min_b + (eb3_2 * gamma_n_2) * eb3_2),
+                self.xi_floor,
+            )
 
-            inv_gammaNp1 = self._safe_inv(gamma_Np1_1, self.denom_floor, clamp_counter, "inv(gamma_Np1_1)")
-            den_gN2 = inv_gammaNp1 - phiHatNp1[-1] * eb3_line_3
-            gamma_N_2 = self._safe_inv(den_gN2, self.denom_floor, clamp_counter, "inv(den_gamma_N_2)")
-            gamma_N_2 = self._maybe_clip_gamma(gamma_N_2)
+            phi_hat_n = phi_hat_np1[:-1] + phi_hat_np1[-1] * w_b
+            w_b += phi_hat_n * (eb3_1 * gamma_n_2)
 
-            eb3_1 = eb3_line_1 * gamma_N_2
-            eb3_2 = eb3_line_2 * gamma_N_2
+            gamma_n_3 = self._safe_inv(
+                1.0 + float(np.dot(phi_hat_n, r[:-1])),
+                self.denom_floor,
+                clamp_counter,
+                "inv_g_n3",
+            )
 
-            xiMin_b = lam * xiMin_b + eb3_2 * eb3_line_2
-            if xiMin_b < self.xi_floor:
-                xiMin_b = self.xi_floor
-                clamp_counter["floor(xiMin_b)"] = clamp_counter.get("floor(xiMin_b)", 0) + 1
+            if return_internal_states and xi_f_track is not None and xi_b_track is not None and gamma_track is not None:
+                xi_f_track[k] = xi_min_f
+                xi_b_track[k] = xi_min_b
+                gamma_track[k] = gamma_n_3
 
+            y_k: float = float(np.dot(self.w, r[:-1]))
+            outputs[k] = y_k
 
-            phiHatN = phiHatNp1[:-1] + phiHatNp1[-1] * w_b
+            e_k: float = float(d[k] - y_k)
+            errors[k] = e_k
 
-            w_b += phiHatN * eb3_1
+            e_post_k: float = float(e_k * gamma_n_3)
+            errors_post[k] = e_post_k
 
-            den_gN3 = 1.0 + float(np.dot(phiHatN, r[:-1]))
-            gamma_N_3 = self._safe_inv(den_gN3, self.denom_floor, clamp_counter, "inv(den_gamma_N_3)")
-            gamma_N_3 = self._maybe_clip_gamma(gamma_N_3)
-
-            y[k] = float(np.dot(self.w, r[:-1]))
-            e_priori[k] = float(d[k] - y[k])
-            e_post[k] = float(e_priori[k] * gamma_N_3)
-
-            self.w = self.w + phiHatN * e_post[k]
+            self.w += phi_hat_n * e_post_k
             self._record_history()
 
-            if return_internal_states:
-                internal["xiMin_f"][k] = xiMin_f
-                internal["xiMin_b"][k] = xiMin_b
-                internal["gamma_N_3"][k] = gamma_N_3
-
-        out: Dict[str, Union[np.ndarray, List[np.ndarray], Dict[str, Any]]] = {
-            "outputs": y,
-            "priori_errors": e_priori,
-            "posteriori_errors": e_post,
-            "coefficients": self.w_history,
-        }
-
-        if return_internal_states:
-            out["internal_states"] = internal
-
-        if return_debug_info:
-            out["debug_info"] = {
-                "clamp_counter": clamp_counter,
-                "final_values": {
-                    "xiMin_f": float(xiMin_f),
-                    "xiMin_b": float(xiMin_b),
-                    "gamma_N_3": float(gamma_N_3),
-                    "gamma_Np1_1": float(gamma_Np1_1),
-                    "gamma_N_2": float(gamma_N_2),
-                },
-                "settings": {
-                    "denom_floor": float(self.denom_floor),
-                    "xi_floor": float(self.xi_floor),
-                    "gamma_clip": None if self.gamma_clip is None else float(self.gamma_clip),
-                },
-            }
-
+        runtime_s: float = float(time() - tic)
         if verbose:
-            print(f"StabFastRLS (REAL) completed in {(time() - tic)*1000:.03f} ms")
+            print(f"[StabFastRLS] Completed in {runtime_s * 1000:.02f} ms")
 
-        return out
+        extra: Dict[str, Any] = {
+            "errors_posteriori": errors_post,
+            "clamp_stats": clamp_counter,
+        }
+        if return_internal_states:
+            extra.update(
+                {
+                    "xi_min_f": xi_f_track,
+                    "xi_min_b": xi_b_track,
+                    "gamma": gamma_track,
+                }
+            )
+
+        return self._pack_results(
+            outputs=outputs,
+            errors=errors,
+            runtime_s=runtime_s,
+            error_type="a_priori",
+            extra=extra,
+        )
 # EOF

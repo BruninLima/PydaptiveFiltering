@@ -5,7 +5,6 @@
 #       (Algorithm 12.3 - book: Adaptive Filtering: Algorithms and Practical
 #                                                        Implementation, Diniz)
 #
-#
 #       Authors:
 #        . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
 #        . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
@@ -14,16 +13,18 @@
 #        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
 #        . Paulo Sergio Ramirez Diniz     -                             diniz@lps.ufrj.br
 
-# Imports 
 from __future__ import annotations
 
 import numpy as np
 from time import time
-from typing import Optional, Union, List, Dict
+from typing import Any, Dict, Optional, Union
 
-from pydaptivefiltering.base import AdaptiveFilter
+from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate_input
+from pydaptivefiltering.utils.validation import ensure_real_signals
+
 
 ArrayLike = Union[np.ndarray, list]
+
 
 def _dft_matrix(M: int) -> np.ndarray:
     """
@@ -48,19 +49,6 @@ def _design_polyphase_nyquist_bank(M: int, nfd: int) -> np.ndarray:
         h=b.*win';
         h=[zeros(1,ceil(Nfd/M)*M-Nfd) h];
         Ed=reshape(h,M,length(h)/M);  % column-major
-
-    Parameters
-    ----------
-    M : int
-        Number of subbands (also the block length L=M).
-    nfd : int
-        Nyquist filter length Nfd.
-
-    Returns
-    -------
-    Ed : np.ndarray, shape (M, P), dtype=float
-        Polyphase matrix (analysis bank used in the fractional-delay path),
-        where P = ceil(Nfd/M).
     """
     if nfd <= 0:
         raise ValueError("nyquist_len (Nfd) must be a positive integer.")
@@ -71,43 +59,23 @@ def _design_polyphase_nyquist_bank(M: int, nfd: int) -> np.ndarray:
     pad = P * M - nfd
     if pad > 0:
         h = np.concatenate([np.zeros(pad, dtype=float), h.astype(float)])
-
     Ed = h.reshape((M, P), order="F").astype(float)
     return Ed
 
 
 class DLCLLMS(AdaptiveFilter):
     """
-    Description
-    -----------
-        Implements the Delayless Closed-Loop Subband LMS Adaptive-Filtering Algorithm
-        for REAL valued data (DLCLLMS).
-        (Algorithm 12.3 - book: Adaptive Filtering: Algorithms and Practical
-        Implementation, Diniz)
-
-        This class is a faithful translation of the MATLAB reference `dlcllms.m`:
-        - block processing with block length L = M (number of subbands)
-        - DFT analysis bank (dftmtx)
-        - fractional-delay (Nyquist) polyphase structure Ed (built from Nfd)
-        - delayless fullband output produced by mapping the subband coefficients
-            into an equivalent fullband FIR GG, then filtering the current block
-        - closed-loop: the fullband error is split into subbands and used to
-            update the subband filters with an NLMS-like normalized step.
+    Implements the Delayless Closed-Loop Subband LMS adaptive-filtering algorithm (DLCLLMS)
+    for real-valued fullband data. (Algorithm 12.3, Diniz)
 
     Notes
     -----
-        * The algorithm targets REAL-valued fullband signals (input and desired).
-        Internally, subband signals become complex due to the DFT analysis bank.
-        * The coefficient mapping step follows MATLAB exactly:
-            ww = real(F' * w_cl) / M
-        which forces a real-valued equivalent fullband filter GG.
-
-    Attributes
-    ----------
-        supports_complex : bool
-            False (algorithm is specified for REAL-valued data).
+    - Processing is block-based with block length L = M (number of subbands).
+    - Internally uses complex subband signals (DFT analysis bank).
+    - The mapped equivalent fullband FIR GG (length M*Nw) is exposed via `self.w` (float).
+    - For compatibility with the base class, `OptimizationResult.coefficients` returns
+      `self.w_history` which stores the mapped GG **once per processed block**.
     """
-
     supports_complex: bool = False
 
     def __init__(
@@ -120,105 +88,103 @@ class DLCLLMS(AdaptiveFilter):
         nyquist_len: int = 2,
         w_init: Optional[Union[np.ndarray, list]] = None,
     ) -> None:
-        """
-        Inputs
-        -------
-            filter_order : int
-                Order of the adaptive filter in each subband (Nw in MATLAB).
-                Each subband has length (Nw+1).
-            n_subbands : int
-                Number of subbands (M in MATLAB). Also the block length (L=M).
-            step : float
-                Convergence factor (u in MATLAB).
-            gamma : float
-                Small constant to prevent the updating factor from getting too large.
-            a : float
-                Smoothing factor for the input power estimate in each subband.
-            nyquist_len : int
-                Nyquist filter length (Nfd in MATLAB) used in the fractional-delay path.
-            w_init : array_like, optional
-                Optional initial *subband* coefficients w_cl of shape (M, Nw+1) or
-                a flat vector of length M*(Nw+1). If provided, it is used to
-                initialize the subband coefficient matrix.
-
-        Notes
-        -----
-            - The equivalent fullband FIR GG has length M*Nw (as in MATLAB).
-            - `AdaptiveFilter` base is initialized with order (M*Nw - 1) so that
-            `self.w` can expose the current mapped fullband coefficients.
-        """
-        self.M = int(n_subbands)
+        self.M: int = int(n_subbands)
         if self.M <= 0:
             raise ValueError("n_subbands must be a positive integer.")
 
-        self.Nw = int(filter_order)
+        self.Nw: int = int(filter_order)
         if self.Nw <= 0:
             raise ValueError("filter_order must be a positive integer.")
 
-        self.step = float(step)
-        self.gamma = float(gamma)
-        self.a = float(a)
+        self.step: float = float(step)
+        self.gamma: float = float(gamma)
+        self.a: float = float(a)
 
-        self.nyquist_len = int(nyquist_len)
+        self.nyquist_len: int = int(nyquist_len)
         if self.nyquist_len <= 0:
             raise ValueError("nyquist_len must be a positive integer.")
 
-        self._full_len = self.M * self.Nw 
-        super().__init__(self._full_len - 1, w_init=None)
+        self._full_len: int = int(self.M * self.Nw)
 
-        self.Ed = _design_polyphase_nyquist_bank(self.M, self.nyquist_len)
-        self._P = int(self.Ed.shape[1])
-        self._Dint = int((self._P - 1) // 2)
+        super().__init__(filter_order=self._full_len - 1, w_init=None)
 
-        self.F = _dft_matrix(self.M)
+        self.Ed: np.ndarray = _design_polyphase_nyquist_bank(self.M, self.nyquist_len)
+        self._P: int = int(self.Ed.shape[1])
+        self._Dint: int = int((self._P - 1) // 2)
 
-        self.w_sb = np.zeros((self.M, self.Nw + 1), dtype=complex)
+        self.F: np.ndarray = _dft_matrix(self.M)
 
+        self.w_sb: np.ndarray = np.zeros((self.M, self.Nw + 1), dtype=complex)
         if w_init is not None:
             w0 = np.asarray(w_init)
             if w0.ndim == 2 and w0.shape == (self.M, self.Nw + 1):
-                self.w_sb = w0.astype(complex)
+                self.w_sb = w0.astype(complex, copy=True)
             else:
                 w0 = w0.reshape(-1)
-                if w0.size == self.M * (self.Nw + 1):
-                    self.w_sb = w0.reshape((self.M, self.Nw + 1)).astype(complex)
+                if w0.size != self.M * (self.Nw + 1):
+                    raise ValueError(
+                        f"w_init has incompatible size. Expected {self.M*(self.Nw+1)} "
+                        f"or shape ({self.M},{self.Nw+1}), got {w0.size}."
+                    )
+                self.w_sb = w0.reshape((self.M, self.Nw + 1)).astype(complex, copy=True)
+
+        self.x_cl: np.ndarray = np.zeros((self.M, self.Nw + 1), dtype=complex)
+
+        self.sig: np.ndarray = np.zeros((self.M,), dtype=float)
+
+        self._xx_frac: np.ndarray = np.zeros((self._P, self.M), dtype=float)
+        self._ee_frac: np.ndarray = np.zeros((self._P, self.M), dtype=float)
+
+        self._x_state: np.ndarray = np.zeros((max(self._full_len - 1, 0),), dtype=float)
+
+        self.w_history = []
+        self._record_history()
+
+    def reset_filter(self, w_new: Optional[Union[np.ndarray, list]] = None) -> None:
+        """
+        Reset coefficients and history.
+
+        - If w_new is provided:
+            * If shape (M, Nw+1): interpreted as subband coefficients.
+            * If flat of length M*(Nw+1): reshaped as subband coefficients.
+        - Resets internal states (x_cl, sig, fractional-delay, FIR state).
+        """
+        if w_new is None:
+            self.w_sb = np.zeros((self.M, self.Nw + 1), dtype=complex)
+        else:
+            w0 = np.asarray(w_new)
+            if w0.ndim == 2 and w0.shape == (self.M, self.Nw + 1):
+                self.w_sb = w0.astype(complex, copy=True)
+            else:
+                w0 = w0.reshape(-1)
+                if w0.size != self.M * (self.Nw + 1):
+                    raise ValueError(
+                        f"w_new has incompatible size. Expected {self.M*(self.Nw+1)} "
+                        f"or shape ({self.M},{self.Nw+1}), got {w0.size}."
+                    )
+                self.w_sb = w0.reshape((self.M, self.Nw + 1)).astype(complex, copy=True)
 
         self.x_cl = np.zeros((self.M, self.Nw + 1), dtype=complex)
-
         self.sig = np.zeros((self.M,), dtype=float)
-
         self._xx_frac = np.zeros((self._P, self.M), dtype=float)
         self._ee_frac = np.zeros((self._P, self.M), dtype=float)
-
         self._x_state = np.zeros((max(self._full_len - 1, 0),), dtype=float)
 
-        self.w_history: List[np.ndarray] = []
-
-    def _validate_inputs_real_1d(self, x: np.ndarray, d: np.ndarray) -> None:
-        if x.ndim != 1 or d.ndim != 1:
-            raise ValueError("input_signal and desired_signal must be 1-D arrays.")
-        if x.size != d.size:
-            raise ValueError("input_signal and desired_signal must have the same length.")
-        if x.size == 0:
-            raise ValueError("Signals cannot be empty.")
+        GG = self._equivalent_fullband()
+        self.w = GG.astype(float, copy=True)
+        self.w_history = []
+        self._record_history()
 
     def _equivalent_fullband(self) -> np.ndarray:
         """
         Build the equivalent fullband FIR GG (length M*Nw) from current subband coefficients,
-        exactly as in MATLAB:
-
-            ww = real(F' * w_cl) / M         # ww: M x (Nw+1)
-            G(1,:) = ww(1,1:end-1)           # length Nw
-            for m=2..M:
-                aux = conv(Ed(m-1,:), ww(m,:))
-                G(m,:) = aux(Dint+2:Dint+1+size(ww,2)-1)   # length Nw
-            GG = reshape(G, 1, M*Nw)         # column-major
+        matching the MATLAB mapping.
 
         Returns
         -------
         GG : np.ndarray, shape (M*Nw,), dtype=float
         """
-        ww = np.real(self.F.conj().T @ self.w_sb) / float(self.M)  # (M, Nw+1), real
+        ww = np.real(self.F.conj().T @ self.w_sb) / float(self.M)
 
         G = np.zeros((self.M, self.Nw), dtype=float)
         G[0, :] = ww[0, : self.Nw]
@@ -234,19 +200,7 @@ class DLCLLMS(AdaptiveFilter):
 
     def _fir_block(self, b: np.ndarray, x_block: np.ndarray) -> np.ndarray:
         """
-        FIR filtering with state, matching MATLAB `filter(b,1,x,zi)` block by block.
-
-        Parameters
-        ----------
-        b : np.ndarray
-            FIR coefficients (length Lb).
-        x_block : np.ndarray
-            Input block (1-D).
-
-        Returns
-        -------
-        y_block : np.ndarray
-            Output block (same length as x_block).
+        FIR filtering with state, matching MATLAB `filter(b,1,x,zi)` block-by-block.
         """
         Lb = int(b.size)
         if Lb == 0:
@@ -258,93 +212,88 @@ class DLCLLMS(AdaptiveFilter):
         state = self._x_state
 
         for i, x_n in enumerate(x_block):
-            acc = b[0] * x_n
-            if Lb > 1:
+            acc = float(b[0]) * float(x_n)
+            if Lb > 1 and state.size > 0:
                 acc += float(np.dot(b[1:], state[: Lb - 1]))
             y[i] = acc
 
             if state.size > 0:
                 state[1:] = state[:-1]
-                state[0] = x_n
+                state[0] = float(x_n)
 
         self._x_state = state
         return y
 
+    @ensure_real_signals
+    @validate_input
     def optimize(
         self,
-        input_signal: ArrayLike,
-        desired_signal: ArrayLike,
+        input_signal: np.ndarray,
+        desired_signal: np.ndarray,
         verbose: bool = False,
-    ) -> Dict[str, Union[np.ndarray, List[np.ndarray]]]:
+        return_internal_states: bool = False,
+    ) -> OptimizationResult:
         """
-        Description
-        -----------
-            Executes the adaptation process for the DLCLLMS algorithm (delayless closed-loop subband LMS),
-            faithfully matching the MATLAB reference `dlcllms.m`.
+        Executes the adaptation process for the DLCLLMS algorithm (faithful to dlcllms.m).
 
-        Inputs
+        Returns
         -------
-            input_signal : np.ndarray | list
-                Fullband input signal x[n] (REAL-valued).
-            desired_signal : np.ndarray | list
-                Fullband desired signal d[n] (REAL-valued).
-            verbose : bool
-                Verbose boolean.
+        OptimizationResult
+            outputs:
+                Estimated fullband output y[n] (real), same length as input_signal.
+            errors:
+                Fullband error e[n] = d[n] - y[n] (real).
+            coefficients:
+                History of equivalent fullband FIR vectors GG (length M*Nw),
+                stored once per processed block (plus the initial entry).
 
-        Outputs
-        -------
-            dictionary:
-                outputs : np.ndarray
-                    Estimated fullband output y[n] (REAL).
-                errors : np.ndarray
-                    Fullband error e[n] = d[n] - y[n] (REAL).
-                coefficients : list[np.ndarray]
-                    History of equivalent fullband FIR vectors GG (each has length M*Nw),
-                    stored once per processed block (k = 1..Nblocks).
+        Extra (always)
+        -------------
+        extra["n_blocks"]:
+            Number of processed blocks.
+        extra["block_len"]:
+            Block length (equals M).
+        extra["n_used"]:
+            Number of samples actually processed (multiple of M).
 
-        Main Variables (MATLAB names)
-        -----------------------------
-            M, L           : number of subbands and block length (L=M)
-            Nw             : subband adaptive filter order
-            Ed             : polyphase Nyquist (fractional-delay) bank
-            F              : DFT matrix
-            x_p            : reversed block of input samples (phase alignment)
-            x_frac         : fractional-delay outputs per phase
-            xsb            : subband input samples (DFT output)
-            ww, G, GG       : mapping from subband coefficients to equivalent fullband FIR
-            y_dl           : delayless fullband output for the block
-            e_aux1, e_p     : fullband error block and its reversed version
-            e_frac, esb     : fractional-delay outputs for error and subband errors
-            sig_cl, unlms   : smoothed subband power and normalized step
-
-        Authors
-        -------
-            . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-            . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-            . Markus Vinícius Santos Lima    - mvsl20@gmailcom           & markus@lps.ufrj.br
-            . Wallace Alves Martins          - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-            . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
-            . Paulo Sergio Ramirez Diniz     -                             diniz@lps.ufrj.br
+        Extra (when return_internal_states=True)
+        --------------------------------------
+        extra["sig_history"]:
+            Smoothed subband power per block (n_blocks, M).
+        extra["w_sb_final"]:
+            Final subband coefficient matrix (M, Nw+1), complex.
         """
-        tic = time()
+        tic: float = time()
 
-        x = np.asarray(input_signal, dtype=float).reshape(-1)
-        d = np.asarray(desired_signal, dtype=float).reshape(-1)
-        self._validate_inputs_real_1d(x, d)
+        x = np.asarray(input_signal, dtype=float).ravel()
+        d = np.asarray(desired_signal, dtype=float).ravel()
 
-        n_samples = int(x.size)
-        M = self.M
-        L = M
+        n_samples: int = int(x.size)
+        M: int = int(self.M)
+        L: int = M
 
-        n_blocks = n_samples // L
-        n_used = n_blocks * L
+        n_blocks: int = int(n_samples // L)
+        n_used: int = int(n_blocks * L)
 
-        y = np.zeros((n_samples,), dtype=float)
-        e = np.zeros((n_samples,), dtype=float)
+        outputs = np.zeros((n_samples,), dtype=float)
+        errors = np.zeros((n_samples,), dtype=float)
+
+        sig_hist: Optional[np.ndarray] = np.zeros((n_blocks, M), dtype=float) if return_internal_states else None
+
+        self.w_history = []
+        self._record_history()
 
         if n_blocks == 0:
-            e = d - y
-            return {"outputs": y, "errors": e, "coefficients": self.w_history}
+            errors = d - outputs
+            runtime_s: float = float(time() - tic)
+            extra: Dict[str, Any] = {"n_blocks": 0, "block_len": L, "n_used": 0}
+            return self._pack_results(
+                outputs=outputs,
+                errors=errors,
+                runtime_s=runtime_s,
+                error_type="output_error",
+                extra=extra,
+            )
 
         for k in range(n_blocks):
             i0 = k * L
@@ -364,17 +313,16 @@ class DLCLLMS(AdaptiveFilter):
             xsb = self.F @ x_frac.astype(complex)
 
             GG = self._equivalent_fullband()
-            self.w = GG.astype(float, copy=True)
-            self.w_history.append(self.w.copy())
-
             y_block = self._fir_block(GG, x_block)
-            y[i0:i1] = y_block
 
+            outputs[i0:i1] = y_block
             e_block = d_block - y_block
-            e[i0:i1] = e_block
+            errors[i0:i1] = e_block
+
+            self.w = GG.astype(float, copy=True)
+            self._record_history()
 
             e_p = e_block[::-1]
-
             e_frac = np.zeros((M,), dtype=float)
             for m in range(M):
                 self._ee_frac[1:, m] = self._ee_frac[:-1, m]
@@ -393,12 +341,35 @@ class DLCLLMS(AdaptiveFilter):
 
                 self.w_sb[m, :] = self.w_sb[m, :] + 2.0 * mu_n * np.conj(esb[m]) * self.x_cl[m, :]
 
+            if return_internal_states and sig_hist is not None:
+                sig_hist[k, :] = self.sig
+
         if n_used < n_samples:
-            y[n_used:] = 0.0
-            e[n_used:] = d[n_used:] - y[n_used:]
+            outputs[n_used:] = 0.0
+            errors[n_used:] = d[n_used:] - outputs[n_used:]
 
+        runtime_s: float = float(time() - tic)
         if verbose:
-            print(f"DLCLLMS Adaptation completed in {(time() - tic) * 1000:.03f} ms")
+            print(f"[DLCLLMS] Completed in {runtime_s * 1000:.03f} ms | blocks={n_blocks} | used={n_used}/{n_samples}")
 
-        return {"outputs": y, "errors": e, "coefficients": self.w_history}
+        extra: Dict[str, Any] = {
+            "n_blocks": int(n_blocks),
+            "block_len": int(L),
+            "n_used": int(n_used),
+        }
+        if return_internal_states:
+            extra.update(
+                {
+                    "sig_history": sig_hist,
+                    "w_sb_final": self.w_sb.copy(),
+                }
+            )
+
+        return self._pack_results(
+            outputs=outputs,
+            errors=errors,
+            runtime_s=runtime_s,
+            error_type="output_error",
+            extra=extra,
+        )
 # EOF

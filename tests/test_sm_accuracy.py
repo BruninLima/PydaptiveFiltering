@@ -1,4 +1,4 @@
-from pydaptivefiltering import SMNLMS, SMBNLMS, SMAP, SimplifiedSMAP
+from pydaptivefiltering import SMNLMS, SMBNLMS, SMAffineProjection, SimplifiedSMAP
 
 def test_compare_sm_performance(system_data, calculate_msd):
     """
@@ -17,7 +17,7 @@ def test_compare_sm_performance(system_data, calculate_msd):
     filters = {
         "SM-NLMS": SMNLMS(filter_order=order, gamma_bar=gamma_val, gamma=1e-6),
         "SM-BNLMS": SMBNLMS(filter_order=order, gamma_bar=gamma_val, gamma=1e-6),
-        "SM-AP": SMAP(filter_order=order, gamma_bar=gamma_val, gamma_bar_vector=gamma_vector, gamma=1e-3, L=L_val),
+        "SM-AP": SMAffineProjection(filter_order=order, gamma_bar=gamma_val, gamma_bar_vector=gamma_vector, gamma=1e-3, L=L_val),
         "SM-Simp-AP": SimplifiedSMAP(filter_order=order, gamma_bar=gamma_val, gamma=1e-3, L=L_val)
     }
 

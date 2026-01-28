@@ -12,113 +12,126 @@
 #        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
 #        . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
 
-#Imports
+from __future__ import annotations
+
+from time import perf_counter
+from typing import Optional, Union
+
 import numpy as np
-from time import time
-from typing import Optional, Union, List, Dict
-from pydaptivefiltering.base import AdaptiveFilter
+
+from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate_input
+
+ArrayLike = Union[np.ndarray, list]
+
 
 class LMS(AdaptiveFilter):
     """
-    Description
-    -----------
-        Implements the Complex LMS algorithm for COMPLEX valued data.
-        (Algorithm 3.2 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
+    Complex LMS (Least-Mean Squares).
+
+    Implements the complex LMS recursion (Algorithm 3.2 - Diniz) for adaptive FIR
+    filtering.
+
+    Notes
+    -----
+    - Complex-valued implementation (supports_complex = True).
+    - Uses the unified base API via `@validate_input`:
+        * optimize(input_signal=..., desired_signal=...)
+        * optimize(x=..., d=...)
+        * optimize(x, d)
+    - This implementation returns the a priori error: e[k] = d[k] - y[k] where
+      y[k] = w[k]^H x_k, and then updates:
+          w[k+1] = w[k] + mu * conj(e[k]) * x_k
     """
+
     supports_complex: bool = True
+
+    step_size: float
+
     def __init__(
-        self, 
-        filter_order: int, 
-        step: float = 1e-2, 
-        w_init: Optional[Union[np.ndarray, list]] = None
+        self,
+        filter_order: int,
+        step_size: float = 1e-2,
+        w_init: Optional[ArrayLike] = None,
     ) -> None:
         """
-        Inputs
-        -------
-            filter_order : int (The order of the filter M)
-            step         : float (Convergence factor mu)
-            w_init       : array_like, optional (Initial coefficients)
+        Parameters
+        ----------
+        filter_order:
+            FIR order M (number of taps is M+1).
+        step_size:
+            Step-size (mu).
+        w_init:
+            Optional initial coefficients (length M+1). If None, zeros.
         """
-        super().__init__(filter_order, w_init)
-        self.step: float = step
+        super().__init__(filter_order=int(filter_order), w_init=w_init)
+        self.step_size = float(step_size)
 
+    @validate_input
     def optimize(
-        self, 
-        input_signal: Union[np.ndarray, list], 
-        desired_signal: Union[np.ndarray, list], 
-        verbose: bool = False
-    ) -> Dict[str, Union[np.ndarray, List[np.ndarray]]]:
+        self,
+        input_signal: np.ndarray,
+        desired_signal: np.ndarray,
+        verbose: bool = False,
+    ) -> OptimizationResult:
         """
-        Description
-        -----------
-            Executes the weight update process for the LMS algorithm.
+        Run LMS adaptation.
 
-        Inputs
+        Parameters
+        ----------
+        input_signal:
+            Input signal x[k].
+        desired_signal:
+            Desired signal d[k].
+        verbose:
+            If True, prints runtime.
+
+        Returns
         -------
-            input_signal   : np.ndarray | list (Input vector x)
-            desired_signal : np.ndarray | list (Desired vector d)
-            verbose        : bool (Verbose boolean)
-
-        Outputs
-        -------
-            dictionary:
-                outputs      : Store the estimated output of each iteration.
-                errors       : Store the error for each iteration.
-                coefficients : Store the estimated coefficients for each iteration.
-
-        Main Variables
-        --------- 
-            regressor      : Vector containing the tapped delay line (x_k).
-            outputs_vector : Represents the output at iteration k (y).
-            error_vector   : Represents the output errors at iteration k (e).
-
-        Misc Variables
-        --------------
-            tic            : Initial time for runtime calculation.
-            n_samples      : Number of iterations based on signal size.
-
-        Authors
-        -------
-            . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-            . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-            . Markus Vinícius Santos Lima    - mvsl20@gmailcom           & markus@lps.ufrj.br
-            . Wallace Alves Martins          - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-            . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
-            . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
+        OptimizationResult
+            outputs:
+                Filter output y[k].
+            errors:
+                A priori error e[k] = d[k] - y[k].
+            coefficients:
+                History of coefficients stored in the base class.
+            error_type:
+                "a_priori".
         """
-        tic: float = time()
-        
-        x: np.ndarray = np.asarray(input_signal, dtype=complex)
-        d: np.ndarray = np.asarray(desired_signal, dtype=complex)
+        tic: float = perf_counter()
 
-        self._validate_inputs(x, d)
-        n_samples: int = x.size
-        
-        y: np.ndarray = np.zeros(n_samples, dtype=complex)
-        e: np.ndarray = np.zeros(n_samples, dtype=complex)
-        
-        x_padded: np.ndarray = np.zeros(n_samples + self.m, dtype=complex)
-        x_padded[self.m:] = x
+        x: np.ndarray = np.asarray(input_signal, dtype=complex).ravel()
+        d: np.ndarray = np.asarray(desired_signal, dtype=complex).ravel()
 
-        
+        n_samples: int = int(x.size)
+        m: int = int(self.filter_order)
+
+        outputs: np.ndarray = np.zeros(n_samples, dtype=complex)
+        errors: np.ndarray = np.zeros(n_samples, dtype=complex)
+
+        x_padded: np.ndarray = np.zeros(n_samples + m, dtype=complex)
+        x_padded[m:] = x
 
         for k in range(n_samples):
-            x_k: np.ndarray = x_padded[k : k + self.m + 1][::-1]
-            
-            y[k] = np.dot(self.w.conj(), x_k)
-            
-            e[k] = d[k] - y[k]
+            x_k: np.ndarray = x_padded[k : k + m + 1][::-1]
 
-            self.w = self.w + self.step * np.conj(e[k]) * x_k
-            
+            y_k: complex = complex(np.vdot(self.w, x_k)) 
+            outputs[k] = y_k
+    
+            e_k: complex = d[k] - y_k
+            errors[k] = e_k
+
+            self.w = self.w + self.step_size * np.conj(e_k) * x_k
+
             self._record_history()
 
+        runtime_s: float = perf_counter() - tic
         if verbose:
-            print(f"LMS Adaptation completed in {(time() - tic)*1000:.03f} ms")
+            print(f"[LMS] Completed in {runtime_s * 1000:.03f} ms")
 
-        return {
-            'outputs': y,
-            'errors': e,
-            'coefficients': self.w_history
-        }
+        return self._pack_results(
+            outputs=outputs,
+            errors=errors,
+            runtime_s=runtime_s,
+            error_type="a_priori",
+        )
 # EOF

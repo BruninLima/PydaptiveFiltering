@@ -5,7 +5,6 @@
 #       (Algorithm 12.4 - book: Adaptive Filtering: Algorithms and Practical
 #                                                        Implementation, Diniz)
 #
-#
 #       Authors:
 #        . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
 #        . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
@@ -14,75 +13,38 @@
 #        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
 #        . Paulo Sergio Ramirez Diniz     -                             diniz@lps.ufrj.br
 
-# Imports
 from __future__ import annotations
 
 import numpy as np
 from time import time
-from typing import Optional, Union, List, Dict, Any
+from typing import Any, Dict, Optional, Union
 
-from pydaptivefiltering.base import AdaptiveFilter
+from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate_input
 from pydaptivefiltering.utils.validation import ensure_real_signals
 
 
 class CFDLMS(AdaptiveFilter):
     """
-    Description
-    -----------
-        Implements the Constrained Frequency-Domain LMS (CFDLMS) algorithm for REAL valued data.
-        (Algorithm 12.4 - book: Adaptive Filtering: Algorithms and Practical Implementation, Diniz)
+    Implements the Constrained Frequency-Domain LMS (CFDLMS) algorithm for real-valued data.
+    (Algorithm 12.4, Diniz)
 
-    Overview
-    --------
-        The CFDLMS algorithm operates in the frequency domain using M subbands (frequency bins)
-        and updates an adaptive filter of length (Nw+1) *per bin*. Each iteration consumes L new
-        time samples (decimation/interpolation factor) and uses an overlapped block of length M
-        (usually L = M/2) for FFT processing.
-
-        The Matlab reference (`cfdlms.m`) uses:
-            - Block length: M
-            - Hop size: L
-            - Frequency-domain regressor buffer: uu (M x (Nw+1))
-            - Per-bin weights: ww (M x (Nw+1))
-            - Smoothed subband energy estimate: sig (M,)
-
-        A key feature is the *constraint* step, implemented by FFT across the subband index (m)
-        and zeroing bins m = L..M-1 (keeping only the first L bins), then IFFT back. This matches
-        the reference script:
-            waux = fft(wwc)/sqrt(M)
-            wwc  = sqrt(M)*ifft([waux(1:L,:); zeros(M-L, Nw+1)])
-
-    Parameters
-    ----------
-        filter_order : int
-            Subband adaptive filter order Nw (the filter has Nw+1 taps per subband).
-        n_subbands : int
-            Number of subbands (FFT size) M.
-        decimation : int | None
-            Hop size L (number of time-domain output samples produced per iteration).
-            If None, defaults to M//2 (as in the reference Matlab script).
-        step : float
-            Convergence factor u.
-        gamma : float
-            Small positive constant to prevent the update normalization from getting too large.
-        smoothing : float
-            Exponential smoothing factor 'a' for subband energy estimate sig.
-        w_init : array_like, optional
-            Initial coefficient matrix. Accepted shapes:
-              - (M, Nw+1) : direct initialization
-              - (M*(Nw+1),) : will be reshaped to (M, Nw+1)
-
-    Attributes
-    ----------
-        ww : np.ndarray
-            Current subband coefficient matrix, shape (M, Nw+1), complex dtype (internal).
-        uu : np.ndarray
-            Regressor buffer, shape (M, Nw+1), complex dtype (internal).
-        sig : np.ndarray
-            Smoothed energy per bin, shape (M,), float dtype.
-
+    Notes
+    -----
+    - This algorithm is block-based: each iteration produces L time-domain outputs.
+    - Internally it uses complex FFT processing; outputs/errors returned are real.
+    - Coefficients are a subband matrix ww with shape (M, Nw+1).
+    - For compatibility with the base class, `self.w` stores a flattened view of `ww`.
+      The returned OptimizationResult.coefficients still comes from `self.w_history`
+      (flattened), and the full matrix history is provided in `extra["ww_history"]`.
     """
     supports_complex: bool = False
+
+    M: int
+    L: int
+    Nw: int
+    step: float
+    gamma: float
+    smoothing: float
 
     def __init__(
         self,
@@ -94,8 +56,6 @@ class CFDLMS(AdaptiveFilter):
         smoothing: float = 0.01,
         w_init: Optional[Union[np.ndarray, list]] = None,
     ) -> None:
-        super().__init__(filter_order, w_init=None)
-
         if n_subbands <= 0:
             raise ValueError("n_subbands (M) must be a positive integer.")
         if filter_order < 0:
@@ -109,13 +69,16 @@ class CFDLMS(AdaptiveFilter):
         if not (0.0 < smoothing <= 1.0):
             raise ValueError("smoothing must be in (0, 1].")
 
-        self.M: int = int(n_subbands)
-        self.L: int = int(decimation)
-        self.Nw: int = int(filter_order)
+        self.M = int(n_subbands)
+        self.L = int(decimation)
+        self.Nw = int(filter_order)
 
-        self.step: float = float(step)
-        self.gamma: float = float(gamma)
-        self.smoothing: float = float(smoothing)
+        self.step = float(step)
+        self.gamma = float(gamma)
+        self.smoothing = float(smoothing)
+
+        n_params = self.M * (self.Nw + 1)
+        super().__init__(filter_order=n_params - 1, w_init=None)
 
         self.ww: np.ndarray = np.zeros((self.M, self.Nw + 1), dtype=np.complex128)
         if w_init is not None:
@@ -124,9 +87,9 @@ class CFDLMS(AdaptiveFilter):
                 self.ww = w0.astype(np.complex128, copy=True)
             else:
                 w0 = w0.reshape(-1)
-                if w0.size != self.M * (self.Nw + 1):
+                if w0.size != n_params:
                     raise ValueError(
-                        f"w_init has incompatible size. Expected {self.M*(self.Nw+1)} "
+                        f"w_init has incompatible size. Expected {n_params} "
                         f"or shape ({self.M},{self.Nw+1}), got {w0.size}."
                     )
                 self.ww = w0.reshape(self.M, self.Nw + 1).astype(np.complex128, copy=True)
@@ -134,91 +97,122 @@ class CFDLMS(AdaptiveFilter):
         self.uu: np.ndarray = np.zeros((self.M, self.Nw + 1), dtype=np.complex128)
         self.sig: np.ndarray = np.zeros(self.M, dtype=np.float64)
 
-        self.ww_history: List[np.ndarray] = []
+        self.w = self.ww.reshape(-1).astype(float, copy=False)
+        self.w_history = []
+        self._record_history()
+
+        self.ww_history: list[np.ndarray] = []
+
+    def reset_filter(self, w_new: Optional[Union[np.ndarray, list]] = None) -> None:
+        """
+        Reset coefficients/history.
+
+        If w_new is:
+          - None: zeros
+          - shape (M, Nw+1): used directly
+          - flat of length M*(Nw+1): reshaped
+        """
+        n_params = self.M * (self.Nw + 1)
+
+        if w_new is None:
+            self.ww = np.zeros((self.M, self.Nw + 1), dtype=np.complex128)
+        else:
+            w0 = np.asarray(w_new)
+            if w0.ndim == 2 and w0.shape == (self.M, self.Nw + 1):
+                self.ww = w0.astype(np.complex128, copy=True)
+            else:
+                w0 = w0.reshape(-1)
+                if w0.size != n_params:
+                    raise ValueError(
+                        f"w_new has incompatible size. Expected {n_params} "
+                        f"or shape ({self.M},{self.Nw+1}), got {w0.size}."
+                    )
+                self.ww = w0.reshape(self.M, self.Nw + 1).astype(np.complex128, copy=True)
+
+        self.uu = np.zeros((self.M, self.Nw + 1), dtype=np.complex128)
+        self.sig = np.zeros(self.M, dtype=np.float64)
+
+        self.ww_history = []
+        self.w = self.ww.reshape(-1).astype(float, copy=False)
+        self.w_history = []
+        self._record_history()
 
     @ensure_real_signals
+    @validate_input
     def optimize(
         self,
-        input_signal: Union[np.ndarray, list],
-        desired_signal: Union[np.ndarray, list],
-        verbose: bool = False
-    ) -> Dict[str, Any]:
+        input_signal: np.ndarray,
+        desired_signal: np.ndarray,
+        verbose: bool = False,
+        return_internal_states: bool = False,
+    ) -> OptimizationResult:
         """
-        Description
-        -----------
-            Executes the CFDLMS weight update process.
+        Executes the CFDLMS weight update process.
 
-        Inputs
+        Parameters
+        ----------
+        input_signal:
+            Input signal x[n] (real-valued).
+        desired_signal:
+            Desired signal d[n] (real-valued).
+        verbose:
+            If True, prints runtime.
+        return_internal_states:
+            If True, returns additional internal trajectories in result.extra.
+
+        Returns
         -------
-            input_signal   : np.ndarray | list
-                Input signal x[n] (REAL valued).
-            desired_signal : np.ndarray | list
-                Desired signal d[n] (REAL valued).
-            verbose        : bool
-                Verbose boolean.
+        OptimizationResult
+            outputs:
+                Estimated output signal (real), length = n_iters * L.
+            errors:
+                Output error signal (real), same length as outputs.
+            coefficients:
+                Flattened coefficient history (from base `w_history`).
+            error_type:
+                "output_error".
 
-        Outputs
-        -------
-            dictionary:
-                outputs      : np.ndarray
-                    Estimated output signal (REAL), aligned to the desired signal
-                    for the processed portion (length = n_iters * L).
-                errors       : np.ndarray
-                    Output error signal (REAL), same length as outputs.
-                coefficients : list[np.ndarray]
-                    History of coefficient matrices ww over iterations; each entry has
-                    shape (M, Nw+1).
+        Extra (always)
+        -------------
+        extra["ww_history"]:
+            List of coefficient matrices ww over iterations; each entry has shape (M, Nw+1).
+        extra["n_iters"]:
+            Number of block iterations.
 
-        Main Variables (matching the Matlab reference)
-        ----------------------------------------------
-            M              : number of subbands (FFT length).
-            L              : hop size / decimation factor.
-            Nw             : subband filter order (taps per bin = Nw+1).
-            x_p            : time-domain block of length M (reversed as in Matlab code).
-            ui             : FFT(x_p)/sqrt(M), shape (M,).
-            uu             : regressor buffer, shape (M, Nw+1).
-            ww             : coefficient matrix, shape (M, Nw+1).
-            uy             : per-bin output in frequency domain, shape (M,).
-            y_block        : ifft(uy)*sqrt(M), time-domain block, shape (M,).
-            e_rev          : error samples in reversed order (length L), as in Matlab.
-            et             : FFT([e_rev; zeros(M-L)])/sqrt(M), shape (M,).
-            sig            : smoothed subband energy estimate.
-
-        Authors
-        -------
-            . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-            . Guilherme de Oliveira Pinto    - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-            . Markus Vinícius Santos Lima    - mvsl20@gmailcom           & markus@lps.ufrj.br
-            . Wallace Alves Martins          - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-            . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
-            . Paulo Sergio Ramirez Diniz     -                             diniz@lps.ufrj.br
+        Extra (when return_internal_states=True)
+        --------------------------------------
+        extra["sig"]:
+            Final smoothed energy per bin (M,).
+        extra["sig_history"]:
+            Energy history per iteration (n_iters, M).
         """
         tic: float = time()
 
-        x = np.asarray(input_signal, dtype=np.float64)
-        d = np.asarray(desired_signal, dtype=np.float64)
-
-        self._validate_inputs(x, d)
+        x = np.asarray(input_signal, dtype=np.float64).ravel()
+        d = np.asarray(desired_signal, dtype=np.float64).ravel()
 
         M = self.M
         L = self.L
         Nw = self.Nw
 
         max_iters_from_x = int(np.floor((x.size + L - M) / L) + 1) if (x.size + L) >= M else 0
-        max_iters_from_d = d.size // L
+        max_iters_from_d = int(d.size // L)
         n_iters = max(0, min(max_iters_from_x, max_iters_from_d))
 
         out_len = n_iters * L
-        y_out = np.zeros(out_len, dtype=np.float64)
-        e_out = np.zeros(out_len, dtype=np.float64)
+        outputs = np.zeros(out_len, dtype=np.float64)
+        errors  = np.zeros(out_len, dtype=np.float64)
 
         xpad = np.concatenate([np.zeros(L, dtype=np.float64), x])
 
         self.ww_history = []
 
+        sig_hist: Optional[np.ndarray] = np.zeros((n_iters, M), dtype=np.float64) if return_internal_states else None
+
         uu = self.uu
         ww = self.ww
         sig = self.sig
+
         a = self.smoothing
         u_step = self.step
         gamma = self.gamma
@@ -226,11 +220,11 @@ class CFDLMS(AdaptiveFilter):
 
         for k in range(n_iters):
             start = k * L
-            seg_x = xpad[start: start + M]  
+            seg_x = xpad[start : start + M]
 
             x_p = seg_x[::-1].astype(np.complex128, copy=False)
 
-            d_seg = d[start: start + L]
+            d_seg = d[start : start + L]
             d_p = d_seg[::-1].astype(np.complex128, copy=False)
 
             ui = np.fft.fft(x_p) / sqrtM
@@ -241,7 +235,6 @@ class CFDLMS(AdaptiveFilter):
             uy = np.sum(uu * ww, axis=1)
 
             y_block = np.fft.ifft(uy) * sqrtM
-
             y_firstL = y_block[:L]
 
             e_rev = d_p - y_firstL
@@ -249,12 +242,11 @@ class CFDLMS(AdaptiveFilter):
             y_time = np.real(y_firstL[::-1])
             e_time = d_seg - y_time
 
-            y_out[start: start + L] = y_time
-            e_out[start: start + L] = e_time
+            outputs[start : start + L] = y_time
+            errors[start : start + L] = e_time
 
             e_pad = np.concatenate([e_rev, np.zeros(M - L, dtype=np.complex128)])
             et = np.fft.fft(e_pad) / sqrtM
-
             sig[:] = (1.0 - a) * sig + a * (np.abs(ui) ** 2)
 
             denom = gamma + (Nw + 1) * sig
@@ -270,16 +262,33 @@ class CFDLMS(AdaptiveFilter):
 
             self.ww_history.append(ww.copy())
 
+            self.w = np.real(ww.reshape(-1)).astype(float, copy=False)
+            self._record_history()
+
+            if return_internal_states and sig_hist is not None:
+                sig_hist[k, :] = sig
+
         self.uu = uu
         self.ww = ww
         self.sig = sig
 
+        runtime_s: float = float(time() - tic)
         if verbose:
-            print(f"CFDLMS Adaptation completed in {(time() - tic)*1000:.03f} ms")
+            print(f"[CFDLMS] Completed in {runtime_s * 1000:.03f} ms | iters={n_iters} | out_len={out_len}")
 
-        return {
-            "outputs": y_out,
-            "errors": e_out,
-            "coefficients": self.ww_history,
+        extra: Dict[str, Any] = {
+            "ww_history": self.ww_history,
+            "n_iters": int(n_iters),
         }
+        if return_internal_states:
+            extra["sig"] = sig.copy()
+            extra["sig_history"] = sig_hist
+
+        return self._pack_results(
+            outputs=outputs,
+            errors=errors,
+            runtime_s=runtime_s,
+            error_type="output_error",
+            extra=extra,
+        )
 # EOF

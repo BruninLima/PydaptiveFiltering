@@ -1,158 +1,154 @@
 # blind.affine_projection_cm.py
 #
-#       Implements the Complex Affine-Projection Constant-Modulus algorithm 
+#       Implements the Complex Affine-Projection Constant-Modulus algorithm
 #       for COMPLEX valued data.
 #       (Algorithm 13.4 - book: Adaptive Filtering: Algorithms and Practical
-#                                                        Implementation, Diniz)
-#
+#                                                              Implementation, Diniz)
 #
 #       Authors:
 #        . Bruno Ramos Lima Netto         - brunolimanetto@gmail.com  & brunoln@cos.ufrj.br
-#        . Guilherme de Oliveira Pinto   - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-#        . Markus Vinícius Santos Lima   - mvsl20@gmailcom           & markus@lps.ufrj.br
-#        . Wallace Alves Martins         - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-#        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com          & wagner@lps.ufrj.br
-#        . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
+#        . Guilherme de Oliveira Pinto    - guilhermeodeoliveirapinto@gmail.com & guilhermepinto7@lps.ufrj.br
+#        . Markus Vinícius Santos Lima    - mvsl20@gmail.com          & markus@lps.ufrj.br
+#        . Wallace Alves Martins          - wallace.wam@gmail.com     & wallace@lps.ufrj.br
+#        . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com           & wagner@lps.ufrj.br
+#        . Paulo Sergio Ramirez Diniz    -                                diniz@lps.ufrj.br
 
 from __future__ import annotations
 
 import numpy as np
 from time import time
-from typing import Optional, Union, List, Dict
+from typing import Any, Dict, Optional, Union
 
-from pydaptivefiltering.base import AdaptiveFilter
+from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult
 
-ArrayLike = Union[np.ndarray, list]
 
 class AffineProjectionCM(AdaptiveFilter):
     """
-    Description
-    -----------
-        Implements the Affine-Projection Constant-Modulus (AP-CM) algorithm 
-        for blind adaptive filtering with complex or real valued data.
-        (Algorithm 13.4 - book: Adaptive Filtering: Algorithms and Practical
-        Implementation, Diniz)
+    Implements the Affine-Projection Constant-Modulus (AP-CM) algorithm
+    for blind adaptive filtering.
 
-    Attributes
-    ----------
-        supports_complex : bool
-            True (The algorithm supports complex-valued data).
+    Notes
+    -----
+    - This is a BLIND algorithm: it does not require desired_signal.
+    - We still accept `desired_signal=None` in `optimize` to keep a unified API.
     """
-
     supports_complex: bool = True
+    step_size: float
+    memory_length: int
+    gamma: float
+    n_coeffs: int
 
     def __init__(
         self,
         filter_order: int = 5,
-        step: float = 0.1,
+        step_size: float = 0.1,
         memory_length: int = 2,
         gamma: float = 1e-6,
         w_init: Optional[Union[np.ndarray, list]] = None,
     ) -> None:
-        """
-        Inputs
-        -------
-            filter_order : int
-                Order of the FIR filter (N). Number of coefficients is filter_order + 1.
-            step : float
-                Convergence (relaxation) factor (mu).
-            memory_length : int
-                Reuse data factor (referred as L in the textbook).
-            gamma : float
-                Regularization factor to avoid singularity in matrix inversion.
-            w_init : array_like, optional
-                Initial filter coefficients. If None, initialized with zeros.
-        """
         super().__init__(filter_order, w_init=w_init)
-        self.step = float(step)
-        self.L = int(memory_length)
+        self.step_size = float(step_size)
+        self.memory_length = int(memory_length)
         self.gamma = float(gamma)
         self.n_coeffs = int(filter_order + 1)
 
     def optimize(
         self,
-        input_signal: ArrayLike,
+        input_signal: Union[np.ndarray, list],
+        desired_signal: Optional[Union[np.ndarray, list]] = None,
         verbose: bool = False,
-    ) -> Dict[str, Union[np.ndarray, List[np.ndarray]]]:
+        return_internal_states: bool = False,
+    ) -> OptimizationResult:
         """
-        Description
-        -----------
-            Executes the adaptation process for the AP-CM algorithm.
-            This algorithm uses multiple past regressors to accelerate 
-            the blind equalization process.
+        Executes the Affine-Projection Constant-Modulus (AP-CM) algorithm.
 
-        Inputs
-        -------
-            input_signal : np.ndarray | list
-                Signal fed into the adaptive filter.
-            verbose : bool
-                Verbose boolean.
+        Parameters
+        ----------
+        input_signal:
+            The input signal to be filtered.
+        desired_signal:
+            Ignored (kept only for API standardization).
+        verbose:
+            If True, prints runtime.
+        return_internal_states:
+            If True, returns selected internal values in `extra`.
 
-        Outputs
+        Returns
         -------
-            dictionary:
-                outputs : np.ndarray
-                    Estimated output y[n] (first element of the output vector).
-                errors : np.ndarray
-                    Blind error e[n] (first element of the error vector).
-                coefficients : list[np.ndarray]
-                    History of estimated coefficient vectors.
+        OptimizationResult
+            outputs:
+                y[k] = first component of the projection output vector.
+            errors:
+                e[k] = first component of the CM error vector.
+            coefficients:
+                coefficient history stored in the base class.
+            error_type:
+                set to "blind_constant_modulus".
 
-        Authors
-        -------
-            . Guilherme de Oliveira Pinto   - guilhermepinto7@gmail.com & guilherme@lps.ufrj.br
-            . Markus Vinícius Santos Lima   - mvsl20@gmailcom           & markus@lps.ufrj.br
-            . Wallace Alves Martins         - wallace.wam@gmail.com     & wallace@lps.ufrj.br
-            . Luiz Wagner Pereira Biscainho - cpneqs@gmail.com          & wagner@lps.ufrj.br
-            . Paulo Sergio Ramirez Diniz    -                             diniz@lps.ufrj.br
+        Extra (when return_internal_states=True)
+        --------------------------------------
+        extra["last_update_factor"]:
+            Solution of the (regularized) linear system at the last iteration.
+        extra["last_regressor_matrix"]:
+            Final regressor matrix (shape n_coeffs x (memory_length+1)).
         """
-        tic = time()
+        tic: float = time()
 
-        x = np.asarray(input_signal).reshape(-1)
-        n_iterations = int(x.size)
-        
-        y_vec = np.zeros(n_iterations, dtype=x.dtype)
-        e_vec = np.zeros(n_iterations, dtype=x.dtype)
-        self.w_history = []
+        x: np.ndarray = np.asarray(input_signal, dtype=complex).ravel()
+        n_samples: int = int(x.size)
 
-        regressor_matrix = np.zeros((self.n_coeffs, self.L + 1), dtype=x.dtype)
-        
-        I_reg = self.gamma * np.eye(self.L + 1)
+        outputs: np.ndarray = np.zeros(n_samples, dtype=complex)
+        errors: np.ndarray = np.zeros(n_samples, dtype=complex)
 
-        for it in range(n_iterations):
+        L: int = int(self.memory_length)
+
+        regressor_matrix: np.ndarray = np.zeros((self.n_coeffs, L + 1), dtype=complex)
+        I_reg: np.ndarray = (self.gamma * np.eye(L + 1)).astype(complex)
+
+        x_padded: np.ndarray = np.zeros(n_samples + self.filter_order, dtype=complex)
+        x_padded[self.filter_order:] = x
+
+        last_update_factor: Optional[np.ndarray] = None
+
+        for k in range(n_samples):
             regressor_matrix[:, 1:] = regressor_matrix[:, :-1]
-            
-            current_x = np.zeros(self.n_coeffs, dtype=x.dtype)
-            for i in range(self.n_coeffs):
-                if it - i >= 0:
-                    current_x[i] = x[it - i]
-            regressor_matrix[:, 0] = current_x
+            regressor_matrix[:, 0] = x_padded[k : k + self.filter_order + 1][::-1]
 
-            self.w_history.append(self.w.copy())
+            output_ap: np.ndarray = np.dot(np.conj(regressor_matrix).T, self.w)
 
-            output_ap = np.dot(np.conj(regressor_matrix).T, self.w)
-            
-            desired_level_conj = np.zeros_like(output_ap)
-            for i in range(len(output_ap)):
-                if np.abs(output_ap[i]) > 0:
-                    desired_level_conj[i] = output_ap[i] / np.abs(output_ap[i])
-            
-            error_ap = desired_level_conj - output_ap
+            abs_out: np.ndarray = np.abs(output_ap)
+            desired_level: np.ndarray = np.zeros_like(output_ap, dtype=complex)
+            np.divide(output_ap, abs_out, out=desired_level, where=abs_out > 1e-12)
 
-            inv_part = np.dot(np.conj(regressor_matrix).T, regressor_matrix) + I_reg
-            update_factor = np.linalg.solve(inv_part, error_ap)
-            
-            self.w = self.w + self.step * np.dot(regressor_matrix, update_factor)
+            error_ap: np.ndarray = desired_level - output_ap
 
-            y_vec[it] = output_ap[0]
-            e_vec[it] = error_ap[0]
+            phi: np.ndarray = np.dot(np.conj(regressor_matrix).T, regressor_matrix) + I_reg
+            update_factor: np.ndarray = np.linalg.solve(phi, error_ap)
+            last_update_factor = update_factor
 
+            self.w = self.w + self.step_size * np.dot(regressor_matrix, update_factor)
+
+            outputs[k] = output_ap[0]
+            errors[k] = error_ap[0]
+
+            self._record_history()
+
+        runtime_s: float = float(time() - tic)
         if verbose:
-            print(f"AP-CM Adaptation completed in {(time() - tic) * 1000:.03f} ms")
+            print(f"[AffineProjectionCM] Completed in {runtime_s * 1000:.02f} ms")
 
-        return {
-            "outputs": y_vec,
-            "errors": e_vec,
-            "coefficients": self.w_history,
-        }
+        extra: Optional[Dict[str, Any]] = None
+        if return_internal_states:
+            extra = {
+                "last_update_factor": last_update_factor,
+                "last_regressor_matrix": regressor_matrix.copy(),
+            }
+
+        return self._pack_results(
+            outputs=outputs,
+            errors=errors,
+            runtime_s=runtime_s,
+            error_type="blind_constant_modulus",
+            extra=extra,
+        )
 # EOF
