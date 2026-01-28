@@ -153,7 +153,7 @@ Roadmap for each algorithm family:
 
 ## Documentation
 
-- 📖 API reference (pdoc): `<docs/>`
+- 📖 API reference (pdoc): [Docs](docs/pydaptivefiltering.html)
 - 🧪 Examples and notebooks: [Notebooks](examples/Jupyter%20Notebooks/)
 
 ---
