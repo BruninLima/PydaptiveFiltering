@@ -21,10 +21,12 @@
   <a href="https://pypi.org/project/pydaptivefiltering/">
     <img src="https://img.shields.io/pypi/v/pydaptivefiltering.svg" alt="PyPI version">
   </a>
-  <a href="<!-- LINK_TO_CI -->"><img src="<!-- BADGE_CI_STATUS -->" alt="CI status"></a>
-  <a href="<!-- LINK_TO_COVERAGE -->"><img src="<!-- BADGE_COVERAGE -->" alt="Coverage"></a>
-  <a href="<!-- LINK_TO_DOCS -->"><img src="<!-- BADGE_DOCS -->" alt="Docs"></a>
-  <a href="<!-- LINK_TO_LICENSE -->"><img src="<!-- BADGE_LICENSE -->" alt="License"></a>
+  <a href="https://BruninLima.github.io/PydaptiveFiltering/">
+    <img src="https://img.shields.io/badge/docs-pdoc-blue" alt="Docs">
+  </a>
+  <a href="https://github.com/BruninLima/PydaptiveFiltering/blob/main/LICENSE.md">
+    <img src="https://img.shields.io/github/license/BruninLima/PydaptiveFiltering.svg" alt="License">
+  </a>
 </p>
 
 
