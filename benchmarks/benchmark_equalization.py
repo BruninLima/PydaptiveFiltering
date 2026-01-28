@@ -5,6 +5,7 @@ import argparse
 import csv
 from dataclasses import dataclass
 from time import perf_counter
+from turtle import delay
 from typing import Callable, Dict, List, Tuple
 
 import numpy as np
@@ -121,6 +122,7 @@ def run_one_trial(
 
     # input to blind equalizer (matches MATLAB: x(1+delay:end))
     x_in = x[delay:]                  # length K-delay
+    x_in = x_in / np.std(x_in) 
     s_ref = s[: K - delay]            # reference for metrics
 
     # init weights: Wiener + random/4 (MATLAB-ish)
