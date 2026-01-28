@@ -25,6 +25,14 @@
   <a href="<!-- LINK_TO_LICENSE -->"><img src="<!-- BADGE_LICENSE -->" alt="License"></a>
 </p>
 
+
+## 📌 Table of Contents
+* [Algorithms & Progress](#-project-status--algorithms)
+* [Installation](#install-instructions)
+* [Usage Examples](#-examples-of-uses)
+* [Neural Adaptation (MLP)](#-quick-example-neural-adaptive-filtering-mlp)
+
+
 ---
 
 ## Install
@@ -145,8 +153,8 @@ Roadmap for each algorithm family:
 
 ## Documentation
 
-- 📖 API reference (pdoc): <!-- LINK_TO_DOCS -->
-- 🧪 Examples and notebooks: <!-- LINK_TO_NOTEBOOKS_FOLDER -->
+- 📖 API reference (pdoc): `<docs/>`
+- 🧪 Examples and notebooks: `<examples/Jupyter Notebooks/>`
 
 ---
 
