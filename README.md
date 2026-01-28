@@ -1,5 +1,22 @@
 # pydaptivefiltering
 
+<p align="center">
+  <strong>High-performance adaptive filtering in Python</strong><br>
+  Implementations based on <em>Adaptive Filtering: Algorithms and Practical Implementation</em> (Paulo S. R. Diniz).
+</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/pydaptivefiltering/">
+    <img src="https://img.shields.io/pypi/v/pydaptivefiltering.svg" alt="PyPI version">
+  </a>
+  <a href="https://BruninLima.github.io/pydaptivefiltering/index.html">
+    <img src="https://img.shields.io/badge/docs-pdoc-blue" alt="Docs">
+  </a>
+  <a href="https://github.com/BruninLima/PydaptiveFiltering/blob/main/LICENSE.md">
+    <img src="https://img.shields.io/github/license/BruninLima/PydaptiveFiltering.svg" alt="License">
+  </a>
+</p>
+
 ## Algorithms (overview)
 
 > This is an overview. For the full list, check the documentation: <!-- LINK_TO_DOCS -->
@@ -14,34 +31,11 @@
 
 ---
 
-<p align="center">
-  <strong>High-performance adaptive filtering in Python</strong><br>
-  Implementations based on <em>Adaptive Filtering: Algorithms and Practical Implementation</em> (Paulo S. R. Diniz).
-</p>
-
-<!--
-  PLACEHOLDER: Badges
-  Replace with your actual badge links (PyPI, CI, coverage, docs, license).
--->
-<p align="center">
-  <a href="https://pypi.org/project/pydaptivefiltering/">
-    <img src="https://img.shields.io/pypi/v/pydaptivefiltering.svg" alt="PyPI version">
-  </a>
-  <a href="https://BruninLima.github.io/pydaptivefiltering/index.html">
-    <img src="https://img.shields.io/badge/docs-pdoc-blue" alt="Docs">
-  </a>
-  <a href="https://github.com/BruninLima/PydaptiveFiltering/blob/main/LICENSE.md">
-    <img src="https://img.shields.io/github/license/BruninLima/PydaptiveFiltering.svg" alt="License">
-  </a>
-</p>
-
-
 ## 📌 Table of Contents
 * [Algorithms & Progress](#-project-status--algorithms)
 * [Installation](#install-instructions)
 * [Usage Examples](#-examples-of-uses)
 * [Neural Adaptation (MLP)](#-quick-example-neural-adaptive-filtering-mlp)
-
 
 ---
 
