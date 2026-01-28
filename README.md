@@ -200,7 +200,7 @@ rmse_vel = np.sqrt(np.mean((x_hat[:, 1] - x_true[:, 1])**2))
 print(f"RMSE position: {rmse_pos:.3f}")
 print(f"RMSE velocity: {rmse_vel:.3f}")
 print(f"Innovation std: {innov.std():.3f}")
-
+```
 
 <p align="center">
   <img src="docs/assets/kalman_tracking.png" alt="Kalman tracking" width="900">
