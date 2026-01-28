@@ -237,9 +237,7 @@ print(f"Innovation std: {innov.std():.3f}")
 
 ### Known limitations (this release)
 
-- ⚠️ `set_membership.simplified_puap.py`: under technical review (convergence may differ from reference).
-- ⚠️ `nonlinear.complex_rbf.py`: under technical review (convergence may differ from reference).
-
+- I need to populate the python examples.
 ---
 
 ## Notebooks
