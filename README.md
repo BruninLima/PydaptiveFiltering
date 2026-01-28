@@ -18,7 +18,9 @@
   Replace with your actual badge links (PyPI, CI, coverage, docs, license).
 -->
 <p align="center">
-  <a href="<!-- LINK_TO_PYPI -->"><img src="<!-- BADGE_PYPI_VERSION -->" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/pydaptivefiltering/">
+    <img src="https://img.shields.io/pypi/v/pydaptivefiltering.svg" alt="PyPI version">
+  </a>
   <a href="<!-- LINK_TO_CI -->"><img src="<!-- BADGE_CI_STATUS -->" alt="CI status"></a>
   <a href="<!-- LINK_TO_COVERAGE -->"><img src="<!-- BADGE_COVERAGE -->" alt="Coverage"></a>
   <a href="<!-- LINK_TO_DOCS -->"><img src="<!-- BADGE_DOCS -->" alt="Docs"></a>
