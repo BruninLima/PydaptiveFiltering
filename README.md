@@ -84,7 +84,7 @@ res = rls.optimize(x, d)
 
 <!-- PLACEHOLDER: Put a convergence plot screenshot here -->
 <p align="center">
-  <img src="examples/Jupyter Notebooks/RLS/docs/assets/rls_weights_vs_true.png" alt="Coefficients convergence plot" width="750">
+  <img src="docs/assets/rls_weights_vs_true.png" alt="Coefficients convergence plot" width="750">
 </p>
 
 ---
@@ -126,10 +126,90 @@ plt.ylabel("Squared Error (dB)")
 plt.show()
 ```
 
-<!-- PLACEHOLDER: Put a convergence plot screenshot here -->
 <p align="center">
-  <img src="<!-- LINK_OR_PATH_TO_MLP_PLOT_IMAGE -->" alt="MLP convergence plot" width="750">
+  <img src="docs/assets/rbf_mse.png" alt="RBF learning curve" width="800">
 </p>
+
+<p align="center">
+  <img src="docs/assets/rbf_weights.png" alt="RBF weights convergence" width="800">
+</p>
+
+
+---
+
+### Example: Kalman Filter Tracking (Constant-Velocity with Maneuvers)
+
+arget-tracking example using a 2-state constant-velocity (CV) Kalman filter (position/velocity). The target performs piecewise acceleration maneuvers, 
+while we measure position only with additive noise; the filter estimates both position and velocity from the noisy measurements.
+
+```python
+import numpy as np
+import pydaptivefiltering as pdf
+
+rng = np.random.default_rng(7)
+
+# 1) Synthetic target: constant-velocity model with acceleration maneuvers
+N, dt = 400, 1.0
+x_true = np.zeros((N, 2), dtype=float)   # [pos, vel]
+
+a = np.zeros(N)
+a[60:120]  =  0.08
+a[180:230] = -0.12
+a[300:340] =  0.05
+
+x_true[0] = [0.0, 1.0]
+for k in range(1, N):
+    pos_prev, vel_prev = x_true[k - 1]
+    x_true[k, 1] = vel_prev + a[k] * dt
+    x_true[k, 0] = pos_prev + vel_prev * dt + 0.5 * a[k] * dt**2
+
+sigma_meas = 0.8
+y = x_true[:, 0] + sigma_meas * rng.standard_normal(N)
+
+# 2) Kalman filter (CV: position/velocity), measuring position only
+A = np.array([[1.0, dt],
+              [0.0, 1.0]])
+
+C_T = np.array([[1.0, 0.0]])  # shape (p=1, n=2)
+
+sigma_a = 0.15
+Q = (sigma_a**2) * np.array([[dt**4/4, dt**3/2],
+                             [dt**3/2, dt**2]])
+
+Rn  = Q
+Rn1 = np.array([[sigma_meas**2]])
+
+kf = pdf.Kalman(
+    A=A,
+    C_T=C_T,
+    Rn=Rn,
+    Rn1=Rn1,
+    x_init=np.array([y[0], 0.0]),
+    Re_init=np.eye(2) * 50.0,
+)
+
+res = kf.optimize(y)
+
+x_hat = res.outputs
+innov = res.errors
+
+# 3) Tiny diagnostics (good for README)
+rmse_pos = np.sqrt(np.mean((x_hat[:, 0] - x_true[:, 0])**2))
+rmse_vel = np.sqrt(np.mean((x_hat[:, 1] - x_true[:, 1])**2))
+
+print(f"RMSE position: {rmse_pos:.3f}")
+print(f"RMSE velocity: {rmse_vel:.3f}")
+print(f"Innovation std: {innov.std():.3f}")
+
+
+<p align="center">
+  <img src="docs/assets/kalman_tracking.png" alt="Kalman tracking" width="900">
+</p>
+
+<p align="center">
+  <img src="docs/assets/kalman_innovation.png" alt="Kalman innovation" width="900">
+</p>
+
 
 ---
 
