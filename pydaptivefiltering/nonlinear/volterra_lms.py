@@ -39,7 +39,7 @@ class VolterraLMS(AdaptiveFilter):
     memory : int, optional
         Linear memory length ``L``. The linear delay line is
         ``[x[k], x[k-1], ..., x[k-L+1]]``. Default is 3.
-    step : float or array_like of float, optional
+    step_size : float or array_like of float, optional
         Step size ``mu``. Can be either:
         - a scalar (same step for all coefficients), or
         - a vector with shape ``(n_coeffs,)`` for per-term step scaling.
@@ -112,7 +112,7 @@ class VolterraLMS(AdaptiveFilter):
     def __init__(
         self,
         memory: int = 3,
-        step: Union[float, np.ndarray, list] = 1e-2,
+        step_size: Union[float, np.ndarray, list] = 1e-2,
         w_init: Optional[ArrayLike] = None,
         *,
         safe_eps: float = 1e-12,
@@ -127,15 +127,15 @@ class VolterraLMS(AdaptiveFilter):
 
         super().__init__(filter_order=self.n_coeffs - 1, w_init=w_init)
 
-        if isinstance(step, (list, np.ndarray)):
-            step_vec = np.asarray(step, dtype=np.float64).reshape(-1)
+        if isinstance(step_size, (list, np.ndarray)):
+            step_vec = np.asarray(step_size, dtype=np.float64).reshape(-1)
             if step_vec.size != self.n_coeffs:
                 raise ValueError(
                     f"step vector must have length {self.n_coeffs}, got {step_vec.size}."
                 )
-            self.step: Union[float, np.ndarray] = step_vec
+            self.step_size: Union[float, np.ndarray] = step_vec
         else:
-            self.step = float(step)
+            self.step_size = float(step_size)
 
         self.w = np.asarray(self.w, dtype=np.float64)
 
@@ -241,10 +241,10 @@ class VolterraLMS(AdaptiveFilter):
             e_k = float(d[k] - y_k)
             errors[k] = e_k
 
-            if isinstance(self.step, np.ndarray):
-                self.w = self.w + (2.0 * self.step) * e_k * u
+            if isinstance(self.step_size, np.ndarray):
+                self.w = self.w + (2.0 * self.step_size) * e_k * u
             else:
-                self.w = self.w + (2.0 * float(self.step)) * e_k * u
+                self.w = self.w + (2.0 * float(self.step_size)) * e_k * u
 
             self._record_history()
 
