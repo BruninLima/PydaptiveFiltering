@@ -20,7 +20,7 @@
 
 ## 📌 Table of Contents
 * [Installation](#install-instructions)
-* [Usage Examples](#quickstart-60-seconds)
+* [Usage Examples](#implementation-and-examples)
 * [Algorithms & Progress](#algorithms-overview)
 * [License](#-license)
 
@@ -39,7 +39,7 @@ pip install pydaptivefiltering
 
 ---
 
-## Quickstart (60 seconds)
+## Implementation and Examples
 
 All algorithms follow the same pattern:
 
@@ -216,7 +216,8 @@ print(f"Innovation std: {innov.std():.3f}")
 ## Algorithms (overview)
 
 > This is an overview. For the full list, check the documentation: <a href="https://BruninLima.github.io/pydaptivefiltering/index.html">Docs</a>
-Algorithms categories are based on the chapters of the book <em>Adaptive Filtering: Algorithms and Practical Implementation</em> (Paulo S. R. Diniz).
+
+>Algorithms categories are based on the chapters of the book <em>Adaptive Filtering: Algorithms and Practical Implementation</em> (Paulo S. R. Diniz).
 
 | Module / Category | Exported classes (examples) | Data type |
 |---|---|---|
@@ -255,8 +256,6 @@ This project is under the license found at [LICENSE](LICENSE.md).
 ![GitHub repo size](https://img.shields.io/github/repo-size/BruninLima/PydaptiveFiltering?style=for-the-badge)
 ![GitHub language count](https://img.shields.io/github/languages/count/BruninLima/PydaptiveFiltering?style=for-the-badge)
 ![GitHub forks](https://img.shields.io/github/forks/BruninLima/PydaptiveFiltering?style=for-the-badge)
-![Bitbucket open issues](https://img.shields.io/bitbucket/issues/BruninLima/PydaptiveFiltering?style=for-the-badge)
-![Bitbucket open pull requests](https://img.shields.io/bitbucket/pr-raw/BruninLima/PydaptiveFiltering?style=for-the-badge)
 
 ## References
 
