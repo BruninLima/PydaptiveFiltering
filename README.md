@@ -19,7 +19,7 @@
 
 ## Algorithms (overview)
 
-> This is an overview. For the full list, check the documentation: <!-- LINK_TO_DOCS -->
+> This is an overview. For the full list, check the documentation: <a href="https://BruninLima.github.io/pydaptivefiltering/index.html">Docs</a>
 
 | Category | Examples (classes) | Data type | Notes |
 |---|---|---:|---|
