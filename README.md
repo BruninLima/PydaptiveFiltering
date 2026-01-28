@@ -137,7 +137,7 @@ plt.show()
 
 ---
 
-### Example: Kalman Filter Tracking (Constant-Velocity with Maneuvers)
+### Example: Kalman Filter Tracking (Constant-Velocity with Maneuvers) [Notebook](examples/Jupyter Notebooks/Kalman Filter/Kalman.ipynb)
 
 arget-tracking example using a 2-state constant-velocity (CV) Kalman filter (position/velocity). The target performs piecewise acceleration maneuvers, 
 while we measure position only with additive noise; the filter estimates both position and velocity from the noisy measurements.
