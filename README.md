@@ -92,9 +92,8 @@ res = rls.optimize(x, d)
 ### Example: Neural Adaptive Filtering (MLP)
 
 Nonlinear system:
-\[
-d(k) = x(k)^2 + 0.5\,x(k-1) + \eta(k)
-\]
+
+ $$d(k) = x(k)^2 + 0.5\,x(k-1) + \eta(k) $$
 
 ```python
 import numpy as np
