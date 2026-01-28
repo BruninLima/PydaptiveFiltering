@@ -26,36 +26,100 @@ ArrayLike = Union[np.ndarray, list]
 
 class ComplexRBF(AdaptiveFilter):
     """
-    Complex Radial Basis Function (CRBF) network (complex-valued).
+    Complex Radial Basis Function (CRBF) adaptive network (complex-valued).
 
-    Implements a complex-valued RBF adaptive model (Algorithm 11.6 - Diniz).
-    The model output is computed as:
+    Complex-valued RBF adaptive model following Diniz (Alg. 11.6). The network
+    output is formed from Gaussian radial basis functions centered at complex
+    vectors, combined by complex weights.
 
-        f_p(u) = exp( -||u - c_p||^2 / sigma_p^2 )
-        y[k]   = w^H f(u_k)
-
-    where:
-      - u_k is the input regressor (dimension = input_dim),
-      - c_p are complex centers ("vet" in the original code),
-      - sigma_p are real spreads,
-      - w are complex neuron weights.
-
-    Input handling
-    --------------
-    This implementation accepts two input formats in `optimize`:
-
-    1) 1D input signal x[k] (shape (N,)):
-       A tapped-delay regressor u_k of length `input_dim` is formed internally.
-
-    2) 2D regressor matrix U (shape (N, input_dim)):
-       Each row is used directly as u_k.
+    Parameters
+    ----------
+    n_neurons : int
+        Number of RBF neurons (centers/basis functions).
+    input_dim : int
+        Regressor dimension (length of :math:`u[k]`).
+    ur : float, optional
+        Step-size for centers update. Default is 0.01.
+    uw : float, optional
+        Step-size for weights update. Default is 0.01.
+    us : float, optional
+        Step-size for spread (sigma) update. Default is 0.01.
+    w_init : array_like of complex, optional
+        Initial neuron weights :math:`w(0)` with shape ``(n_neurons,)``. If None,
+        weights are initialized randomly (complex Gaussian).
+    sigma_init : float, optional
+        Initial spread used for all neurons (must be > 0). Default is 1.0.
+    rng : numpy.random.Generator, optional
+        Random generator used for reproducible initialization when ``w_init`` is None
+        (and for centers initialization). If None, uses ``np.random.default_rng()``.
 
     Notes
     -----
-    - Complex-valued implementation (`supports_complex=True`).
-    - The base class `filter_order` is used here as a size indicator (n_neurons-1).
-    - `OptimizationResult.coefficients` stores the history of neuron weights `w`.
-      Centers and spreads can be returned via `result.extra` when requested.
+    Complex-valued
+        This implementation supports complex-valued signals and coefficients
+        (``supports_complex=True``).
+
+    Input handling
+        :meth:`optimize` accepts either:
+        1) A 1D input signal ``x[k]`` with shape ``(N,)``. A tapped-delay regressor
+           matrix ``U`` with shape ``(N, input_dim)`` is built internally using
+
+           .. math::
+              u[k] = [x[k], x[k-1], \\dots, x[k-input\\_dim+1]]^T.
+
+        2) A 2D regressor matrix ``U`` with shape ``(N, input_dim)`` whose rows are
+           used directly as :math:`u[k]`.
+
+    RBF activations and output (as implemented)
+        For neuron :math:`p` with complex center :math:`c_p \\in \\mathbb{C}^{D}`
+        (stored as row ``vet[p, :]``) and real spread :math:`\\sigma_p > 0`
+        (stored in ``sigma[p]``), the activation is
+
+        .. math::
+            f_p(u[k]) = \\exp\\left( -\\frac{\\lVert u[k] - c_p \\rVert^2}{\\sigma_p^2} \\right),
+
+        where :math:`\\lVert \\cdot \\rVert^2` is implemented as the sum of squared
+        real and imaginary parts. Stacking all activations:
+
+        .. math::
+            f(u[k]) = [f_1(u[k]), \\dots, f_P(u[k])]^{T} \\in \\mathbb{R}^{P},
+
+        the (a priori) output is computed as
+
+        .. math::
+            y[k] = w^H[k-1] f(u[k]) = \\sum_{p=1}^{P} \\overline{w_p[k-1]}\\, f_p(u[k]).
+
+        In code, this corresponds to ``np.vdot(w_old, f)``.
+
+    Adaptation loop (a priori form, as implemented)
+        With error
+
+        .. math::
+            e[k] = d[k] - y[k],
+
+        the weight update is
+
+        .. math::
+            w[k] = w[k-1] + 2\\,\\mu_w\\, \\overline{e[k]}\\, f(u[k]),
+
+        where ``mu_w = uw``. The center and spread updates follow the expressions
+        implemented in the code via the intermediate term ``phi = real(e[k] * w_old)``.
+        (The exact algebraic form is determined by Alg. 11.6 and the original implementation.)
+
+    Numerical safeguards
+        - ``safe_eps`` in :meth:`optimize` guards denominators involving ``sigma``
+          to avoid division by very small values.
+        - ``sigma`` is clipped from below by ``safe_eps`` after each update.
+
+    Implementation details
+        - Coefficient history recorded by the base class corresponds to the neuron
+          weights ``w``. Centers (``vet``) and spreads (``sigma``) are not part of the
+          base history but can be returned via ``result.extra`` when requested.
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 5th ed., Algorithm 11.6.
     """
 
     supports_complex: bool = True
@@ -72,26 +136,7 @@ class ComplexRBF(AdaptiveFilter):
         sigma_init: float = 1.0,
         rng: Optional[np.random.Generator] = None,
     ) -> None:
-        """
-        Parameters
-        ----------
-        n_neurons:
-            Number of RBF neurons.
-        input_dim:
-            Dimension of the input regressor u_k.
-        ur:
-            Step-size for centers update.
-        uw:
-            Step-size for weights update.
-        us:
-            Step-size for spread (sigma) update.
-        w_init:
-            Optional initial neuron weights (length n_neurons). If None, random complex.
-        sigma_init:
-            Initial spread value used for all neurons (must be > 0).
-        rng:
-            Optional numpy random generator for reproducible initialization.
-        """
+        
         n_neurons = int(n_neurons)
         input_dim = int(input_dim)
         if n_neurons <= 0:
@@ -127,7 +172,6 @@ class ComplexRBF(AdaptiveFilter):
 
         self.sigma = np.ones(n_neurons, dtype=float) * float(sigma_init)
 
-        self.w_history = []
         self._record_history()
 
     @staticmethod
@@ -166,45 +210,41 @@ class ComplexRBF(AdaptiveFilter):
         safe_eps: float = 1e-12,
     ) -> OptimizationResult:
         """
-        Run CRBF adaptation.
+        Executes the CRBF adaptation loop over paired regressor/desired sequences.
 
         Parameters
         ----------
-        input_signal:
+        input_signal : array_like of complex
             Either:
-              - 1D signal x[k] with shape (N,), or
-              - regressor matrix U with shape (N, input_dim).
-        desired_signal:
-            Desired signal d[k], shape (N,).
-        verbose:
-            If True, prints runtime.
-        return_internal_states:
-            If True, returns final centers/spreads and last activation vector in result.extra.
-        safe_eps:
-            Small epsilon to protect denominators (sigma and other divisions).
+            - Input signal ``x[k]`` with shape ``(N,)`` (will be flattened), in which
+              case tapped-delay regressors of length ``input_dim`` are built internally; or
+            - Regressor matrix ``U`` with shape ``(N, input_dim)`` (each row is ``u[k]``).
+        desired_signal : array_like of complex
+            Desired sequence ``d[k]`` with shape ``(N,)`` (will be flattened).
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, includes the last internal states in ``result.extra``:
+            ``"centers_last"``, ``"sigma_last"``, ``"last_activation"``, and
+            ``"last_regressor"`` (plus ``"input_dim"`` and ``"n_neurons"``).
+        safe_eps : float, optional
+            Small positive constant used to guard denominators involving ``sigma``.
+            Default is 1e-12.
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Model output y[k].
-            errors:
-                A priori error e[k] = d[k] - y[k].
-            coefficients:
-                History of neuron weights w[k] (shape (N+1, n_neurons) in base history).
-            error_type:
-                "a_priori".
-
-        Extra (when return_internal_states=True)
-        --------------------------------------
-        extra["centers_last"]:
-            Final centers array (n_neurons, input_dim).
-        extra["sigma_last"]:
-            Final spreads array (n_neurons,).
-        extra["last_activation"]:
-            Last activation vector f(u_k) (n_neurons,).
-        extra["last_regressor"]:
-            Last regressor u_k (input_dim,).
+            Result object with fields:
+            - outputs : ndarray of complex, shape ``(N,)``
+                Scalar a priori output sequence, ``y[k] = w^H[k-1] f(u[k])``.
+            - errors : ndarray of complex, shape ``(N,)``
+                Scalar a priori error sequence, ``e[k] = d[k] - y[k]``.
+            - coefficients : ndarray of complex
+                Coefficient history recorded by the base class (neuron weights ``w``).
+            - error_type : str
+                Set to ``"a_priori"``.
+            - extra : dict, optional
+                Present only if ``return_internal_states=True``.
         """
         t0 = perf_counter()
 
@@ -232,6 +272,8 @@ class ComplexRBF(AdaptiveFilter):
         last_f: Optional[np.ndarray] = None
         last_u: Optional[np.ndarray] = None
 
+        eps = float(safe_eps)
+
         for k in range(N):
             u = U[k, :]
             last_u = u
@@ -242,15 +284,16 @@ class ComplexRBF(AdaptiveFilter):
             last_f = f
 
             
-            w_old = self.w.copy()
+            w_old = self.w
             y_k = complex(np.vdot(w_old, f))
             outputs[k] = y_k
             e_k = d[k] - y_k 
             errors[k] = e_k
 
-            self.w = w_old + (2.0 * self.uw) * np.conj(e_k) * f
+            
             phi = np.real(e_k * w_old)    
-            denom_sigma = np.maximum(self.sigma**3, float(safe_eps))
+            
+            denom_sigma = np.maximum(self.sigma**3, eps)
             grad_sigma = (
                 (4.0 * self.us)
                 * f
@@ -258,9 +301,9 @@ class ComplexRBF(AdaptiveFilter):
                 * dis_sq
                 / denom_sigma
             )
-            self.sigma = np.maximum(self.sigma + grad_sigma, float(safe_eps))
+            self.sigma = np.maximum(self.sigma + grad_sigma, eps)
 
-            denom_c = np.maximum(self.sigma**2, safe_eps)
+            denom_c = np.maximum(self.sigma**2, eps)
 
             self.vet = self.vet + (2.0 * self.ur) * (f[:, None] * phi[:, None]) * (u - self.vet) / denom_c[:, None]
 

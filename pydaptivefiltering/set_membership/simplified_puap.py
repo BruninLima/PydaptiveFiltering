@@ -15,9 +15,8 @@
 
 from __future__ import annotations
 
-import warnings
 import numpy as np
-from time import time
+from time import perf_counter
 from typing import Any, Dict, Optional, Union
 
 from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate_input
@@ -25,13 +24,106 @@ from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate
 
 class SimplifiedSMPUAP(AdaptiveFilter):
     """
-    Implements the Simplified Set-membership Partial-Update Affine-Projection (SM-Simp-PUAP)
-    algorithm for complex-valued data. (Algorithm 6.6, Diniz)
+    Simplified Set-membership Partial-Update Affine-Projection (SM-Simp-PUAP) adaptive filter
+    (complex-valued).
 
-    Note
-    ----
-    The original implementation warns that this algorithm is under development and may be unstable
-    for complex-valued simulations.
+    Set-membership affine-projection adaptive filter with *partial updates*, following
+    Diniz (Alg. 6.6). At each iteration, the algorithm forms an affine-projection (AP)
+    a priori error vector from a sliding regressor matrix. An update is performed only
+    when the magnitude of the first a priori error component exceeds a prescribed bound
+    (set-membership condition). When an update occurs, only a subset of coefficients is
+    updated according to a user-provided selector mask.
+
+    Parameters
+    ----------
+    filter_order : int
+        FIR filter order (number of taps minus 1). The number of coefficients is
+        ``M+1 = filter_order + 1``.
+    gamma_bar : float
+        Error magnitude threshold for triggering an update. An update is performed when
+        ``|e[k]| > gamma_bar`` where ``e[k]`` is the first AP a priori error component.
+    gamma : float
+        Regularization factor added to the AP correlation matrix (diagonal loading).
+        Must typically be positive to improve numerical stability.
+    L : int
+        Projection order / reuse data factor. The AP vectors have length ``L+1`` and
+        the regressor matrix has shape ``(M+1, L+1)``.
+    up_selector : array_like of {0,1}
+        Partial-update selector matrix with shape ``(M+1, N)``. Column ``k`` (a vector
+        of length ``M+1``) selects which coefficients are updated at iteration ``k``.
+        Non-selected coefficients remain unchanged in that iteration.
+    w_init : array_like of complex, optional
+        Initial coefficient vector ``w(0)`` with shape ``(M+1,)``. If None, initializes
+        with zeros (via the base class).
+
+    Notes
+    -----
+    Complex-valued
+        This implementation supports complex-valued signals and coefficients
+        (``supports_complex=True``).
+
+    Regressor matrix and AP vectors (as implemented)
+        Let ``M+1`` be the number of coefficients and ``L+1`` the projection length.
+        The regressor matrix ``X[k]`` is built by stacking the most recent tapped-delay
+        input vectors:
+
+        .. math::
+            X[k] = [x_k, x_{k-1}, \\dots, x_{k-L}] \\in \\mathbb{C}^{(M+1)\\times(L+1)},
+
+        where each column is an ``(M+1)``-length FIR regressor built from the input signal.
+        The AP a priori output vector and error vector (conjugated form) are computed as:
+
+        .. math::
+            y^*[k] = X^H[k] w[k-1], \\qquad
+            e^*[k] = d^*[k] - y^*[k],
+
+        producing vectors in :math:`\\mathbb{C}^{(L+1)}`. This implementation returns only
+        the *first component* as the scalar output/error:
+
+        .. math::
+            y[k] = y^*[k]_0, \\qquad e[k] = e^*[k]_0.
+
+    Set-membership update gate (as implemented)
+        The update step-size ``mu[k]`` is defined by:
+
+        .. math::
+            \\mu[k] =
+            \\begin{cases}
+                1 - \\frac{\\bar\\gamma}{|e[k]|}, & |e[k]| > \\bar\\gamma \\\\
+                0, & \\text{otherwise}
+            \\end{cases}
+
+        where ``bar_gamma = gamma_bar``.
+
+    Partial-update mechanism (as implemented)
+        Let ``c[k]`` be the selector column (shape ``(M+1,1)``). The selected regressor
+        matrix is formed by element-wise selection:
+
+        .. math::
+            C_X[k] = \\operatorname{diag}(c[k])\\,X[k],
+
+        implemented as ``C_reg = c_vec * regressor_matrix``. The regularized correlation
+        matrix is
+
+        .. math::
+            R[k] = X^H[k] C_X[k] + \\gamma I,
+
+        and the coefficient update uses the AP unit vector ``u_1 = [1, 0, ..., 0]^T`` to
+        target the first error component:
+
+        .. math::
+            w[k] = w[k-1] + C_X[k] R^{-1}[k] (\\mu[k] e[k] u_1).
+
+    Implementation details
+        - ``up_selector`` must provide at least ``N`` columns for an ``N``-sample run.
+        - ``np.linalg.solve`` is used for the linear system; if singular/ill-conditioned,
+          a pseudoinverse fallback is used.
+        - Coefficient history is recorded by the base class at every iteration.
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 5th ed., Algorithm 6.6.
     """
     supports_complex: bool = True
 
@@ -66,12 +158,6 @@ class SimplifiedSMPUAP(AdaptiveFilter):
         w_init:
             Optional initial coefficient vector. If None, initializes to zeros.
         """
-        warnings.warn(
-            "SM-Simp-PUAP is currently under development and may not produce intended results. "
-            "Instability or divergence (high MSE) has been observed in complex-valued simulations.",
-            UserWarning,
-        )
-
         super().__init__(filter_order=filter_order, w_init=w_init)
 
         self.gamma_bar = float(gamma_bar)
@@ -88,13 +174,8 @@ class SimplifiedSMPUAP(AdaptiveFilter):
             )
         self.up_selector: np.ndarray = sel
 
-        # Regressor matrix: columns are current/past regressors (x_k, x_{k-1}, ..., x_{k-L})
         self.regressor_matrix: np.ndarray = np.zeros((self.n_coeffs, self.L + 1), dtype=complex)
-
-        # Backwards-compat alias
-        self.X_matrix = self.regressor_matrix
-
-        # Bookkeeping
+        
         self.n_updates: int = 0
 
     @validate_input
@@ -106,46 +187,39 @@ class SimplifiedSMPUAP(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Executes the SM-Simp-PUAP adaptation.
+        Executes the SM-Simp-PUAP adaptation loop over paired input/desired sequences.
 
         Parameters
         ----------
-        input_signal:
-            Input signal x[k].
-        desired_signal:
-            Desired signal d[k].
-        verbose:
-            If True, prints runtime and update count.
-        return_internal_states:
-            If True, includes internal trajectories in result.extra.
+        input_signal : array_like of complex
+            Input sequence ``x[k]`` with shape ``(N,)`` (will be flattened).
+        desired_signal : array_like of complex
+            Desired sequence ``d[k]`` with shape ``(N,)`` (will be flattened).
+        verbose : bool, optional
+            If True, prints the total runtime and the number of performed updates.
+        return_internal_states : bool, optional
+            If True, includes internal trajectories in ``result.extra``:
+            ``"mu"`` and ``"selected_count"`` in addition to the always-present
+            set-membership bookkeeping fields.
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                A-priori output y[k] (first component of AP output vector).
-            errors:
-                A-priori error e[k] (first component of AP error vector).
-            coefficients:
-                History of coefficients stored in the base class.
-            error_type:
-                "a_priori".
-
-        Extra (always)
-        -------------
-        extra["n_updates"]:
-            Number of coefficient updates (iterations where |e(k)| > gamma_bar).
-        extra["update_mask"]:
-            Boolean array marking which iterations performed updates.
-
-        Extra (when return_internal_states=True)
-        --------------------------------------
-        extra["mu"]:
-            Trajectory of mu[k] (0 when no update).
-        extra["selected_count"]:
-            Number of selected coefficients each iteration.
+            Result object with fields:
+            - outputs : ndarray of complex, shape ``(N,)``
+                Scalar a priori output sequence (first component of the AP output vector).
+            - errors : ndarray of complex, shape ``(N,)``
+                Scalar a priori error sequence (first component of the AP error vector).
+            - coefficients : ndarray of complex
+                Coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"a_priori"``.
+            - extra : dict
+                Always includes ``"n_updates"`` and ``"update_mask"``. If
+                ``return_internal_states=True``, also includes ``"mu"`` and
+                ``"selected_count"``.
         """
-        tic: float = time()
+        tic: float = perf_counter()
 
         x: np.ndarray = np.asarray(input_signal, dtype=complex).ravel()
         d: np.ndarray = np.asarray(desired_signal, dtype=complex).ravel()
@@ -154,7 +228,6 @@ class SimplifiedSMPUAP(AdaptiveFilter):
         n_coeffs: int = int(self.n_coeffs)
         Lp1: int = int(self.L + 1)
 
-        # Validate selector length vs iterations
         if self.up_selector.shape[1] < n_samples:
             raise ValueError(
                 f"up_selector has {self.up_selector.shape[1]} columns, but signal has {n_samples} samples."
@@ -171,25 +244,21 @@ class SimplifiedSMPUAP(AdaptiveFilter):
         self.n_updates = 0
         w_current: np.ndarray = self.w.astype(complex, copy=False).reshape(-1, 1)
 
-        # Padding (matches original slicing/indexing)
         prefixed_input: np.ndarray = np.concatenate([np.zeros(n_coeffs - 1, dtype=complex), x])
         prefixed_desired: np.ndarray = np.concatenate([np.zeros(self.L, dtype=complex), d])
 
-        # u1 = [1, 0, 0, ..., 0]^T  (selects first component)
         u1: np.ndarray = np.zeros((Lp1, 1), dtype=complex)
         u1[0, 0] = 1.0
 
         for k in range(n_samples):
-            # Update regressor matrix
             self.regressor_matrix[:, 1:] = self.regressor_matrix[:, :-1]
             start_idx = k + n_coeffs - 1
             stop = (k - 1) if (k > 0) else None
             self.regressor_matrix[:, 0] = prefixed_input[start_idx:stop:-1]
 
-            # AP a-priori output/error vectors
-            output_ap_conj: np.ndarray = (self.regressor_matrix.conj().T) @ w_current  # (L+1,1)
+            output_ap_conj: np.ndarray = (self.regressor_matrix.conj().T) @ w_current
             desired_slice = prefixed_desired[k + self.L : stop : -1]
-            error_ap_conj: np.ndarray = desired_slice.conj().reshape(-1, 1) - output_ap_conj  # (L+1,1)
+            error_ap_conj: np.ndarray = desired_slice.conj().reshape(-1, 1) - output_ap_conj
 
             yk: complex = complex(output_ap_conj[0, 0])
             ek: complex = complex(error_ap_conj[0, 0])
@@ -205,17 +274,14 @@ class SimplifiedSMPUAP(AdaptiveFilter):
             else:
                 mu = 0.0
 
-            # Partial-update selector for this iteration (column k): shape (M+1,1)
             c_vec: np.ndarray = self.up_selector[:, k].reshape(-1, 1).astype(float)
 
             if return_internal_states and selcnt_track is not None:
                 selcnt_track[k] = int(np.sum(c_vec != 0))
 
             if mu > 0.0:
-                # Apply selection (element-wise) to regressor matrix
                 C_reg: np.ndarray = c_vec * self.regressor_matrix  # (M+1, L+1)
 
-                # R = X^H C X  (as in original: regressor_matrix^H @ C_reg)
                 R: np.ndarray = (self.regressor_matrix.conj().T @ C_reg) + self.gamma * np.eye(Lp1)
 
                 rhs: np.ndarray = mu * ek * u1  # (L+1,1)
@@ -230,11 +296,10 @@ class SimplifiedSMPUAP(AdaptiveFilter):
             if return_internal_states and mu_track is not None:
                 mu_track[k] = mu
 
-            # Commit coefficients + history
             self.w = w_current.ravel()
             self._record_history()
 
-        runtime_s: float = float(time() - tic)
+        runtime_s: float = perf_counter() - tic
         if verbose:
             print(f"[SM-Simp-PUAP] Updates: {self.n_updates}/{n_samples} | Runtime: {runtime_s * 1000:.2f} ms")
 
