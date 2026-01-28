@@ -1,7 +1,7 @@
 # pydaptivefiltering
 
 <p align="center">
-  <strong>High-performance adaptive filtering in Python</strong><br>
+  <strong>Adaptive filtering in Python</strong><br>
   Implementations based on <em>Adaptive Filtering: Algorithms and Practical Implementation</em> (Paulo S. R. Diniz).
 </p>
 
