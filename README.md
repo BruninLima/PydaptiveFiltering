@@ -21,7 +21,7 @@
   <a href="https://pypi.org/project/pydaptivefiltering/">
     <img src="https://img.shields.io/pypi/v/pydaptivefiltering.svg" alt="PyPI version">
   </a>
-  <a href="https://BruninLima.github.io/PydaptiveFiltering/">
+  <a href="https://BruninLima.github.io/PydaptiveFiltering/index.html">
     <img src="https://img.shields.io/badge/docs-pdoc-blue" alt="Docs">
   </a>
   <a href="https://github.com/BruninLima/PydaptiveFiltering/blob/main/LICENSE.md">
