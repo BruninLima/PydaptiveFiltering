@@ -19,7 +19,7 @@ from time import time
 from typing import Any, Dict, Optional, Union
 
 from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate_input
-from pydaptivefiltering.utils.validation import ensure_real_signals
+from pydaptivefiltering._utils.validation import ensure_real_signals
 
 
 class ErrorEquation(AdaptiveFilter):

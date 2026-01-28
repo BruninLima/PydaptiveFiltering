@@ -20,7 +20,7 @@ from time import time
 from typing import Optional, Union
 
 from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate_input
-from pydaptivefiltering.utils.validation import ensure_real_signals
+from pydaptivefiltering._utils.validation import ensure_real_signals
 
 
 class RLSIIR(AdaptiveFilter):
