@@ -261,3 +261,5 @@ This project is under the license found at [LICENSE](LICENSE.md).
 
 - Diniz, P. S. R. (2020). *Adaptive Filtering: Algorithms and Practical Implementation*. Springer.
 - MATLAB Adaptive Filtering Toolbox (for comparison).
+
+"Documentação e docstrings refinadas com auxílio de ferramentas de IA para garantir conformidade com o padrão NumPy/SciPy."
