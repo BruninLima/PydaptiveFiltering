@@ -1,12 +1,18 @@
 # pydaptivefiltering
 
-<!--
-  PLACEHOLDER: Project banner / logo
-  Replace the path below with your image (e.g., docs/assets/banner.png).
--->
-<p align="center">
-  <img src="<!-- LINK_OR_PATH_TO_BANNER_IMAGE -->" alt="pydaptivefiltering banner" width="900">
-</p>
+## Algorithms (overview)
+
+> This is an overview. For the full list, check the documentation: <!-- LINK_TO_DOCS -->
+
+| Category | Examples (classes) | Data type | Notes |
+|---|---|---:|---|
+| LMS family | `LMS`, `NLMS`, `AP`, ... | Real/Complex | classic + normalized/projection variants |
+| RLS family | `RLS`, `RLSAlt`, `QRRLS`, ... | Real/Complex | numerically stable variants included |
+| Set-membership | `SMNLMS`, `SMAffineProjection`, ... | Complex | updates only when \|e(k)\| exceeds threshold |
+| Nonlinear | `VolterraLMS/RLS`, `BilinearRLS`, `RBF`, `MultilayerPerceptron` | Real | nonlinear modeling + neural adaptation |
+| Subband | `OLSBLMS`, `DLCLLMS`, `CFDLMS` | Real | block/subband processing |
+
+---
 
 <p align="center">
   <strong>High-performance adaptive filtering in Python</strong><br>
@@ -54,7 +60,22 @@ pip install pydaptivefiltering
 
 ## Quickstart (60 seconds)
 
-System identification (example with Volterra-RLS):
+All algorithms follow the same pattern:
+
+1. Instantiate the filter/model
+2. Run `optimize(input_signal, desired_signal)`
+3. Inspect `outputs`, `errors`, `coefficients`, and optional `extra`
+
+Returned dictionary keys:
+- `outputs`: model output
+- `errors`: error sequence (see `error_type`)
+- `coefficients`: coefficient history (snapshots over time)
+- `runtime_s`: runtime in seconds
+- `error_type`: `"a_priori"`, `"a_posteriori"`, or `"output_error"`
+- `extra`: optional internal states (when enabled)
+
+
+### System identification (example with Volterra-RLS):
 
 ```python
 import numpy as np
@@ -81,7 +102,7 @@ print("Final coefficient vector length:", res["coefficients"][-1].size)
 
 ---
 
-## Example: Neural Adaptive Filtering (MLP)
+### Example: Neural Adaptive Filtering (MLP)
 
 Nonlinear system:
 \[
@@ -125,19 +146,6 @@ plt.show()
 
 ---
 
-## Algorithms (overview)
-
-> This is an overview. For the full list, check the documentation: <!-- LINK_TO_DOCS -->
-
-| Category | Examples (classes) | Data type | Notes |
-|---|---|---:|---|
-| LMS family | `LMS`, `NLMS`, `AP`, ... | Real/Complex | classic + normalized/projection variants |
-| RLS family | `RLS`, `RLSAlt`, `QRRLS`, ... | Real/Complex | numerically stable variants included |
-| Set-membership | `SMNLMS`, `SMAffineProjection`, ... | Complex | updates only when \|e(k)\| exceeds threshold |
-| Nonlinear | `VolterraLMS/RLS`, `BilinearRLS`, `RBF`, `MultilayerPerceptron` | Real | nonlinear modeling + neural adaptation |
-| Subband | `OLSBLMS`, `DLCLLMS`, `CFDLMS` | Real | block/subband processing |
-
----
 
 ## Project status
 
