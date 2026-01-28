@@ -26,27 +26,75 @@ ArrayLike = Union[np.ndarray, list]
 
 class RLS(AdaptiveFilter):
     """
-    Recursive Least Squares (RLS) for complex-valued adaptive FIR filtering.
+    Recursive Least Squares (RLS) adaptive filter (complex-valued).
 
-    Implements Algorithm 5.3 (Diniz). RLS minimizes an exponentially-weighted
-    least-squares cost by updating an inverse correlation matrix using the
-    matrix inversion lemma.
+    Exponentially-weighted least-squares adaptive FIR filter following
+    Diniz (Alg. 5.3). The algorithm updates the coefficient vector using a
+    Kalman-gain-like direction and updates an inverse correlation matrix via
+    the matrix inversion lemma.
 
-    Recursion (common form)
-    -----------------------
-        y[k] = w[k]^H x_k
-        e[k] = d[k] - y[k]
-
-        g[k] = (S[k-1] x_k) / (lambda + x_k^H S[k-1] x_k)
-        w[k] = w[k-1] + conj(e[k]) g[k]
-        S[k] = (S[k-1] - g[k] x_k^H S[k-1]) / lambda
+    Parameters
+    ----------
+    filter_order : int
+        Adaptive FIR filter order ``M``. The number of coefficients is ``M + 1``.
+    delta : float
+        Positive initialization factor for the inverse correlation matrix:
+        ``S_d(0) = (1/delta) I``.
+    lamb : float
+        Forgetting factor ``lambda`` with ``0 < lambda <= 1``.
+    w_init : array_like of complex, optional
+        Initial coefficient vector ``w(0)`` with shape ``(M + 1,)``. If None,
+        initializes with zeros.
+    safe_eps : float, optional
+        Small positive constant used to guard denominators. Default is 1e-12.
 
     Notes
     -----
-    - Complex-valued implementation (supports_complex=True).
-    - By default, returns a priori output/error.
-    - If `return_internal_states=True`, includes a posteriori sequences and
-      selected internal states in `result.extra`.
+    At iteration ``k``, form the regressor vector (tapped delay line):
+
+    - ``x_k = [x[k], x[k-1], ..., x[k-M]]^T  ∈ 𝕮^{M+1}``
+
+    The a priori output and error are:
+
+    .. math::
+        y[k] = w^H[k] x_k, \\qquad e[k] = d[k] - y[k].
+
+    Let ``S_d[k-1] ∈ 𝕮^{(M+1)\\times(M+1)}`` denote the inverse correlation
+    estimate. Define the intermediate vector:
+
+    .. math::
+        \\psi[k] = S_d[k-1] x_k.
+
+    The gain denominator and gain vector are:
+
+    .. math::
+        \\Delta[k] = \\lambda + x_k^H \\psi[k]
+                   = \\lambda + x_k^H S_d[k-1] x_k,
+
+    .. math::
+        g[k] = \\frac{\\psi[k]}{\\Delta[k]}.
+
+    The coefficient update is:
+
+    .. math::
+        w[k+1] = w[k] + e^*[k] \\, g[k],
+
+    and the inverse correlation update is:
+
+    .. math::
+        S_d[k] = \\frac{1}{\\lambda}\\Bigl(S_d[k-1] - g[k] \\psi^H[k]\\Bigr).
+
+    A posteriori quantities
+        If ``return_internal_states=True``, this implementation also computes the
+        a posteriori output/error using the updated weights:
+
+        .. math::
+            y^{post}[k] = w^H[k+1] x_k, \\qquad e^{post}[k] = d[k] - y^{post}[k].
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 5th ed., Algorithm 5.3.
     """
 
     supports_complex: bool = True
@@ -64,20 +112,6 @@ class RLS(AdaptiveFilter):
         *,
         safe_eps: float = 1e-12,
     ) -> None:
-        """
-        Parameters
-        ----------
-        filter_order:
-            FIR order M (number of taps is M+1).
-        delta:
-            Initialization for S_d(0) = (1/delta) * I. Must be positive.
-        lamb:
-            Forgetting factor λ, typically 0 < λ <= 1.
-        w_init:
-            Optional initial coefficients (length M+1). If None, zeros.
-        safe_eps:
-            Small epsilon used to guard denominators.
-        """
         super().__init__(filter_order=int(filter_order), w_init=w_init)
 
         self.lamb = float(lamb)
@@ -102,41 +136,42 @@ class RLS(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Run RLS adaptation.
+        Executes the RLS adaptation loop over paired input/desired sequences.
 
         Parameters
         ----------
-        input_signal:
-            Input signal x[k].
-        desired_signal:
-            Desired signal d[k].
-        verbose:
-            If True, prints runtime.
-        return_internal_states:
-            If True, includes a posteriori sequences and final internal states in `result.extra`.
+        input_signal : array_like of complex
+            Input sequence ``x[k]`` with shape ``(N,)`` (will be flattened).
+        desired_signal : array_like of complex
+            Desired sequence ``d[k]`` with shape ``(N,)`` (will be flattened).
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, includes a posteriori sequences and final internal states in
+            ``result.extra`` (see below).
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                A priori output y[k] = w^H x_k.
-            errors:
-                A priori error e[k] = d[k] - y[k].
-            coefficients:
-                Coefficient history stored in the base class.
-            error_type:
-                "a_priori".
-
-        Extra (when return_internal_states=True)
-        --------------------------------------
-        extra["outputs_posteriori"]:
-            A posteriori output y_post[k] computed after updating w.
-        extra["errors_posteriori"]:
-            A posteriori error e_post[k] = d[k] - y_post[k].
-        extra["S_d_last"]:
-            Final inverse correlation matrix.
-        extra["gain_last"]:
-            Last gain vector g.
+            Result object with fields:
+            - outputs : ndarray of complex, shape ``(N,)``
+                A priori output sequence, ``y[k] = w^H[k] x_k``.
+            - errors : ndarray of complex, shape ``(N,)``
+                A priori error sequence, ``e[k] = d[k] - y[k]``.
+            - coefficients : ndarray of complex
+                Coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"a_priori"``.
+            - extra : dict, optional
+                Present only if ``return_internal_states=True`` with:
+                - ``outputs_posteriori`` : ndarray of complex
+                    A posteriori output sequence, ``y^{post}[k] = w^H[k+1] x_k``.
+                - ``errors_posteriori`` : ndarray of complex
+                    A posteriori error sequence, ``e^{post}[k] = d[k] - y^{post}[k]``.
+                - ``S_d_last`` : ndarray of complex
+                    Final inverse correlation matrix ``S_d``.
+                - ``gain_last`` : ndarray of complex
+                    Last gain vector ``g[k]``.
         """
         tic: float = time()
 

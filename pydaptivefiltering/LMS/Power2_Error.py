@@ -27,29 +27,75 @@ ArrayLike = Union[np.ndarray, list]
 
 class Power2ErrorLMS(AdaptiveFilter):
     """
-    Power-of-Two Error LMS (real-valued).
+    Power-of-Two Error LMS adaptive filter (real-valued).
 
-    This is an LMS variant where the instantaneous error is quantized to the nearest
-    power-of-two (or special cases), aiming at reducing computational complexity.
+    LMS variant in which the instantaneous a priori error is quantized to a
+    power-of-two level (with special cases for large and very small errors),
+    aiming to reduce computational complexity in fixed-point / low-cost
+    implementations.
 
-    Quantization rule (as implemented here)
-    ---------------------------------------
-    Let e be the a priori error.
-
-    - If |e| >= 1:
-        q(e) = sign(e)
-    - Else if |e| < 2^(-bd+1):
-        q(e) = tau * sign(e)
-    - Else:
-        q(e) = 2^{floor(log2(|e|))} * sign(e)
-
-    Update:
-        w <- w + 2 * mu * q(e) * x_k
+    Parameters
+    ----------
+    filter_order : int
+        Adaptive FIR filter order ``M``. The number of coefficients is ``M + 1``.
+    bd : int
+        Word length (number of bits) used to define the small-error threshold
+        ``2^{-bd+1}``.
+    tau : float
+        Gain factor applied when ``|e[k]|`` is very small (below ``2^{-bd+1}``).
+    step_size : float, optional
+        Adaptation step size ``mu``. Default is 1e-2.
+    w_init : array_like of float, optional
+        Initial coefficient vector ``w(0)`` with shape ``(M + 1,)``. If None,
+        initializes with zeros.
 
     Notes
     -----
-    - Real-valued only: enforced by `ensure_real_signals`.
-    - Uses the unified base API via `validate_input`.
+    Real-valued only
+        This implementation is restricted to real-valued signals and coefficients
+        (``supports_complex=False``). The constraint is enforced via
+        ``@ensure_real_signals`` on :meth:`optimize`.
+
+    Signal model and LMS update
+        Let the regressor vector be
+
+        .. math::
+            x_k = [x[k], x[k-1], \\ldots, x[k-M]]^T \\in \\mathbb{R}^{M+1},
+
+        with output and a priori error
+
+        .. math::
+            y[k] = w^T[k] x_k, \\qquad e[k] = d[k] - y[k].
+
+        The update uses a quantized error ``q(e[k])``:
+
+        .. math::
+            w[k+1] = w[k] + 2\\mu\\, q(e[k])\\, x_k.
+
+    Error quantization (as implemented)
+        Define the small-error threshold
+
+        .. math::
+            \\epsilon = 2^{-bd+1}.
+
+        Then the quantizer is
+
+        .. math::
+            q(e) =
+            \\begin{cases}
+                \\operatorname{sign}(e), & |e| \\ge 1, \\\\
+                \\tau\\,\\operatorname{sign}(e), & |e| < \\epsilon, \\\\
+                2^{\\lfloor \\log_2(|e|) \\rfloor}\\,\\operatorname{sign}(e),
+                & \\text{otherwise.}
+            \\end{cases}
+
+        Note that ``numpy.sign(0) = 0``; therefore if ``e[k] == 0`` then
+        ``q(e[k]) = 0`` and the update is null.
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 5th ed., Algorithm 4.1 (modified complexity-reduced LMS variants).
     """
 
     supports_complex: bool = False
@@ -62,20 +108,6 @@ class Power2ErrorLMS(AdaptiveFilter):
         step_size: float = 1e-2,
         w_init: Optional[ArrayLike] = None,
     ) -> None:
-        """
-        Parameters
-        ----------
-        filter_order:
-            FIR order M (number of taps is M+1).
-        bd:
-            Word length (signal bits) used in the small-error threshold 2^(-bd+1).
-        tau:
-            Gain factor used when |e| is very small (< 2^(-bd+1)).
-        step_size:
-            Step-size (mu).
-        w_init:
-            Optional initial coefficients (length M+1). If None, zeros.
-        """
         super().__init__(filter_order=int(filter_order), w_init=w_init)
         self.bd = int(bd)
         self.tau = float(tau)
@@ -94,30 +126,35 @@ class Power2ErrorLMS(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Run Power-of-Two Error LMS adaptation.
+        Executes the Power-of-Two Error LMS adaptation loop over paired sequences.
 
         Parameters
         ----------
-        input_signal:
-            Input signal x[k] (real).
-        desired_signal:
-            Desired signal d[k] (real).
-        verbose:
-            If True, prints runtime.
-        return_internal_states:
-            If True, returns the last quantized error value in result.extra.
+        input_signal : array_like of float
+            Input sequence ``x[k]`` with shape ``(N,)`` (will be flattened).
+        desired_signal : array_like of float
+            Desired sequence ``d[k]`` with shape ``(N,)`` (will be flattened).
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, includes the last internal states in ``result.extra``:
+            ``"last_quantized_error"`` (``q(e[k])``) and ``"small_threshold"``
+            (``2^{-bd+1}``).
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Filter output outputs[k].
-            errors:
-                A priori error errors[k] = d[k] - outputs[k].
-            coefficients:
-                History of coefficients stored in the base class.
-            error_type:
-                "a_priori".
+            Result object with fields:
+            - outputs : ndarray of float, shape ``(N,)``
+                Scalar output sequence, ``y[k] = w^T[k] x_k``.
+            - errors : ndarray of float, shape ``(N,)``
+                Scalar a priori error sequence, ``e[k] = d[k] - y[k]``.
+            - coefficients : ndarray of float
+                Coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"a_priori"``.
+            - extra : dict, optional
+                Present only if ``return_internal_states=True``.
         """
         t0 = perf_counter()
 

@@ -49,33 +49,90 @@ class MultilayerPerceptron(AdaptiveFilter):
     """
     Multilayer Perceptron (MLP) adaptive model with momentum (real-valued).
 
-    This is a 2-hidden-layer MLP adapted online using a gradient update with momentum.
-    The network is:
+    Online adaptation of a 2-hidden-layer feedforward neural network using a
+    stochastic-gradient update with momentum. The model is treated as an
+    adaptive nonlinear filter.
 
-        y1 = act(w1 u - b1)
-        y2 = act(w2 y1 - b2)
-        y  = w3^T y2 - b3
+    The forward pass is:
 
-    where `act` is either tanh or sigmoid.
+    .. math::
+        v_1[k] = W_1 u[k] - b_1, \\qquad y_1[k] = \\phi(v_1[k]),
 
-    Input handling
-    --------------
-    This implementation accepts two input formats in `optimize`:
+    .. math::
+        v_2[k] = W_2 y_1[k] - b_2, \\qquad y_2[k] = \\phi(v_2[k]),
 
-    1) 2D input matrix X with shape (N, input_dim):
-       Each row is used directly as the regressor u[k].
+    .. math::
+        y[k] = w_3^T y_2[k] - b_3,
 
-    2) 1D input signal x[k] with shape (N,):
-       A 3-dimensional regressor is formed internally as:
-           u[k] = [x[k], d[k-1], x[k-1]]
-       In this mode, `input_dim` must be 3.
+    where ``\\phi`` is either ``tanh`` or ``sigmoid``.
+
+    Parameters
+    ----------
+    n_neurons : int, optional
+        Number of neurons in each hidden layer. Default is 10.
+    input_dim : int, optional
+        Dimension of the regressor vector ``u[k]``. Default is 3.
+        If :meth:`optimize` is called with a 1D input signal, this must be 3
+        (see Notes).
+    step_size : float, optional
+        Gradient step size ``mu``. Default is 1e-2.
+    momentum : float, optional
+        Momentum factor in ``[0, 1)``. Default is 0.9.
+    activation : {"tanh", "sigmoid"}, optional
+        Activation function used in both hidden layers. Default is ``"tanh"``.
+    w_init : array_like of float, optional
+        Optional initialization for the output-layer weights ``w_3(0)``, with
+        shape ``(n_neurons,)``. If None, Xavier/Glorot-style uniform
+        initialization is used for all weights.
+    rng : numpy.random.Generator, optional
+        Random generator used for initialization.
 
     Notes
     -----
-    - Real-valued only: enforced by `ensure_real_signals`.
-    - The base class `filter_order` is used only as a size indicator here.
-    - `OptimizationResult.coefficients` stores a proxy coefficient history (w3).
-      Full parameter trajectories can be returned in `result.extra` when requested.
+    Real-valued only
+        This implementation is restricted to real-valued signals and parameters
+        (``supports_complex=False``). The constraint is enforced via
+        ``@ensure_real_signals`` on :meth:`optimize`.
+
+    Input formats
+        The method :meth:`optimize` accepts two input formats:
+
+        1. **Regressor matrix** ``U`` with shape ``(N, input_dim)``:
+           each row is used directly as ``u[k]``.
+
+        2. **Scalar input signal** ``x[k]`` with shape ``(N,)``:
+           a 3-dimensional regressor is formed internally as
+
+           .. math::
+               u[k] = [x[k],\\ d[k-1],\\ x[k-1]]^T,
+
+           therefore this mode requires ``input_dim = 3``.
+
+    Parameter update (as implemented)
+        Let the a priori error be ``e[k] = d[k] - y[k]``. This implementation
+        applies a momentum update of the form
+
+        .. math::
+            \\theta[k+1] = \\theta[k] + \\Delta\\theta[k] + \\beta\\,\\Delta\\theta[k-1],
+
+        where ``\\beta`` is the momentum factor and ``\\Delta\\theta[k]`` is a
+        gradient step proportional to ``e[k]``. (See source for the exact
+        per-parameter expressions.)
+
+    Library conventions
+        - The base class ``filter_order`` is used only as a size indicator
+          (set to ``n_neurons - 1``).
+        - ``OptimizationResult.coefficients`` stores a *proxy* coefficient
+          history: the output-layer weight vector ``w3`` as tracked through
+          ``self.w`` for compatibility with the base API.
+        - Full parameter trajectories can be returned in ``result.extra`` when
+          ``return_internal_states=True``.
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 5th ed., Algorithm 11.4 (MLP adaptive structure; here
+       extended with momentum and selectable activations).
     """
 
     supports_complex: bool = False
@@ -91,26 +148,6 @@ class MultilayerPerceptron(AdaptiveFilter):
         *,
         rng: Optional[np.random.Generator] = None,
     ) -> None:
-        """
-        Parameters
-        ----------
-        n_neurons:
-            Number of neurons in each hidden layer.
-        input_dim:
-            Dimension of the input regressor u[k].
-            If `optimize` is called with a 1D signal, input_dim must be 3.
-        step_size:
-            Gradient step-size (mu).
-        momentum:
-            Momentum factor in [0, 1). Typical values: 0.0 to 0.9.
-        activation:
-            Activation function: "tanh" or "sigmoid".
-        w_init:
-            Optional initialization for the output-layer weights w3 (length n_neurons).
-            If None, Xavier/Glorot initialization is used for all weights.
-        rng:
-            Optional numpy random generator for reproducible initialization.
-        """
         n_neurons = int(n_neurons)
         input_dim = int(input_dim)
         if n_neurons <= 0:
@@ -217,39 +254,53 @@ class MultilayerPerceptron(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Run MLP online adaptation with momentum.
+        Executes the online MLP adaptation loop (with momentum).
 
         Parameters
         ----------
-        input_signal:
+        input_signal : array_like of float
             Either:
-              - regressor matrix X with shape (N, input_dim), or
-              - 1D signal x[k] with shape (N,) (uses u[k]=[x[k], d[k-1], x[k-1]]; requires input_dim=3).
-        desired_signal:
-            Desired signal d[k], shape (N,).
-        verbose:
-            If True, prints runtime.
-        return_internal_states:
-            If True, returns parameter histories in `result.extra`.
+            - regressor matrix ``U`` with shape ``(N, input_dim)``, or
+            - scalar input signal ``x[k]`` with shape ``(N,)`` (in which case the
+              regressor is built as ``u[k] = [x[k], d[k-1], x[k-1]]`` and
+              requires ``input_dim = 3``).
+        desired_signal : array_like of float
+            Desired sequence ``d[k]`` with shape ``(N,)`` (will be flattened).
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, stores parameter snapshots in ``result.extra`` (may be memory
+            intensive for long runs).
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Estimated output y[k].
-            errors:
-                A priori error e[k] = d[k] - y[k].
-            coefficients:
-                Proxy coefficient history (w3) stacked from base history.
-            error_type:
-                "a_priori".
-
-        Extra (when return_internal_states=True)
-        --------------------------------------
-        extra["w1_hist"], extra["w2_hist"], extra["w3_hist"]:
-            Parameter histories (each item is a snapshot per iteration).
-        extra["b1_hist"], extra["b2_hist"], extra["b3_hist"]:
-            Bias histories.
+            Result object with fields:
+            - outputs : ndarray of float, shape ``(N,)``
+                Scalar output sequence ``y[k]``.
+            - errors : ndarray of float, shape ``(N,)``
+                Scalar a priori error sequence, ``e[k] = d[k] - y[k]``.
+            - coefficients : ndarray of float
+                Proxy coefficient history recorded by the base class (tracks
+                the output-layer weights ``w3``).
+            - error_type : str
+                Set to ``"a_priori"``.
+            - extra : dict, optional
+                Present only if ``return_internal_states=True`` with:
+                - ``w1_hist`` : list of ndarray
+                    Hidden-layer-1 weight snapshots.
+                - ``w2_hist`` : list of ndarray
+                    Hidden-layer-2 weight snapshots.
+                - ``w3_hist`` : list of ndarray
+                    Output-layer weight snapshots.
+                - ``b1_hist`` : list of ndarray
+                    Bias-1 snapshots.
+                - ``b2_hist`` : list of ndarray
+                    Bias-2 snapshots.
+                - ``b3_hist`` : list of float
+                    Bias-3 snapshots.
+                - ``activation`` : str
+                    Activation identifier (``"tanh"`` or ``"sigmoid"``).
         """
         t0 = perf_counter()
 

@@ -8,6 +8,12 @@
 
 This package provides a modern Python alternative to the **MATLAB Adaptive Filtering Toolbox**.
 
+## 📌 Table of Contents
+* [Algorithms & Progress](#-project-status--algorithms)
+* [Installation](#install-instructions)
+* [Usage Examples](#-examples-of-uses)
+* [Neural Adaptation (MLP)](#-quick-example-neural-adaptive-filtering-mlp)
+
 ## 🚀 Project Status & Algorithms
 
 The package currently covers the vast majority of classical and advanced linear adaptive algorithms, all validated via `pytest` with steady-state convergence scenarios.
@@ -20,17 +26,16 @@ The project is currently on its early stages (v0.9). The planned order of work f
 - [2/2] RLS based algorithms 
 - [5*/5] SetMembership Algorithms
 - [4/4] Lattice-based RLS 
-- [2*/2] Fast Transversal RLS
+- [2/2] Fast Transversal RLS
 - [1/1] QR
 - [5/5] IIR Filters
-- [6/6] Nonlinear Filters
+- [6*/6] Nonlinear Filters
 - [3/3] Subband Filters
 - [4/4] BlindFilters
 - [1/1] Kalman Filters
 
-**PUAP:** The `SetMembership_Simp_PUAP` implementation is currently under technical review and may not exhibit expected convergence in this version.
-
-**StabFastRLS:** The `Fast_TransversalRLS.StabFastRLS` implementation is currently under technical review and may exhibit unexpected warnings in this version.
+**simplified_puap:** The `set_membership.simplified_puap.py` implementation is currently under technical review and may not exhibit expected convergence in this version.
+**complex_rbf:** The `nonlinear.complex_rbf.py` implementation is currently under technical review and may exhibit unexpected warnings in this version.
 
 ---
 ## 💻 Requirements

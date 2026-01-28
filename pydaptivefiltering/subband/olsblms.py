@@ -48,17 +48,99 @@ def _upsample_by_L(x: np.ndarray, L: int, out_len: int) -> np.ndarray:
 
 class OLSBLMS(AdaptiveFilter):
     """
-    Implements the Open-Loop Subband LMS (OLSBLMS) adaptive-filtering algorithm for real-valued data.
-    (Algorithm 12.1, Diniz)
+    Open-Loop Subband LMS (OLSBLMS) for real-valued fullband signals.
+
+    Implements the Open-Loop Subband LMS adaptive filtering algorithm
+    (Algorithm 12.1, Diniz) using an analysis/synthesis filterbank with
+    subband-adaptive FIR filters.
+
+    High-level operation (as implemented)
+    -------------------------------------
+    Given fullband input x[n] and desired d[n], and an M-channel analysis bank h_k[m],
+    the algorithm proceeds in two stages:
+
+    (A) Analysis + Decimation (open-loop)
+        For each subband m = 0..M-1:
+          - Filter the fullband input and desired with the analysis filter:
+                x_aux[m] = filter(hk[m], 1, x)
+                d_aux[m] = filter(hk[m], 1, d)
+          - Decimate by L (keep samples 0, L, 2L, ...):
+                x_sb[m] = x_aux[m][::L]
+                d_sb[m] = d_aux[m][::L]
+
+        The adaptation length is:
+            N_iter = min_m len(x_sb[m]) and len(d_sb[m])
+        (i.e., all subbands are truncated to the shortest decimated sequence).
+
+    (B) Subband LMS adaptation (per-sample in decimated time)
+        Each subband has its own tapped-delay line x_ol[m,:] of length (Nw+1) and
+        its own coefficient vector w_mat[m,:] (also length Nw+1).
+
+        For each decimated-time index k = 0..N_iter-1, and for each subband m:
+          - Update subband delay line:
+                x_ol[m,0] = x_sb[m,k]
+          - Compute subband output and error:
+                y_sb[m,k] = w_mat[m]^T x_ol[m]
+                e_sb[m,k] = d_sb[m,k] - y_sb[m,k]
+          - Update a smoothed subband energy estimate:
+                sig_ol[m] = (1-a) sig_ol[m] + a * x_sb[m,k]^2
+          - Normalized LMS-like step:
+                mu_m = (2*step) / (gamma + (Nw+1)*sig_ol[m])
+          - Coefficient update:
+                w_mat[m] <- w_mat[m] + mu_m * e_sb[m,k] * x_ol[m]
+
+    Fullband reconstruction (convenience synthesis)
+    ----------------------------------------------
+    After adaptation, a fullband output is reconstructed via the synthesis bank f_k[m]:
+      - Upsample each subband output by L (zero-stuffing), then filter:
+            y_up[m]   = upsample(y_sb[m], L)
+            y_full[m] = filter(fk[m], 1, y_up[m])
+      - Sum across subbands:
+            y[n] = sum_m y_full[m][n]
+    The returned error is the fullband output error e[n] = d[n] - y[n].
+
+    Coefficient representation and history
+    --------------------------------------
+    - The adaptive parameters are stored as:
+          w_mat : ndarray, shape (M, Nw+1), dtype=float
+    - For compatibility with the base class, `self.w` is a flattened view of w_mat
+      (row-major), and `OptimizationResult.coefficients` contains the stacked history
+      of this flattened vector (recorded once per decimated-time iteration, plus the
+      initial entry).
+    - The full (M, Nw+1) snapshots are also stored in `extra["w_matrix_history"]`.
+
+    Parameters
+    ----------
+    n_subbands : int
+        Number of subbands (M).
+    analysis_filters : array_like
+        Analysis bank hk with shape (M, Lh).
+    synthesis_filters : array_like
+        Synthesis bank fk with shape (M, Lf).
+    filter_order : int
+        Subband FIR order Nw (number of taps per subband is Nw+1).
+    step : float, default=0.1
+        Global LMS step-size factor.
+    gamma : float, default=1e-2
+        Regularization term in the normalized denominator (>0 recommended).
+    a : float, default=0.01
+        Exponential smoothing factor for subband energy estimates in (0,1].
+    decimation_factor : int, optional
+        Decimation factor L. If None, uses L=M.
+    w_init : array_like, optional
+        Initial subband coefficients. Can be:
+          - shape (M, Nw+1), or
+          - flat of length M*(Nw+1), reshaped row-major.
 
     Notes
     -----
-    - The adaptive coefficients are subband-wise: w has shape (M, Nw+1).
-    - For compatibility with the base class, `OptimizationResult.coefficients` will contain
-      a flattened history of the subband coefficient matrix (row-major flatten).
-      The full matrix history is provided in `extra["w_matrix_history"]`.
-    - The MATLAB reference typically evaluates MSE in subbands; here we also provide a
-      convenience fullband reconstruction via the synthesis bank.
+    - Real-valued interface (input_signal and desired_signal enforced real).
+    - This is an *open-loop* structure: subband regressors are formed from the
+      analysis-filtered fullband input, independent of any reconstructed fullband
+      output loop.
+    - Subband MSE curves are provided as `mse_subbands = e_sb**2` and
+      `mse_overall = mean_m mse_subbands[m,k]`.
+
     """
     supports_complex: bool = False
 
@@ -162,31 +244,43 @@ class OLSBLMS(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Executes the adaptation process for the Open-Loop Subband LMS (OLSBLMS) algorithm.
+        Run OLSBLMS adaptation.
+
+        Parameters
+        ----------
+        input_signal : array_like of float
+            Fullband input x[n], shape (N,).
+        desired_signal : array_like of float
+            Fullband desired d[n], shape (N,).
+        verbose : bool, default=False
+            If True, prints runtime and iteration count.
+        return_internal_states : bool, default=False
+            If True, returns additional internal states in result.extra.
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Fullband reconstructed output y(n), same length as desired_signal.
-            errors:
-                Fullband output error e(n) = d(n) - y(n).
-            coefficients:
-                Flattened coefficient history (shape: (#snapshots, M*(Nw+1))).
+            outputs : ndarray of float, shape (N,)
+                Fullband reconstructed output y[n] obtained by synthesis of the
+                subband outputs after adaptation.
+            errors : ndarray of float, shape (N,)
+                Fullband output error e[n] = d[n] - y[n].
+            coefficients : ndarray
+                Flattened coefficient history of w_mat, shape
+                (#snapshots, M*(Nw+1)), where snapshots are recorded once per
+                subband-iteration (decimated-time step), plus the initial entry.
+            error_type : str
+                "output_error".
 
-        Extra (always)
-        -------------
-        extra["w_matrix_history"]:
-            List of coefficient matrices (M, Nw+1), one per subband-iteration.
-        extra["subband_outputs"], extra["subband_errors"]:
-            Arrays with shape (M, N_iter).
-        extra["mse_subbands"], extra["mse_overall"]:
-            MSE curves in subbands.
-
-        Extra (when return_internal_states=True)
-        --------------------------------------
-        extra["sig_ol"]:
-            Final subband energy estimates (M,).
+            extra : dict
+                Always contains:
+                  - "w_matrix_history": list of (M, Nw+1) coefficient snapshots
+                  - "subband_outputs": ndarray (M, N_iter)
+                  - "subband_errors": ndarray (M, N_iter)
+                  - "mse_subbands": ndarray (M, N_iter) with e_sb**2
+                  - "mse_overall": ndarray (N_iter,) mean subband MSE per iteration
+                If return_internal_states=True, also contains:
+                  - "sig_ol": final subband energy estimates, shape (M,)
         """
         tic: float = time()
 

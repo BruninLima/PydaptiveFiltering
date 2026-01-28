@@ -24,12 +24,86 @@ from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate
 
 class SimplifiedSMAP(AdaptiveFilter):
     """
-    Implements the Simplified Set-membership Affine-Projection (SM-Simp-AP) algorithm
-    for complex-valued data. (Algorithm 6.3, Diniz)
+    Simplified Set-Membership Affine Projection (SM-Simp-AP) adaptive filter
+    (complex-valued).
 
-    In this simplified version, only the current regressor column (x_k) is used
-    in the update, while the algorithm still keeps an AP-style regressor matrix
-    for compatibility/inspection.
+    Implements Algorithm 6.3 (Diniz). This is a simplified affine-projection
+    set-membership scheme where an AP-style regressor matrix of length ``L+1``
+    is maintained, but **the update uses only the most recent column** (the
+    current regressor vector). Updates occur only when the a priori error
+    magnitude exceeds ``gamma_bar``.
+
+    Parameters
+    ----------
+    filter_order : int
+        FIR filter order ``M`` (number of coefficients is ``M + 1``).
+    gamma_bar : float
+        Set-membership bound ``\\bar{\\gamma}`` for the a priori error magnitude.
+        An update occurs only if ``|e[k]| > gamma_bar``.
+    gamma : float
+        Regularization constant used in the normalization denominator
+        ``gamma + ||x_k||^2``.
+    L : int
+        Reuse data factor / constraint length. In this simplified variant it
+        mainly determines the number of columns kept in the internal AP-style
+        regressor matrix (size ``(M+1) x (L+1)``); only the first column is used
+        in the update.
+    w_init : array_like of complex, optional
+        Initial coefficient vector ``w(0)``, shape ``(M + 1,)``. If None, zeros.
+
+    Notes
+    -----
+    Regressor definition
+        The current tapped-delay regressor is
+
+        .. math::
+            x_k = [x[k], x[k-1], \\dots, x[k-M]]^T \\in \\mathbb{C}^{M+1}.
+
+        Internally, the algorithm maintains an AP regressor matrix
+
+        .. math::
+            X_k = [x_k, x_{k-1}, \\dots, x_{k-L}] \\in \\mathbb{C}^{(M+1)\\times(L+1)},
+
+        but the update uses only the first column ``x_k``.
+
+    A priori output and error (as implemented)
+        This implementation computes
+
+        .. math::
+            y[k] = x_k^H w[k],
+
+        and stores it as ``outputs[k]``.
+        The stored error is
+
+        .. math::
+            e[k] = d^*[k] - y[k].
+
+        (This matches the semantics of your code; many texts use
+        ``e[k] = d[k] - w^H x_k``. If you want the textbook convention, you’d
+        remove the conjugation on ``d[k]`` and ensure ``y[k]=w^H x_k``.)
+
+    Set-membership condition
+        If ``|e[k]| \\le \\bar{\\gamma}``, no update is performed.
+
+        If ``|e[k]| > \\bar{\\gamma}``, define the scalar step factor
+
+        .. math::
+            s[k] = \\left(1 - \\frac{\\bar{\\gamma}}{|e[k]|}\\right) e[k].
+
+    Normalized update (simplified AP)
+        With ``\\mathrm{den}[k] = \\gamma + \\|x_k\\|^2``, the coefficient update is
+
+        .. math::
+            w[k+1] = w[k] + \\frac{s[k]}{\\mathrm{den}[k]} \\, x_k.
+
+    Returned error type
+        The returned sequences correspond to **a priori** quantities (computed
+        before updating ``w``), so ``error_type="a_priori"``.
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, Algorithm 6.3.
     """
     supports_complex: bool = True
     gamma_bar: float
@@ -45,20 +119,6 @@ class SimplifiedSMAP(AdaptiveFilter):
         L: int,
         w_init: Optional[Union[np.ndarray, list]] = None,
     ) -> None:
-        """
-        Parameters
-        ----------
-        filter_order:
-            FIR filter order (number of taps - 1). Number of coefficients is filter_order + 1.
-        gamma_bar:
-            Error magnitude threshold for triggering updates.
-        gamma:
-            Regularization factor in the normalization denominator.
-        L:
-            Reuse data factor / constraint length (kept for matrix size L+1).
-        w_init:
-            Optional initial coefficient vector. If None, initializes to zeros.
-        """
         super().__init__(filter_order=filter_order, w_init=w_init)
 
         self.gamma_bar = float(gamma_bar)
@@ -85,40 +145,40 @@ class SimplifiedSMAP(AdaptiveFilter):
 
         Parameters
         ----------
-        input_signal:
-            Input signal x[k].
-        desired_signal:
-            Desired signal d[k].
-        verbose:
-            If True, prints runtime and update stats.
-        return_internal_states:
-            If True, includes additional internal trajectories in result.extra.
+        input_signal : array_like of complex
+            Input sequence ``x[k]``, shape ``(N,)`` (flattened internally).
+        desired_signal : array_like of complex
+            Desired sequence ``d[k]``, shape ``(N,)`` (flattened internally).
+        verbose : bool, optional
+            If True, prints runtime and update statistics after completion.
+        return_internal_states : bool, optional
+            If True, includes internal trajectories in ``result.extra``:
+            ``step_factor`` and ``den`` (each length ``N``). Entries are zero
+            when no update occurs.
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                A-priori output y[k] = w^H x_k.
-            errors:
-                A-priori error e[k] = d[k] - y[k] (same semantics as your original code).
-            coefficients:
-                History of coefficients stored in the base class.
-            error_type:
-                "a_priori".
-
-        Extra (always)
-        -------------
-        extra["n_updates"]:
-            Number of coefficient updates (iterations where |e(k)| > gamma_bar).
-        extra["update_mask"]:
-            Boolean array marking which iterations performed updates.
-
-        Extra (when return_internal_states=True)
-        --------------------------------------
-        extra["step_factor"]:
-            Trajectory of the scalar (1 - gamma_bar/|e|) * e used in the update (0 when no update).
-        extra["den"]:
-            Denominator trajectory (gamma + ||x_k||^2) (0 when no update).
+            Result object with fields:
+            - outputs : ndarray of complex, shape ``(N,)``
+                A priori output sequence.
+            - errors : ndarray of complex, shape ``(N,)``
+                A priori error sequence (as in code: ``e[k] = conj(d[k]) - y[k]``).
+            - coefficients : ndarray of complex
+                Coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"a_priori"``.
+            - extra : dict
+                Always present with:
+                - ``"n_updates"`` : int
+                    Number of coefficient updates (iterations where ``|e[k]| > gamma_bar``).
+                - ``"update_mask"`` : ndarray of bool, shape ``(N,)``
+                    Boolean mask indicating which iterations performed updates.
+                Additionally present only if ``return_internal_states=True``:
+                - ``"step_factor"`` : ndarray of complex, shape ``(N,)``
+                    Scalar factor ``(1 - gamma_bar/|e|) * e`` (0 when no update).
+                - ``"den"`` : ndarray of float, shape ``(N,)``
+                    Denominator ``gamma + ||x_k||^2`` (0 when no update).
         """
         tic: float = time()
 

@@ -23,18 +23,76 @@ from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate
 
 class LRLSPriori(AdaptiveFilter):
     """
-    Lattice Recursive Least Squares (LRLS) using a priori errors.
+    Lattice RLS using a priori errors (LRLS, a priori form), complex-valued.
 
-    Implements Algorithm 7.4 (Diniz) in a lattice (prediction + ladder) structure.
+    Implements Diniz (Algorithm 7.4) in a lattice/ladder structure:
+
+    1) **Lattice prediction stage** (order ``M``):
+       Produces forward a priori errors and a vector of backward errors, updating
+       reflection-like state variables and exponentially weighted energies.
+
+    2) **Ladder (joint-process) stage** (length ``M+1``):
+       Updates the ladder coefficients ``v`` using the a priori backward-error
+       vector and produces an **a priori** error associated with the desired signal.
 
     Library conventions
     -------------------
-    - Complex arithmetic (`supports_complex=True`).
-    - Ladder coefficients are stored in `self.v` (length M+1).
-    - For consistency with the library base class:
-        * `self.w` mirrors `self.v`
-        * `self._record_history()` is called each iteration
-        * coefficients history is available as `result.coefficients`
+    - Complex-valued implementation (``supports_complex=True``).
+    - Ladder coefficients are stored in ``self.v`` with length ``M+1``.
+    - For compatibility with :class:`~pydaptivefiltering.base.AdaptiveFilter`,
+      ``self.w`` mirrors ``self.v`` at each iteration and the base-class history
+      corresponds to the ladder coefficient trajectory.
+
+    Parameters
+    ----------
+    filter_order : int
+        Lattice order ``M`` (number of sections). The ladder has ``M+1`` coefficients.
+    lambda_factor : float, optional
+        Forgetting factor ``lambda`` used in the exponentially weighted recursions.
+        Default is 0.99.
+    epsilon : float, optional
+        Initialization/regularization constant for the energy variables
+        (forward/backward). Default is 0.1.
+    w_init : array_like of complex, optional
+        Optional initial ladder coefficients of length ``M+1``. If None, initializes
+        with zeros.
+    denom_floor : float, optional
+        Small positive floor used to avoid division by (near) zero in normalization
+        terms (``gamma`` variables and energy denominators). Default is 1e-12.
+
+    Notes
+    -----
+    Signals and dimensions
+    ~~~~~~~~~~~~~~~~~~~~~~
+    For lattice order ``M``:
+
+    - ``delta`` has shape ``(M,)`` (lattice delta state)
+    - ``xi_f`` and ``xi_b`` have shape ``(M+1,)`` (forward/backward energies)
+    - ``error_b_prev`` and per-sample ``alpha_b`` have shape ``(M+1,)``
+      (backward-error vectors)
+    - ``v`` and ``delta_v`` have shape ``(M+1,)`` (ladder coefficients and state)
+
+    A priori error (as returned)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    The ladder stage starts with ``alpha_e = d[k]`` and removes components
+    correlated with the backward-error vector:
+
+    .. math::
+        \\alpha_e \\leftarrow \\alpha_e - v_m^*(k)\\, b_m(k),
+
+    where :math:`b_m(k)` are the backward errors (``alpha_b[m]``). The final
+    value is then scaled by the final lattice normalization factor ``gamma``:
+
+    .. math::
+        e_{pri}(k) = \\gamma(k)\\, \\alpha_e(k).
+
+    This scaled error is returned in ``errors[k]``, and the output estimate is
+    returned as ``outputs[k] = d[k] - e_pri[k]``.
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, Algorithm 7.4.
     """
 
     supports_complex: bool = True
@@ -99,24 +157,47 @@ class LRLSPriori(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Executes LRLS adaptation (a priori version) over (x[k], d[k]).
+        Executes LRLS adaptation (a priori form) over paired sequences ``x[k]`` and ``d[k]``.
+
+        Parameters
+        ----------
+        input_signal : array_like of complex
+            Input sequence ``x[k]`` with shape ``(N,)``.
+        desired_signal : array_like of complex
+            Desired/reference sequence ``d[k]`` with shape ``(N,)``.
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, returns selected *final* internal states in ``result.extra``
+            (not full trajectories).
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Filter output y[k].
-            errors:
-                A priori error e[k].
-            coefficients:
-                History of ladder coefficients v (mirrored in `self.w_history`).
-            error_type:
-                "a_priori".
+            Result object with fields:
+            - outputs : ndarray of complex, shape ``(N,)``
+                Estimated output sequence. In this implementation:
+                ``outputs[k] = d[k] - e_pri[k]``.
+            - errors : ndarray of complex, shape ``(N,)``
+                A priori ladder error scaled by the final lattice normalization
+                factor: ``e_pri[k] = gamma[k] * alpha_e[k]``.
+            - coefficients : ndarray
+                Ladder coefficient history (mirrors ``self.v`` via ``self.w``).
+            - error_type : str
+                Set to ``"a_priori"``.
+            - extra : dict, optional
+                Present only if ``return_internal_states=True`` (see below).
 
         Extra (when return_internal_states=True)
         --------------------------------------
-        extra["xi_f"], extra["xi_b"], extra["delta"], extra["delta_v"]:
-            Final arrays at the end of adaptation.
+        xi_f : ndarray of float, shape ``(M+1,)``
+            Final forward energies.
+        xi_b : ndarray of float, shape ``(M+1,)``
+            Final backward energies.
+        delta : ndarray of complex, shape ``(M,)``
+            Final lattice delta state.
+        delta_v : ndarray of complex, shape ``(M+1,)``
+            Final ladder delta state used to compute ``v``.
         """
         t0 = perf_counter()
 

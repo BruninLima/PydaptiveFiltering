@@ -27,27 +27,84 @@ ArrayLike = Union[np.ndarray, list]
 
 class VolterraLMS(AdaptiveFilter):
     """
-    Volterra LMS (2nd-order) for real-valued adaptive filtering.
+    Second-order Volterra LMS adaptive filter (real-valued).
 
-    Implements Algorithm 11.1 (Diniz) using a second-order Volterra expansion.
+    Volterra LMS (Diniz, Alg. 11.1) using a second-order Volterra expansion.
+    The adaptive model augments a linear tapped-delay regressor with all
+    quadratic products (including squares) and performs an LMS-type update on
+    the expanded coefficient vector.
 
-    For a linear memory length L (called `memory`), the regressor is composed of:
-    - linear terms:  [x[k], x[k-1], ..., x[k-L+1]]
-    - quadratic terms (with i <= j):
-        [x[k]^2, x[k]x[k-1], ..., x[k-L+1]^2]
-
-    Total number of coefficients:
-        n_coeffs = L + L(L+1)/2
+    Parameters
+    ----------
+    memory : int, optional
+        Linear memory length ``L``. The linear delay line is
+        ``[x[k], x[k-1], ..., x[k-L+1]]``. Default is 3.
+    step : float or array_like of float, optional
+        Step size ``mu``. Can be either:
+        - a scalar (same step for all coefficients), or
+        - a vector with shape ``(n_coeffs,)`` for per-term step scaling.
+        Default is 1e-2.
+    w_init : array_like of float, optional
+        Initial coefficient vector ``w(0)`` with shape ``(n_coeffs,)``. If None,
+        initializes with zeros.
+    safe_eps : float, optional
+        Small positive constant kept for API consistency across the library.
+        (Not used directly by this implementation.) Default is 1e-12.
 
     Notes
     -----
-    - Real-valued only: enforced by `ensure_real_signals`.
-    - The base class coefficient vector `self.w` corresponds to the Volterra
-      coefficient vector (linear + quadratic). The history returned in
-      `OptimizationResult.coefficients` is the stacked trajectory of `self.w`.
-    - `step` can be:
-        * scalar (same step for all coefficients), or
-        * vector (shape (n_coeffs,)) allowing per-term step scaling.
+    Real-valued only
+        This implementation is restricted to real-valued signals and coefficients
+        (``supports_complex=False``). The constraint is enforced via
+        ``@ensure_real_signals`` on :meth:`optimize`.
+
+    Volterra regressor (as implemented)
+        Let the linear delay line be
+
+        .. math::
+            x_{lin}[k] = [x[k], x[k-1], \\ldots, x[k-L+1]]^T \\in \\mathbb{R}^{L}.
+
+        The second-order Volterra regressor is constructed as
+
+        .. math::
+            u[k] =
+            \\begin{bmatrix}
+                x_{lin}[k] \\\\
+                \\mathrm{vec}\\bigl(x_{lin}[k] x_{lin}^T[k]\\bigr)_{i \\le j}
+            \\end{bmatrix}
+            \\in \\mathbb{R}^{n_{coeffs}},
+
+        where the quadratic block contains all products ``x_{lin,i}[k] x_{lin,j}[k]``
+        for ``0 \\le i \\le j \\le L-1`` (unique terms only).
+
+        The number of coefficients is therefore
+
+        .. math::
+            n_{coeffs} = L + \\frac{L(L+1)}{2}.
+
+    LMS recursion (a priori)
+        With
+
+        .. math::
+            y[k] = w^T[k] u[k], \\qquad e[k] = d[k] - y[k],
+
+        the update implemented here is
+
+        .. math::
+            w[k+1] = w[k] + 2\\mu\\, e[k] \\, u[k],
+
+        where ``\\mu`` may be scalar or element-wise (vector step).
+
+    Implementation details
+        - The coefficient vector ``self.w`` stores the full Volterra parameter
+          vector (linear + quadratic) and is recorded by the base class.
+        - The quadratic term ordering matches the nested loops used in
+          :meth:`_create_volterra_regressor` (i increasing, j from i to L-1).
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 5th ed., Algorithm 11.1.
     """
 
     supports_complex: bool = False
@@ -60,19 +117,6 @@ class VolterraLMS(AdaptiveFilter):
         *,
         safe_eps: float = 1e-12,
     ) -> None:
-        """
-        Parameters
-        ----------
-        memory:
-            Linear memory length L. Determines the Volterra regressor size:
-            n_coeffs = L + L(L+1)/2.
-        step:
-            Step-size mu. Can be a scalar or a vector of length n_coeffs.
-        w_init:
-            Optional initial coefficients (length n_coeffs). If None, zeros.
-        safe_eps:
-            Small epsilon used for internal safety checks (kept for consistency).
-        """
         memory = int(memory)
         if memory <= 0:
             raise ValueError(f"memory must be > 0. Got {memory}.")
@@ -100,19 +144,20 @@ class VolterraLMS(AdaptiveFilter):
 
     def _create_volterra_regressor(self, x_lin: np.ndarray) -> np.ndarray:
         """
-        Construct the 2nd-order Volterra regressor from a linear delay line.
+        Constructs the second-order Volterra regressor from a linear delay line.
 
         Parameters
         ----------
-        x_lin:
-            Linear delay line of length `memory` ordered as:
-            [x[k], x[k-1], ..., x[k-L+1]].
+        x_lin : ndarray of float
+            Linear delay line with shape ``(L,)`` ordered as
+            ``[x[k], x[k-1], ..., x[k-L+1]]``.
 
         Returns
         -------
-        np.ndarray
-            Volterra regressor u[k] of length n_coeffs:
-            [linear terms, quadratic terms (i<=j)].
+        ndarray of float
+            Volterra regressor ``u[k]`` with shape ``(n_coeffs,)`` containing:
+            - linear terms, followed by
+            - quadratic terms for ``i <= j``.
         """
         x_lin = np.asarray(x_lin, dtype=np.float64).reshape(-1)
         if x_lin.size != self.memory:
@@ -138,39 +183,34 @@ class VolterraLMS(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Run Volterra LMS adaptation over (x[k], d[k]).
+        Executes the Volterra LMS adaptation loop over paired input/desired sequences.
 
         Parameters
         ----------
-        input_signal:
-            Input sequence x[k], shape (N,).
-        desired_signal:
-            Desired sequence d[k], shape (N,).
-        verbose:
-            If True, prints runtime.
-        return_internal_states:
-            If True, returns selected internal values in `result.extra`.
+        input_signal : array_like of float
+            Input sequence ``x[k]`` with shape ``(N,)`` (will be flattened).
+        desired_signal : array_like of float
+            Desired sequence ``d[k]`` with shape ``(N,)`` (will be flattened).
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, includes the last internal states in ``result.extra``:
+            ``"last_regressor"``, ``"memory"``, and ``"n_coeffs"``.
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Filter output y[k] (a priori).
-            errors:
-                A priori error e[k] = d[k] - y[k].
-            coefficients:
-                History of Volterra coefficient vector w (stacked from base history).
-            error_type:
-                "a_priori".
-
-        Extra (when return_internal_states=True)
-        --------------------------------------
-        extra["last_regressor"]:
-            Last Volterra regressor u[k] (length n_coeffs).
-        extra["memory"]:
-            Linear memory length L.
-        extra["n_coeffs"]:
-            Number of Volterra coefficients.
+            Result object with fields:
+            - outputs : ndarray of float, shape ``(N,)``
+                Scalar a priori output sequence, ``y[k] = w^T[k] u[k]``.
+            - errors : ndarray of float, shape ``(N,)``
+                Scalar a priori error sequence, ``e[k] = d[k] - y[k]``.
+            - coefficients : ndarray of float
+                Volterra coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"a_priori"``.
+            - extra : dict, optional
+                Present only if ``return_internal_states=True``.
         """
         t0 = perf_counter()
 

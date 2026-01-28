@@ -27,26 +27,98 @@ ArrayLike = Union[np.ndarray, list]
 
 class VolterraRLS(AdaptiveFilter):
     """
-    Volterra RLS (2nd-order) for real-valued adaptive filtering.
+    Second-order Volterra RLS adaptive filter (real-valued).
 
-    Implements Algorithm 11.2 (Diniz) using a second-order Volterra expansion
-    and an RLS update on the expanded regressor.
+    Volterra RLS (Diniz, Alg. 11.2) using a second-order Volterra expansion and
+    an RLS update applied to the expanded regressor. The model augments a linear
+    tapped-delay regressor with all unique quadratic products (including
+    squares) and estimates the corresponding coefficient vector via RLS.
 
-    For linear memory length L (`memory`), the Volterra regressor is:
-    - linear terms:  [x[k], x[k-1], ..., x[k-L+1]]
-    - quadratic terms (i <= j):
-        [x[k]^2, x[k]x[k-1], ..., x[k-L+1]^2]
-
-    Total number of coefficients:
-        n_coeffs = L + L(L+1)/2
+    Parameters
+    ----------
+    memory : int, optional
+        Linear memory length ``L``. The linear delay line is
+        ``[x[k], x[k-1], ..., x[k-L+1]]``. Default is 3.
+    forgetting_factor : float, optional
+        Forgetting factor ``lambda`` with ``0 < lambda <= 1``. Default is 0.98.
+    delta : float, optional
+        Regularization parameter used to initialize the inverse correlation
+        matrix as ``P(0) = I/delta`` (requires ``delta > 0``). Default is 1.0.
+    w_init : array_like of float, optional
+        Initial coefficient vector ``w(0)`` with shape ``(n_coeffs,)``. If None,
+        initializes with zeros.
+    safe_eps : float, optional
+        Small positive constant used to guard denominators. Default is 1e-12.
 
     Notes
     -----
-    - Real-valued only (enforced by `ensure_real_signals`).
-    - We return the *a priori* error by default:
-        e[k] = d[k] - y[k]  with y[k] = w^T u[k]  (before the weight update)
-      and set `error_type="a_priori"`.
-    - If `return_internal_states=True`, we also include posterior sequences in `extra`.
+    Real-valued only
+        This implementation is restricted to real-valued signals and coefficients
+        (``supports_complex=False``). The constraint is enforced via
+        ``@ensure_real_signals`` on :meth:`optimize`.
+
+    Volterra regressor (as implemented)
+        Let the linear delay line be
+
+        .. math::
+            x_{lin}[k] = [x[k], x[k-1], \\ldots, x[k-L+1]]^T \\in \\mathbb{R}^{L}.
+
+        The second-order Volterra regressor is constructed as
+
+        .. math::
+            u[k] =
+            \\begin{bmatrix}
+                x_{lin}[k] \\\\
+                \\mathrm{vec}\\bigl(x_{lin}[k] x_{lin}^T[k]\\bigr)_{i \\le j}
+            \\end{bmatrix}
+            \\in \\mathbb{R}^{n_{coeffs}},
+
+        where the quadratic block contains all products ``x_{lin,i}[k] x_{lin,j}[k]``
+        for ``0 \\le i \\le j \\le L-1``.
+
+        The number of coefficients is
+
+        .. math::
+            n_{coeffs} = L + \\frac{L(L+1)}{2}.
+
+    RLS recursion (a priori form)
+        With
+
+        .. math::
+            y[k] = w^T[k-1] u[k], \\qquad e[k] = d[k] - y[k],
+
+        define the gain
+
+        .. math::
+            g[k] = \\frac{P[k-1] u[k]}{\\lambda + u^T[k] P[k-1] u[k]},
+
+        the inverse correlation update
+
+        .. math::
+            P[k] = \\frac{1}{\\lambda}\\left(P[k-1] - g[k] u^T[k] P[k-1]\\right),
+
+        and the coefficient update
+
+        .. math::
+            w[k] = w[k-1] + g[k] e[k].
+
+    A posteriori quantities
+        If requested, this implementation also computes the *a posteriori*
+        output/error after updating the coefficients at time ``k``:
+
+        .. math::
+            y^{post}[k] = w^T[k] u[k], \\qquad e^{post}[k] = d[k] - y^{post}[k].
+
+    Implementation details
+        - The denominator ``lambda + u^T P u`` is guarded by ``safe_eps`` to avoid
+          numerical issues when very small.
+        - Coefficient history is recorded via the base class.
+        - The quadratic-term ordering matches :meth:`_create_volterra_regressor`.
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 5th ed., Algorithm 11.2.
     """
 
     supports_complex: bool = False
@@ -113,19 +185,20 @@ class VolterraRLS(AdaptiveFilter):
 
     def _create_volterra_regressor(self, x_lin: np.ndarray) -> np.ndarray:
         """
-        Construct the 2nd-order Volterra regressor from a linear delay line.
+        Constructs the second-order Volterra regressor from a linear delay line.
 
         Parameters
         ----------
-        x_lin:
-            Linear delay line of length `memory` ordered as:
-            [x[k], x[k-1], ..., x[k-L+1]].
+        x_lin : ndarray of float
+            Linear delay line with shape ``(L,)`` ordered as
+            ``[x[k], x[k-1], ..., x[k-L+1]]``.
 
         Returns
         -------
-        np.ndarray
-            Volterra regressor u[k] of length n_coeffs:
-            [linear terms, quadratic terms (i<=j)].
+        ndarray of float
+            Volterra regressor ``u[k]`` with shape ``(n_coeffs,)`` containing:
+            - linear terms, followed by
+            - quadratic terms for ``i <= j``.
         """
         x_lin = np.asarray(x_lin, dtype=np.float64).reshape(-1)
         if x_lin.size != self.memory:
@@ -150,43 +223,50 @@ class VolterraRLS(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Run Volterra RLS adaptation over (x[k], d[k]).
+        Executes the Volterra RLS adaptation loop over paired input/desired sequences.
 
         Parameters
         ----------
-        input_signal:
-            Input sequence x[k], shape (N,).
-        desired_signal:
-            Desired sequence d[k], shape (N,).
-        verbose:
-            If True, prints runtime.
-        return_internal_states:
-            If True, includes additional sequences in `result.extra`.
+        input_signal : array_like of float
+            Input sequence ``x[k]`` with shape ``(N,)`` (will be flattened).
+        desired_signal : array_like of float
+            Desired sequence ``d[k]`` with shape ``(N,)`` (will be flattened).
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, includes additional internal sequences in ``result.extra``,
+            including a posteriori output/error and last gain/denominator.
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                A priori output y[k] = w^T u[k].
-            errors:
-                A priori error e[k] = d[k] - y[k].
-            coefficients:
-                History of Volterra coefficients w (stacked from base history).
-            error_type:
-                "a_priori".
-
-        Extra (when return_internal_states=True)
-        --------------------------------------
-        extra["posteriori_outputs"]:
-            Output after the weight update (y_post).
-        extra["posteriori_errors"]:
-            Error after the weight update (e_post).
-        extra["last_gain"]:
-            Last RLS gain vector k (shape (n_coeffs,)).
-        extra["last_den"]:
-            Last denominator (scalar).
-        extra["last_regressor"]:
-            Last Volterra regressor u[k].
+            Result object with fields:
+            - outputs : ndarray of float, shape ``(N,)``
+                Scalar a priori output sequence, ``y[k] = w^T[k-1] u[k]``.
+            - errors : ndarray of float, shape ``(N,)``
+                Scalar a priori error sequence, ``e[k] = d[k] - y[k]``.
+            - coefficients : ndarray of float
+                Volterra coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"a_priori"``.
+            - extra : dict, optional
+                Present only if ``return_internal_states=True`` with:
+                - ``posteriori_outputs`` : ndarray of float
+                    A posteriori output sequence ``y^{post}[k]``.
+                - ``posteriori_errors`` : ndarray of float
+                    A posteriori error sequence ``e^{post}[k]``.
+                - ``last_gain`` : ndarray of float
+                    Last RLS gain vector ``g[k]``.
+                - ``last_den`` : float
+                    Last gain denominator ``lambda + u^T P u``.
+                - ``last_regressor`` : ndarray of float
+                    Last Volterra regressor ``u[k]``.
+                - ``memory`` : int
+                    Linear memory length ``L``.
+                - ``n_coeffs`` : int
+                    Number of Volterra coefficients.
+                - ``forgetting_factor`` : float
+                    The forgetting factor ``lambda`` used.
         """
         t0 = perf_counter()
 

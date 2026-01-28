@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from pydaptivefiltering import FastRLS, StabFastRLS
+from pydaptivefiltering.base import OptimizationResult
 
 
 def generate_real_fir_data(
@@ -46,82 +47,11 @@ def rel_rmse(a, b, eps: float = 1e-12) -> float:
     return float(num / den)
 
 
-def _last_w(coeff_history):
-    """
-    Helper: seu framework guarda w_history como lista de arrays.
-    Suporta também o caso de matriz (n_taps x (n_iter+1)) ou (n_iter x n_taps).
-    """
-    if coeff_history is None:
-        return None
-    if isinstance(coeff_history, list) and len(coeff_history) > 0:
-        return np.asarray(coeff_history[-1])
-
-    arr = np.asarray(coeff_history)
-    if arr.ndim == 2:
-        # tenta inferir orientação
-        if arr.shape[0] >= arr.shape[1]:
-            return arr[-1, :]
-        else:
-            return arr[:, -1]
-    return arr
-
-
-def _get_outputs(res: dict) -> np.ndarray:
-    if "outputs" in res:
-        return np.asarray(res["outputs"])
-    if "y" in res:
-        return np.asarray(res["y"])
-    raise KeyError("Result does not contain outputs/y.")
-
-
-def _get_errors(res: dict, d: np.ndarray) -> np.ndarray:
-    # Aceita vários padrões de chave
-    for k in ("priori_errors", "errors", "e"):
-        if k in res:
-            return np.asarray(res[k])
-    # fallback: d - y
-    y = _get_outputs(res)
-    if np.iscomplexobj(y):
-        y = np.real(y)
-    return np.asarray(d) - np.asarray(y)
-
-
-def _make_filter_with_matching_taps(cls, n_taps: int, **kwargs):
-    """
-    Alguns filtros usam `filter_order` como:
-      - ordem M (taps = M+1), ou
-      - número de taps diretamente (taps = M)
-
-    Para evitar o erro: shapes (2,) and (3,) not aligned,
-    tentamos as duas convenções e escolhemos a que produz len(w)=n_taps.
-    """
-    # tentativa A: filter_order = n_taps - 1 (convenção mais comum: ordem)
-    try:
-        f = cls(filter_order=n_taps - 1, **kwargs)
-        w = np.asarray(getattr(f, "w"))
-        if w.size == n_taps:
-            return f
-    except Exception:
-        f = None
-
-    # tentativa B: filter_order = n_taps (convenção: taps)
-    f2 = cls(filter_order=n_taps, **kwargs)
-    w2 = np.asarray(getattr(f2, "w"))
-    if w2.size == n_taps:
-        return f2
-
-    # se nenhuma bateu, dá um erro bem explicativo
-    wA = None
-    if f is not None:
-        try:
-            wA = np.asarray(getattr(f, "w")).size
-        except Exception:
-            wA = None
-    raise AssertionError(
-        f"{cls.__name__}: could not match n_taps={n_taps}. "
-        f"TryA(order={n_taps-1}) -> w.size={wA}; "
-        f"TryB(order={n_taps}) -> w.size={w2.size}."
-    )
+def last_w(res: OptimizationResult) -> np.ndarray:
+    coeffs = np.asarray(res.coefficients)
+    if coeffs.ndim != 2 or coeffs.shape[0] == 0:
+        raise AssertionError("coefficients history is empty or has unexpected shape.")
+    return coeffs[-1]
 
 
 @pytest.fixture
@@ -137,6 +67,7 @@ def real_rls_test_data():
         "d": d,
         "w_true": w_true,
         "n_taps": int(w_true.size),
+        "filter_order": int(w_true.size - 1),
     }
 
 
@@ -150,16 +81,16 @@ def test_stab_vs_fast_equivalence_real_short(real_rls_test_data):
 
     x = data["x"][:n_short]
     d = data["d"][:n_short]
-    n_taps = data["n_taps"]
+    order = data["filter_order"]
 
-    f_fast = _make_filter_with_matching_taps(FastRLS, n_taps=n_taps, forgetting_factor=0.99)
-    f_stab = _make_filter_with_matching_taps(StabFastRLS, n_taps=n_taps, forgetting_factor=0.99, epsilon=0.1)
+    f_fast = FastRLS(filter_order=order, forgetting_factor=0.99, epsilon=0.1)
+    f_stab = StabFastRLS(filter_order=order, forgetting_factor=0.99, epsilon=0.1)
 
     res_fast = f_fast.optimize(x, d)
     res_stab = f_stab.optimize(x, d)
 
-    y_fast = _get_outputs(res_fast)
-    y_stab = _get_outputs(res_stab)
+    y_fast = np.asarray(res_fast.outputs)
+    y_stab = np.asarray(res_stab.outputs)
 
     # Para dados reais, se algum retornar complexo, imag deve ser ~0
     if np.iscomplexobj(y_fast):
@@ -177,34 +108,24 @@ def test_stab_vs_fast_equivalence_real_short(real_rls_test_data):
 
 
 def test_stab_converges_to_true_system_real(real_rls_test_data):
-    """
-    Testa convergência do StabFastRLS REAL para um FIR conhecido.
-    """
+    """Testa convergência do StabFastRLS REAL para um FIR conhecido."""
     data = real_rls_test_data
     x = data["x"]
     d = data["d"]
     w_true = data["w_true"]
-    n_taps = data["n_taps"]
+    order = data["filter_order"]
 
-    f_stab = _make_filter_with_matching_taps(
-        StabFastRLS,
-        n_taps=n_taps,
-        forgetting_factor=0.995,
-        epsilon=0.1,
-    )
+    f_stab = StabFastRLS(filter_order=order, forgetting_factor=0.995, epsilon=0.1)
     res = f_stab.optimize(x, d)
 
-    w_est = _last_w(res.get("coefficients", None))
-    assert w_est is not None, "StabFastRLS must return coefficients history."
-
+    w_est = last_w(res)
     if np.iscomplexobj(w_est):
         assert np.max(np.abs(np.imag(w_est))) < 1e-8
         w_est = np.real(w_est)
 
-    # como RLS tende a convergir bem, tolerâncias moderadas
     np.testing.assert_allclose(w_est, w_true, rtol=0.10, atol=0.05)
 
-    e = _get_errors(res, d)
+    e = np.asarray(res.errors)
     if np.iscomplexobj(e):
         assert np.max(np.abs(np.imag(e))) < 1e-8
         e = np.real(e)
@@ -214,32 +135,24 @@ def test_stab_converges_to_true_system_real(real_rls_test_data):
 
 
 def test_fast_converges_to_true_system_real(real_rls_test_data):
-    """
-    Testa convergência do FastRLS para dados reais.
-    """
+    """Testa convergência do FastRLS para dados reais."""
     data = real_rls_test_data
     x = data["x"]
     d = data["d"]
     w_true = data["w_true"]
-    n_taps = data["n_taps"]
+    order = data["filter_order"]
 
-    f_fast = _make_filter_with_matching_taps(
-        FastRLS,
-        n_taps=n_taps,
-        forgetting_factor=0.995,
-    )
+    f_fast = FastRLS(filter_order=order, forgetting_factor=0.995, epsilon=0.1)
     res = f_fast.optimize(x, d)
 
-    w_est = _last_w(res.get("coefficients", None))
-    assert w_est is not None, "FastRLS must return coefficients history."
-
+    w_est = last_w(res)
     if np.iscomplexobj(w_est):
         assert np.max(np.abs(np.imag(w_est))) < 1e-6
         w_est = np.real(w_est)
 
     np.testing.assert_allclose(w_est, w_true, rtol=0.15, atol=0.08)
 
-    e = _get_errors(res, d)
+    e = np.asarray(res.errors)
     if np.iscomplexobj(e):
         assert np.max(np.abs(np.imag(e))) < 1e-6
         e = np.real(e)
@@ -248,56 +161,37 @@ def test_fast_converges_to_true_system_real(real_rls_test_data):
     assert mse_tail < 1e-2
 
 
-def test_real_stab_fast_rls_complex_input_policy(real_rls_test_data):
+def test_real_input_produces_real_outputs_policy(real_rls_test_data):
     """
-    Política recomendada para a versão REAL:
-    - ou rejeitar complexo (TypeError/ValueError)
-    - ou aceitar e emitir ComplexWarning e descartar imag
-
-    Aceita QUALQUER uma das duas políticas.
+    Política recomendada com API padronizada (e algoritmos complex):
+    - Se entrada/desired são reais, outputs/errors devem ter parte imaginária ~0.
     """
     data = real_rls_test_data
-    n_taps = data["n_taps"]
+    x = data["x"][:200]
+    d = data["d"][:200]
+    order = data["filter_order"]
 
-    x = data["x"].astype(complex) + 1j * 0.5 * data["x"]
-    d = data["d"].astype(complex) + 1j * 0.5 * data["d"]
+    f_stab = StabFastRLS(filter_order=order, forgetting_factor=0.99, epsilon=0.1)
+    res = f_stab.optimize(x, d)
 
-    f_stab = _make_filter_with_matching_taps(
-        StabFastRLS,
-        n_taps=n_taps,
-        forgetting_factor=0.99,
-        epsilon=0.1,
-    )
+    y = np.asarray(res.outputs)
+    e = np.asarray(res.errors)
 
-    # Policy A: strict reject
-    with pytest.raises((TypeError, ValueError)):
-        f_stab.optimize(x[:20], d[:20])
-        return  # se levantou, ok
-
-    # Policy B: warn + discard imag
-    # (Se você implementar warning no decorator, este bloco vira o comportamento esperado.)
-    with pytest.warns(np.ComplexWarning):
-        res = f_stab.optimize(x[:20], d[:20])
-
-    y = _get_outputs(res)
-    assert np.isrealobj(y)
+    if np.iscomplexobj(y):
+        assert np.max(np.abs(np.imag(y))) < 1e-6
+    if np.iscomplexobj(e):
+        assert np.max(np.abs(np.imag(e))) < 1e-6
 
 
 def test_long_term_stability_comparison():
-    """Verifica se o StabFastRLS sobrevive onde o FastRLS padrão pode divergir."""
+    """Verifica se o StabFastRLS é numericamente estável em execução longa."""
     x_long, d_long, w_true = generate_real_fir_data(n_samples=20000, seed=42)
-    n_taps = int(w_true.size)
-    order_like = n_taps - 1  # só para referência
+    order = int(w_true.size - 1)
 
-    f_stab = _make_filter_with_matching_taps(
-        StabFastRLS,
-        n_taps=n_taps,
-        forgetting_factor=0.999,
-        epsilon=0.5,
-    )
+    f_stab = StabFastRLS(filter_order=order, forgetting_factor=0.999, epsilon=0.5)
     res_stab = f_stab.optimize(x_long, d_long)
 
-    y = _get_outputs(res_stab)
+    y = np.asarray(res_stab.outputs)
     if np.iscomplexobj(y):
         y = np.real(y)
 
@@ -315,21 +209,13 @@ def test_tracking_performance_abrupt_change():
     x_total = np.concatenate([x1, x2])
     d_total = np.concatenate([d1, d2])
 
-    n_taps = int(w_true.size)
+    order = int(w_true.size - 1)
 
-    f_stab = _make_filter_with_matching_taps(
-        StabFastRLS,
-        n_taps=n_taps,
-        forgetting_factor=0.995,
-        epsilon=0.5,
-    )
+    f_stab = StabFastRLS(filter_order=order, forgetting_factor=0.995, epsilon=0.5)
     res = f_stab.optimize(x_total, d_total)
 
-    w_final = _last_w(res.get("coefficients", None))
-    assert w_final is not None
-
+    w_final = last_w(res)
     if np.iscomplexobj(w_final):
         w_final = np.real(w_final)
 
-    # Deve estar perto do NOVO sistema (tolerância mais larga porque tracking é mais difícil)
     np.testing.assert_allclose(w_final, w_new, atol=0.2)

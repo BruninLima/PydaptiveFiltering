@@ -1,6 +1,7 @@
 (!) nonlinear.complex_rbf.py
 (!) set_membership.simplified_puap.py
-(!) arrumar os testes.
+(!) arrumar os testes. (3/?)
+(!) padronizar as docstrings. (nonlinear/todos)
 
 README
 

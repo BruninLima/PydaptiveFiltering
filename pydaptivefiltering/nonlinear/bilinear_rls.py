@@ -27,29 +27,78 @@ ArrayLike = Union[np.ndarray, list]
 
 class BilinearRLS(AdaptiveFilter):
     """
-    Bilinear RLS (real-valued).
+    Bilinear RLS adaptive filter (real-valued).
 
-    Implements a bilinear regressor RLS structure (Algorithm 11.3 - Diniz).
-    The regressor used here has 4 components:
+    RLS algorithm with a fixed 4-dimensional *bilinear* regressor structure,
+    following Diniz (Alg. 11.3). The regressor couples the current input with
+    past desired samples to model a simple bilinear relationship.
 
-        u[k] = [ x[k],
-                 d[k-1],
-                 x[k] d[k-1],
-                 x[k-1] d[k-1] ]^T
-
-    and the RLS update (a priori form) is:
-
-        y[k] = w^T u[k]
-        e[k] = d[k] - y[k]
-        k[k] = P[k-1] u[k] / (lambda + u[k]^T P[k-1] u[k])
-        P[k] = (P[k-1] - k[k] u[k]^T P[k-1]) / lambda
-        w[k] = w[k-1] + k[k] e[k]
+    Parameters
+    ----------
+    forgetting_factor : float, optional
+        Forgetting factor ``lambda`` with ``0 < lambda <= 1``. Default is 0.98.
+    delta : float, optional
+        Regularization parameter used to initialize the inverse correlation
+        matrix as ``P(0) = I/delta`` (requires ``delta > 0``). Default is 1.0.
+    w_init : array_like of float, optional
+        Initial coefficient vector ``w(0)`` with shape ``(4,)``. If None,
+        initializes with zeros.
+    safe_eps : float, optional
+        Small positive constant used to guard denominators. Default is 1e-12.
 
     Notes
     -----
-    - Real-valued only: enforced by `ensure_real_signals`.
-    - Uses the unified base API via `validate_input`.
-    - Returns a priori error by default.
+    Real-valued only
+        This implementation is restricted to real-valued signals and coefficients
+        (``supports_complex=False``). The constraint is enforced via
+        ``@ensure_real_signals`` on :meth:`optimize`.
+
+    Bilinear regressor (as implemented)
+        This implementation uses a 4-component regressor:
+
+        .. math::
+            u[k] =
+            \\begin{bmatrix}
+                x[k] \\\\
+                d[k-1] \\\\
+                x[k]d[k-1] \\\\
+                x[k-1]d[k-1]
+            \\end{bmatrix}
+            \\in \\mathbb{R}^{4}.
+
+        The state ``x[k-1]`` and ``d[k-1]`` are taken from the previous iteration,
+        with ``x[-1] = 0`` and ``d[-1] = 0`` at initialization.
+
+    RLS recursion (a priori form)
+        With
+
+        .. math::
+            y[k] = w^T[k-1] u[k], \\qquad e[k] = d[k] - y[k],
+
+        the gain vector is
+
+        .. math::
+            g[k] = \\frac{P[k-1] u[k]}{\\lambda + u^T[k] P[k-1] u[k]},
+
+        the inverse correlation update is
+
+        .. math::
+            P[k] = \\frac{1}{\\lambda}\\left(P[k-1] - g[k] u^T[k] P[k-1]\\right),
+
+        and the coefficient update is
+
+        .. math::
+            w[k] = w[k-1] + g[k] e[k].
+
+    Implementation details
+        - The denominator ``lambda + u^T P u`` is guarded by ``safe_eps`` to avoid
+          numerical issues when very small.
+        - Coefficient history is recorded via the base class.
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 5th ed., Algorithm 11.3.
     """
 
     supports_complex: bool = False
@@ -62,18 +111,6 @@ class BilinearRLS(AdaptiveFilter):
         *,
         safe_eps: float = 1e-12,
     ) -> None:
-        """
-        Parameters
-        ----------
-        forgetting_factor:
-            Forgetting factor lambda (0 < lambda <= 1).
-        delta:
-            Regularization factor for initial P = I/delta (delta > 0).
-        w_init:
-            Optional initial coefficients (length 4). If None, zeros.
-        safe_eps:
-            Small epsilon used to guard denominators.
-        """
         n_coeffs = 4
         super().__init__(filter_order=n_coeffs - 1, w_init=w_init)
 
@@ -101,30 +138,34 @@ class BilinearRLS(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Run Bilinear RLS adaptation.
+        Executes the bilinear RLS adaptation loop over paired input/desired sequences.
 
         Parameters
         ----------
-        input_signal:
-            Input signal x[k] (real).
-        desired_signal:
-            Desired signal d[k] (real).
-        verbose:
-            If True, prints runtime.
-        return_internal_states:
-            If True, returns the last regressor and last gain in result.extra.
+        input_signal : array_like of float
+            Input sequence ``x[k]`` with shape ``(N,)`` (will be flattened).
+        desired_signal : array_like of float
+            Desired sequence ``d[k]`` with shape ``(N,)`` (will be flattened).
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, includes the last internal states in ``result.extra``:
+            ``"P_last"``, ``"last_regressor"`` (``u[k]``), and ``"last_gain"`` (``g[k]``).
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Filter output y[k] (a priori).
-            errors:
-                A priori error e[k] = d[k] - y[k].
-            coefficients:
-                History of coefficients stored in the base class (length 4).
-            error_type:
-                "a_priori".
+            Result object with fields:
+            - outputs : ndarray of float, shape ``(N,)``
+                Scalar a priori output sequence, ``y[k] = w^T[k-1] u[k]``.
+            - errors : ndarray of float, shape ``(N,)``
+                Scalar a priori error sequence, ``e[k] = d[k] - y[k]``.
+            - coefficients : ndarray of float
+                Coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"a_priori"``.
+            - extra : dict, optional
+                Present only if ``return_internal_states=True``.
         """
         t0 = perf_counter()
 

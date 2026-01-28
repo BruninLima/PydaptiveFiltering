@@ -26,28 +26,94 @@ ArrayLike = Union[np.ndarray, list]
 
 class TDomainLMS(AdaptiveFilter):
     """
-    Generic Transform-Domain LMS using a user-provided unitary transform matrix T.
+    Transform-Domain LMS with a user-provided transform matrix.
 
-    This is a transform-domain LMS variant (Algorithm 4.4 - Diniz). Given a transform
-    z_k = T x_k and transform-domain weights w_T, the recursion is:
+    Generic transform-domain LMS algorithm (Diniz, Alg. 4.4) parameterized by a
+    transform matrix ``T``. At each iteration, the time-domain regressor is
+    mapped to the transform domain, adaptation is performed with per-bin
+    normalization using a smoothed power estimate, and time-domain coefficients
+    are recovered from the transform-domain weights.
 
-        y[k] = w_T^H z_k
-        e[k] = d[k] - y[k]
-        P_z[k] = alpha * |z_k|^2 + (1-alpha) * P_z[k-1]
-        w_T <- w_T + mu * conj(e[k]) * z_k / (gamma + P_z[k])
-
-    For library consistency, this implementation also exposes time-domain weights:
-
-        w_time = T^H w_T
+    Parameters
+    ----------
+    filter_order : int
+        Adaptive FIR filter order ``M``. The number of coefficients is ``M + 1``.
+        The transform size must be ``(M + 1, M + 1)``.
+    gamma : float
+        Regularization factor ``gamma`` used in the per-bin normalization
+        denominator to avoid division by zero (or near-zero power).
+    alpha : float
+        Smoothing factor ``alpha`` for the transform-bin power estimate,
+        typically close to 1.
+    initial_power : float
+        Initial power estimate used to initialize all transform bins.
+    transform_matrix : array_like of complex
+        Transform matrix ``T`` with shape ``(M + 1, M + 1)``.
+        Typically unitary (``T^H T = I``).
+    step_size : float, optional
+        Adaptation step size ``mu``. Default is 1e-2.
+    w_init : array_like of complex, optional
+        Initial **time-domain** coefficient vector ``w(0)`` with shape ``(M + 1,)``.
+        If None, initializes with zeros.
+    assume_unitary : bool, optional
+        If True (default), maps transform-domain weights back to the time domain
+        using ``w = T^H w_T`` (fast). If False, uses a pseudo-inverse mapping
+        ``w = pinv(T)^H w_T`` (slower but works for non-unitary ``T``).
 
     Notes
     -----
-    - Complex-valued implementation (`supports_complex=True`).
-    - `OptimizationResult.coefficients` stores time-domain coefficient history (self.w_history).
-    - Transform-domain coefficient history is returned in `result.extra["coefficients_transform"]`
-      when requested.
-    - `transform_matrix` is expected to be unitary (T^H T = I). If it is not, the mapping
-      back to time domain is not the true inverse transform.
+    At iteration ``k``, form the time-domain regressor vector (newest sample first):
+
+    .. math::
+        x_k = [x[k], x[k-1], \\ldots, x[k-M]]^T \\in \\mathbb{C}^{M+1}.
+
+    Define the transform-domain regressor:
+
+    .. math::
+        z_k = T x_k.
+
+    Adaptation is performed in the transform domain with weights ``w_T[k]``.
+    The a priori output and error are
+
+    .. math::
+        y[k] = w_T^H[k] z_k, \\qquad e[k] = d[k] - y[k].
+
+    A smoothed per-bin power estimate ``p[k]`` is updated as
+
+    .. math::
+        p[k] = \\alpha\\,|z_k|^2 + (1-\\alpha)\\,p[k-1],
+
+    where ``|z_k|^2`` is taken element-wise.
+
+    The normalized transform-domain LMS update used here is
+
+    .. math::
+        w_T[k+1] = w_T[k] + \\mu\\, e^*[k] \\, \\frac{z_k}{\\gamma + p[k]},
+
+    with element-wise division.
+
+    Mapping back to time domain
+        If ``T`` is unitary (``T^H T = I``), then the inverse mapping is
+
+        .. math::
+            w[k] = T^H w_T[k].
+
+        If ``T`` is not unitary and ``assume_unitary=False``, this implementation
+        uses the pseudo-inverse mapping:
+
+        .. math::
+            w[k] = \\operatorname{pinv}(T)^H w_T[k].
+
+    Implementation details
+        - ``OptimizationResult.coefficients`` stores the **time-domain** coefficient
+          history recorded by the base class (``self.w`` after mapping back).
+        - If ``return_internal_states=True``, the transform-domain coefficient history
+          is returned in ``result.extra["coefficients_transform"]``.
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 5th ed., Algorithm 4.4.
     """
 
     supports_complex: bool = True
@@ -64,27 +130,6 @@ class TDomainLMS(AdaptiveFilter):
         *,
         assume_unitary: bool = True,
     ) -> None:
-        """
-        Parameters
-        ----------
-        filter_order:
-            FIR order M (number of taps is M+1). Transform size must be (M+1, M+1).
-        gamma:
-            Small positive constant to avoid division by (near) zero in each bin.
-        alpha:
-            Smoothing factor for power estimation (typically close to 1).
-        initial_power:
-            Initial power estimate for all transform bins.
-        transform_matrix:
-            Transform matrix T of shape (M+1, M+1). Typically unitary.
-        step_size:
-            Step-size (mu).
-        w_init:
-            Optional initial coefficients in time domain (length M+1). If None, zeros.
-        assume_unitary:
-            If True, uses w_time = T^H w_T. If False, uses a least-squares mapping
-            w_time = pinv(T)^H w_T (slower, but works for non-unitary transforms).
-        """
         super().__init__(filter_order=int(filter_order), w_init=w_init)
 
         self.gamma = float(gamma)
@@ -126,30 +171,43 @@ class TDomainLMS(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Run Transform-Domain LMS adaptation.
+        Executes the Transform-Domain LMS adaptation loop.
 
         Parameters
         ----------
-        input_signal:
-            Input signal x[k].
-        desired_signal:
-            Desired signal d[k].
-        verbose:
-            If True, prints runtime.
-        return_internal_states:
-            If True, returns transform-domain coefficient history and final power vector in result.extra.
+        input_signal : array_like of complex
+            Input sequence ``x[k]`` with shape ``(N,)`` (will be flattened).
+        desired_signal : array_like of complex
+            Desired sequence ``d[k]`` with shape ``(N,)`` (will be flattened).
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, includes transform-domain internal states in ``result.extra``:
+            ``"coefficients_transform"``, ``"power_vector_last"``,
+            ``"transform_matrix"``, and ``"assume_unitary"``.
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Filter output y[k] (a priori).
-            errors:
-                A priori error e[k] = d[k] - y[k].
-            coefficients:
-                Time-domain coefficient history stored in the base class.
-            error_type:
-                "a_priori".
+            Result object with fields:
+            - outputs : ndarray of complex, shape ``(N,)``
+                Scalar a priori output sequence, ``y[k] = w_T^H[k] z_k``.
+            - errors : ndarray of complex, shape ``(N,)``
+                Scalar a priori error sequence, ``e[k] = d[k] - y[k]``.
+            - coefficients : ndarray of complex
+                **Time-domain** coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"a_priori"``.
+            - extra : dict, optional
+                Present only if ``return_internal_states=True`` with:
+                - ``coefficients_transform`` : ndarray of complex
+                    Transform-domain coefficient history.
+                - ``power_vector_last`` : ndarray of float
+                    Final per-bin power estimate ``p[k]``.
+                - ``transform_matrix`` : ndarray of complex
+                    The transform matrix ``T`` used (shape ``(M+1, M+1)``).
+                - ``assume_unitary`` : bool
+                    Whether the inverse mapping assumed ``T`` is unitary.
         """
         t0 = perf_counter()
 

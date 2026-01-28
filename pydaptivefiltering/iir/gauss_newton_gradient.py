@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import numpy as np
 from time import time
-from typing import Any, Dict, Optional, Union
+from typing import Optional, Union
 
 from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate_input
 from pydaptivefiltering.utils.validation import ensure_real_signals
@@ -24,10 +24,85 @@ from pydaptivefiltering.utils.validation import ensure_real_signals
 
 class GaussNewtonGradient(AdaptiveFilter):
     """
-    Implements the gradient-based Gauss-Newton algorithm for real-valued IIR adaptive filters.
-    """
-    supports_complex: bool = False
+    Gradient-based Gauss-Newton (output-error) adaptation for IIR filters (real-valued).
 
+    This method targets the output-error (OE) criterion for IIR adaptive filtering,
+    i.e., it adapts the coefficients to minimize the squared error
+    :math:`e(k) = d(k) - y(k)` where :math:`y(k)` is produced by the *recursive*
+    (IIR) structure.
+
+    Compared to the classical Gauss-Newton approach, this implementation uses a
+    simplified *gradient* update (no matrix inversions) while still leveraging
+    filtered sensitivity signals to approximate how the output changes with
+    respect to pole/zero coefficients.
+
+    This is a modified version of Diniz (3rd ed., Alg. 10.1). The implementation
+    is restricted to **real-valued** signals (enforced by ``ensure_real_signals``).
+
+    Parameters
+    ----------
+    zeros_order : int
+        Numerator order ``N`` (number of zeros). The feedforward part has
+        ``N + 1`` coefficients.
+    poles_order : int
+        Denominator order ``M`` (number of poles). The feedback part has ``M``
+        coefficients.
+    step_size : float, optional
+        Adaptation step size ``mu``. Default is 1e-3.
+    w_init : array_like of float, optional
+        Optional initial coefficient vector. If provided, it should have shape
+        ``(M + N + 1,)`` following the parameter order described below. If None,
+        the implementation initializes with zeros (and ignores ``w_init``).
+
+    Notes
+    -----
+    Parameterization (as implemented)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    The coefficient vector is arranged as:
+
+    - ``w[:M]``: feedback (pole) coefficients (often denoted ``a``)
+    - ``w[M:]``: feedforward (zero) coefficients (often denoted ``b``)
+
+    Regressor and output (as implemented)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    With ``reg_x = [x(k), x(k-1), ..., x(k-N)]^T`` and an internal buffer of the
+    last ``M`` outputs, this implementation forms:
+
+    .. math::
+        \\varphi(k) = [y(k-1), \\ldots, y(k-M),\\; x(k), \\ldots, x(k-N)]^T,
+
+    and computes the (recursive) output used by the OE criterion as:
+
+    .. math::
+        y(k) = w^T(k)\\, \\varphi(k), \\qquad e(k) = d(k) - y(k).
+
+    Sensitivity-based gradient factor
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    The update direction is built from filtered sensitivity signals stored in
+    internal buffers (``x_line_buffer`` and ``y_line_buffer``). The code forms:
+
+    .. math::
+        \\phi(k) =
+        [\\underline{y}(k-1), \\ldots, \\underline{y}(k-M),\\;
+         -\\underline{x}(k), \\ldots, -\\underline{x}(k-N)]^T,
+
+    and applies the per-sample gradient step:
+
+    .. math::
+        w(k+1) = w(k) - \\mu\\, \\phi(k)\\, e(k).
+
+    Stability procedure
+    ~~~~~~~~~~~~~~~~~~~
+    After each update, the feedback coefficients ``w[:M]`` are stabilized by
+    reflecting poles outside the unit circle back inside (pole reflection).
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 3rd ed., Algorithm 10.1 (modified).
+    """
+
+    supports_complex: bool = False
     zeros_order: int
     poles_order: int
     step_size: float
@@ -43,24 +118,6 @@ class GaussNewtonGradient(AdaptiveFilter):
         step_size: float = 1e-3,
         w_init: Optional[Union[np.ndarray, list]] = None,
     ) -> None:
-        """
-        Parameters
-        ----------
-        zeros_order:
-            Numerator order (number of zeros).
-        poles_order:
-            Denominator order (number of poles).
-        step_size:
-            Gradient step size.
-        w_init:
-            Optional initial coefficient vector. If None, initializes to zeros.
-
-        Notes
-        -----
-        Coefficient vector convention:
-        - First `poles_order` entries correspond to denominator (pole) parameters.
-        - Remaining entries correspond to numerator (zero) parameters.
-        """
         super().__init__(filter_order=zeros_order + poles_order, w_init=w_init)
 
         self.zeros_order = int(zeros_order)
@@ -79,10 +136,12 @@ class GaussNewtonGradient(AdaptiveFilter):
     def _stability_procedure(self, a_coeffs: np.ndarray) -> np.ndarray:
         """
         Enforces IIR stability by reflecting poles outside the unit circle back inside.
+        Essential for preventing divergence during the gradient descent update.
         """
         poly_coeffs: np.ndarray = np.concatenate(([1.0], -a_coeffs))
         poles: np.ndarray = np.roots(poly_coeffs)
         mask: np.ndarray = np.abs(poles) > 1.0
+        
         if np.any(mask):
             poles[mask] = 1.0 / np.conj(poles[mask])
             new_poly: np.ndarray = np.poly(poles)
@@ -99,43 +158,45 @@ class GaussNewtonGradient(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Executes the gradient-based Gauss-Newton adaptation.
+        Executes the gradient-based Gauss-Newton (OE) adaptation loop.
 
         Parameters
         ----------
-        input_signal:
-            Input signal x[k].
-        desired_signal:
-            Desired signal d[k].
-        verbose:
-            If True, prints runtime.
-        return_internal_states:
-            If True, returns sensitivity signals in result.extra.
+        input_signal : array_like of float
+            Real-valued input sequence ``x[k]`` with shape ``(N,)``.
+        desired_signal : array_like of float
+            Real-valued desired/reference sequence ``d[k]`` with shape ``(N,)``.
+            Must have the same length as ``input_signal``.
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, includes sensitivity trajectories in ``result.extra``:
+            - ``"x_sensitivity"``: ndarray of float, shape ``(N,)`` with the
+              scalar sensitivity signal :math:`\\underline{x}(k)` produced by
+              the recursion in the code.
+            - ``"y_sensitivity"``: ndarray of float, shape ``(N,)`` with the
+              scalar sensitivity signal :math:`\\underline{y}(k)` produced by
+              the recursion in the code.
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Filter output y[k].
-            errors:
-                Output error e[k] = d[k] - y[k].
-            coefficients:
-                History of coefficients stored in the base class.
-            error_type:
-                "output_error".
-
-        Extra (when return_internal_states=True)
-        --------------------------------------
-        extra["x_sensitivity"]:
-            Sensitivity-related track (x_line), length N.
-        extra["y_sensitivity"]:
-            Sensitivity-related track (y_line), length N.
+            Result object with fields:
+            - outputs : ndarray of float, shape ``(N,)``
+                Output sequence ``y[k]`` produced by the current IIR structure.
+            - errors : ndarray of float, shape ``(N,)``
+                Output error sequence ``e[k] = d[k] - y[k]``.
+            - coefficients : ndarray of float
+                Coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"output_error"``.
+            - extra : dict
+                Empty unless ``return_internal_states=True``.
         """
         tic: float = time()
 
         x: np.ndarray = np.asarray(input_signal, dtype=np.float64)
         d: np.ndarray = np.asarray(desired_signal, dtype=np.float64)
-
         n_samples: int = int(x.size)
 
         outputs: np.ndarray = np.zeros(n_samples, dtype=np.float64)
@@ -153,12 +214,10 @@ class GaussNewtonGradient(AdaptiveFilter):
 
             y_k: float = float(np.dot(self.w, regressor))
             outputs[k] = y_k
-
             e_k: float = float(d[k] - y_k)
             errors[k] = e_k
 
             a_coeffs: np.ndarray = self.w[: self.poles_order]
-
             x_line_k: float = float(x[k] + np.dot(a_coeffs, self.x_line_buffer[: self.poles_order]))
 
             y_line_k: float = 0.0
@@ -169,9 +228,8 @@ class GaussNewtonGradient(AdaptiveFilter):
             self.x_line_buffer = np.concatenate(([x_line_k], self.x_line_buffer[:-1]))
             self.y_line_buffer = np.concatenate(([y_line_k], self.y_line_buffer[:-1]))
 
-            if return_internal_states and x_line_track is not None and y_line_track is not None:
-                x_line_track[k] = x_line_k
-                y_line_track[k] = y_line_k
+            if return_internal_states and x_line_track is not None:
+                x_line_track[k], y_line_track[k] = x_line_k, y_line_k
 
             phi: np.ndarray = np.concatenate(
                 (
@@ -192,12 +250,7 @@ class GaussNewtonGradient(AdaptiveFilter):
         if verbose:
             print(f"[GaussNewtonGradient] Completed in {runtime_s * 1000:.02f} ms")
 
-        extra: Optional[Dict[str, Any]] = None
-        if return_internal_states:
-            extra = {
-                "x_sensitivity": x_line_track,
-                "y_sensitivity": y_line_track,
-            }
+        extra = {"x_sensitivity": x_line_track, "y_sensitivity": y_line_track} if return_internal_states else {}
 
         return self._pack_results(
             outputs=outputs,

@@ -24,9 +24,88 @@ from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate
 
 class SMAffineProjection(AdaptiveFilter):
     """
-    Implements the Set-membership Affine-Projection (SM-AP) algorithm for complex-valued data.
+    Set-Membership Affine-Projection (SM-AP) adaptive filter (complex-valued).
 
-    This is a supervised algorithm, i.e., it requires both input_signal and desired_signal.
+    Supervised affine-projection algorithm with *set-membership* updating,
+    following Diniz (Alg. 6.2). Coefficients are updated **only** when the
+    magnitude of the most-recent a priori error exceeds a prescribed bound
+    ``gamma_bar``. When an update occurs, the algorithm enforces a target
+    a posteriori error vector (provided by ``gamma_bar_vector``).
+
+    Parameters
+    ----------
+    filter_order : int
+        Adaptive FIR filter order ``M``. The number of coefficients is ``M + 1``.
+    gamma_bar : float
+        Set-membership bound for the (most recent) a priori error magnitude.
+        An update is performed only if ``|e[k]| > gamma_bar``.
+    gamma_bar_vector : array_like of complex
+        Target a posteriori error vector with shape ``(L + 1,)`` (stored
+        internally as a column vector). This is algorithm-dependent and
+        corresponds to the desired post-update constraint in Alg. 6.2.
+    gamma : float
+        Regularization factor ``gamma`` used in the affine-projection normal
+        equations to improve numerical stability.
+    L : int
+        Data reuse factor (projection order). The affine-projection block size is
+        ``P = L + 1``.
+    w_init : array_like of complex, optional
+        Initial coefficient vector ``w(0)`` with shape ``(M + 1,)``. If None,
+        initializes with zeros.
+
+    Notes
+    -----
+    At iteration ``k``, form the regressor block matrix:
+
+    - ``X(k) ∈ C^{(M+1) x (L+1)}``, whose columns are the most recent regressor
+      vectors (newest in column 0).
+
+    The affine-projection output vector is:
+
+    .. math::
+        y_{ap}(k) = X^H(k) w(k) \\in \\mathbb{C}^{L+1}.
+
+    Let the stacked desired vector be:
+
+    .. math::
+        d_{ap}(k) \\in \\mathbb{C}^{L+1},
+
+    with newest sample at index 0. The a priori error vector is:
+
+    .. math::
+        e_{ap}(k) = d_{ap}(k) - y_{ap}(k).
+
+    This implementation uses the *most recent* scalar component as the reported
+    output and error:
+
+    .. math::
+        y[k] = y_{ap}(k)[0], \\qquad e[k] = e_{ap}(k)[0].
+
+    Set-membership update rule
+        Update **only if**:
+
+        .. math::
+            |e[k]| > \\bar{\\gamma}.
+
+        When updating, solve the regularized system:
+
+        .. math::
+            (X^H(k)X(k) + \\gamma I_{L+1})\\, s(k) =
+            \\bigl(e_{ap}(k) - \\bar{\\gamma}_{vec}^*(k)\\bigr),
+
+        and update the coefficients as:
+
+        .. math::
+            w(k+1) = w(k) + X(k)\\, s(k).
+
+        Here ``\\bar{\\gamma}_{vec}`` is provided by ``gamma_bar_vector`` (stored
+        as a column vector); complex conjugation is applied to match the internal
+        conjugate-domain formulation used in the implementation.
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 5th ed., Algorithm 6.2.
     """
     supports_complex: bool = True
 
@@ -45,22 +124,6 @@ class SMAffineProjection(AdaptiveFilter):
         L: int,
         w_init: Optional[Union[np.ndarray, list]] = None,
     ) -> None:
-        """
-        Parameters
-        ----------
-        filter_order:
-            FIR filter order (number of taps - 1). Number of coefficients is filter_order + 1.
-        gamma_bar:
-            Upper bound for the (a-priori) error magnitude used by set-membership criterion.
-        gamma_bar_vector:
-            Target a-posteriori error vector, size (L+1,). (Algorithm-dependent)
-        gamma:
-            Regularization factor for the AP correlation matrix.
-        L:
-            Reuse data factor / constraint length (projection order).
-        w_init:
-            Optional initial coefficient vector. If None, initializes to zeros.
-        """
         super().__init__(filter_order=filter_order, w_init=w_init)
 
         self.gamma_bar = float(gamma_bar)
@@ -89,42 +152,41 @@ class SMAffineProjection(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Executes the SM-AP adaptation.
+        Executes the SM-AP adaptation loop over paired input/desired sequences.
 
         Parameters
         ----------
-        input_signal:
-            Input signal x[k].
-        desired_signal:
-            Desired signal d[k].
-        verbose:
-            If True, prints runtime and update count.
-        return_internal_states:
-            If True, includes additional internal trajectories in result.extra.
+        input_signal : array_like of complex
+            Input sequence ``x[k]`` with shape ``(N,)`` (will be flattened).
+        desired_signal : array_like of complex
+            Desired sequence ``d[k]`` with shape ``(N,)`` (will be flattened).
+        verbose : bool, optional
+            If True, prints total runtime and update count after completion.
+        return_internal_states : bool, optional
+            If True, includes the full a priori AP error-vector trajectory in
+            ``result.extra`` as ``"errors_vector"`` with shape ``(N, L + 1)``.
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                A-priori output y[k].
-            errors:
-                A-priori error e[k] = d[k] - y[k] (first component of AP error vector).
-            coefficients:
-                History of coefficients stored in the base class.
-            error_type:
-                "a_priori".
-
-        Extra (always)
-        -------------
-        extra["n_updates"]:
-            Number of coefficient updates (iterations where |e(k)| > gamma_bar).
-        extra["update_mask"]:
-            Boolean array marking which iterations performed updates.
-
-        Extra (when return_internal_states=True)
-        --------------------------------------
-        extra["errors_vector"]:
-            Full AP a-priori error vector over time, shape (N, L+1).
+            Result object with fields:
+            - outputs : ndarray of complex, shape ``(N,)``
+                Scalar a priori output sequence, ``y[k] = y_{ap}(k)[0]``.
+            - errors : ndarray of complex, shape ``(N,)``
+                Scalar a priori error sequence, ``e[k] = e_{ap}(k)[0]``.
+            - coefficients : ndarray of complex
+                Coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"a_priori"``.
+            - extra : dict
+                Always present with:
+                - ``"n_updates"`` : int
+                    Number of coefficient updates (iterations where ``|e[k]| > gamma_bar``).
+                - ``"update_mask"`` : ndarray of bool, shape ``(N,)``
+                    Boolean mask indicating which iterations performed updates.
+                Additionally present only if ``return_internal_states=True``:
+                - ``"errors_vector"`` : ndarray of complex, shape ``(N, L + 1)``
+                    Full affine-projection a priori error vectors over time.
         """
         tic: float = time()
 

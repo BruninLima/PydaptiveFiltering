@@ -24,10 +24,90 @@ from pydaptivefiltering.utils.validation import ensure_real_signals
 
 class StabFastRLS(AdaptiveFilter):
     """
-    Implements the Stabilized Fast Transversal RLS algorithm for real-valued data.
+    Stabilized Fast Transversal RLS (SFT-RLS) algorithm (real-valued).
+
+    The Stabilized Fast Transversal RLS is a numerically robust variant of the
+    Fast Transversal RLS. It preserves the approximately :math:`O(M)` per-sample
+    complexity of transversal RLS recursions while improving stability in
+    finite-precision arithmetic by introducing feedback stabilization in the
+    backward prediction recursion (via ``kappa1``, ``kappa2``, ``kappa3``) and by
+    guarding divisions/energies through floors and optional clipping.
+
+    This implementation corresponds to Diniz (Alg. 8.2) and is restricted to
+    **real-valued** input/desired sequences (enforced by ``ensure_real_signals``).
+
+    Parameters
+    ----------
+    filter_order : int
+        FIR filter order ``M``. The number of coefficients is ``M + 1``.
+    forgetting_factor : float, optional
+        Exponential forgetting factor ``lambda``. Default is 0.99.
+    epsilon : float, optional
+        Positive initialization for the minimum prediction-error energies
+        (regularization), used as :math:`\\xi_{\\min}(0)` in the recursions.
+        Default is 1e-1.
+    kappa1, kappa2, kappa3 : float, optional
+        Stabilization constants used to form stabilized versions of the backward
+        prediction error. Defaults are 1.5, 2.5, and 1.0.
+    w_init : array_like of float, optional
+        Initial coefficient vector ``w(0)`` with shape ``(M + 1,)``. If None,
+        initializes with zeros.
+    denom_floor : float, optional
+        Safety floor used to clamp denominators before inversion to prevent
+        overflow/underflow and non-finite values during internal recursions.
+        If None, a small value based on machine ``tiny`` is used.
+    xi_floor : float, optional
+        Safety floor for prediction error energies (e.g., ``xi_min_f``,
+        ``xi_min_b``). If None, a small value based on machine ``tiny`` is used.
+    gamma_clip : float, optional
+        Optional clipping threshold applied to an intermediate conversion factor
+        to avoid extreme values (singularities). If None, no clipping is applied.
+
+    Notes
+    -----
+    Convention
+    ~~~~~~~~~~
+    At time ``k``, the internal regressor window has length ``M + 2`` (denoted
+    ``r`` in the code) and is formed in reverse order (most recent sample first).
+    The main adaptive filter uses the first ``M + 1`` entries of this window.
+
+    A priori vs a posteriori
+    ~~~~~~~~~~~~~~~~~~~~~~~~
+    The a priori output and error are:
+
+    .. math::
+        y(k) = w^T(k-1) x_k, \\qquad e(k) = d(k) - y(k),
+
+    and the a posteriori error returned by this implementation is:
+
+    .. math::
+        e_{\\text{post}}(k) = \\gamma(k)\\, e(k),
+
+    where :math:`\\gamma(k)` is produced by the stabilized transversal recursions.
+
+    Stabilization with kappa
+    ~~~~~~~~~~~~~~~~~~~~~~~~
+    The algorithm forms stabilized backward-error combinations (three variants)
+    from two backward-error lines in the recursion (named ``e_b_line1`` and
+    ``e_b_line2`` in the code). Conceptually:
+
+    .. math::
+        e_{b,i}(k) = \\kappa_i\\, e_{b,2}(k) + (1-\\kappa_i)\\, e_{b,1}(k),
+
+    for :math:`\\kappa_i \\in \\{\\kappa_1, \\kappa_2, \\kappa_3\\}`.
+
+    Numerical safeguards
+    ~~~~~~~~~~~~~~~~~~~~
+    Several denominators are clamped to ``denom_floor`` before inversion and
+    minimum energies are floored by ``xi_floor``. The counts of clamp events are
+    tracked and returned in ``extra["clamp_stats"]``.
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+    Implementation*, 5th ed., Algorithm 8.2.
     """
     supports_complex: bool = False
-
     lambda_: float
     epsilon: float
     kappa1: float
@@ -51,31 +131,10 @@ class StabFastRLS(AdaptiveFilter):
         xi_floor: Optional[float] = None,
         gamma_clip: Optional[float] = None,
     ) -> None:
-        """
-        Parameters
-        ----------
-        filter_order:
-            FIR filter order (number of taps - 1). Number of coefficients is filter_order + 1.
-        forgetting_factor:
-            Forgetting factor (lambda), typically close to 1.
-        epsilon:
-            Regularization / initial prediction error energy (positive).
-        kappa1, kappa2, kappa3:
-            Stabilization parameters from the stabilized FTRLS formulation.
-        w_init:
-            Optional initial coefficient vector. If None, initializes to zeros.
-        denom_floor:
-            Floor for denominators used in safe inversions. If None, a tiny float-based default is used.
-        xi_floor:
-            Floor for prediction error energies. If None, a tiny float-based default is used.
-        gamma_clip:
-            Optional clipping threshold for gamma (if provided).
-        """
         super().__init__(filter_order=filter_order, w_init=w_init)
 
         self.filter_order = int(filter_order)
         self.n_coeffs = int(self.filter_order + 1)
-
         self.lambda_ = float(forgetting_factor)
         self.epsilon = float(epsilon)
         self.kappa1 = float(kappa1)
@@ -111,46 +170,44 @@ class StabFastRLS(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Executes the Stabilized Fast Transversal RLS algorithm.
+        Executes the stabilized FT-RLS adaptation loop (real-valued).
 
         Parameters
         ----------
-        input_signal:
-            Input signal x[k].
-        desired_signal:
-            Desired signal d[k].
-        verbose:
-            If True, prints runtime.
-        return_internal_states:
-            If True, returns internal trajectories and clamping stats in result.extra.
+        input_signal : array_like of float
+            Real-valued input sequence ``x[k]`` with shape ``(N,)``.
+        desired_signal : array_like of float
+            Real-valued desired/reference sequence ``d[k]`` with shape ``(N,)``.
+            Must have the same length as ``input_signal``.
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, includes internal trajectories in ``result.extra``:
+            - ``"xi_min_f"``: ndarray of float, shape ``(N,)`` (forward minimum
+              prediction-error energy).
+            - ``"xi_min_b"``: ndarray of float, shape ``(N,)`` (backward minimum
+              prediction-error energy).
+            - ``"gamma"``: ndarray of float, shape ``(N,)`` (conversion factor).
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                A-priori output y[k].
-            errors:
-                A-priori error e[k] = d[k] - y[k].
-            coefficients:
-                History of coefficients stored in the base class.
-            error_type:
-                "a_priori".
-
-        Extra (always)
-        -------------
-        extra["errors_posteriori"]:
-            A-posteriori error sequence e_post[k] = gamma[k] * e[k].
-        extra["clamp_stats"]:
-            Dictionary with counters of how many times each denominator was clamped.
-
-        Extra (when return_internal_states=True)
-        --------------------------------------
-        extra["xi_min_f"]:
-            Forward prediction error energy trajectory.
-        extra["xi_min_b"]:
-            Backward prediction error energy trajectory.
-        extra["gamma"]:
-            Conversion factor trajectory.
+            Result object with fields:
+            - outputs : ndarray of float, shape ``(N,)``
+                A priori output sequence ``y[k]``.
+            - errors : ndarray of float, shape ``(N,)``
+                A priori error sequence ``e[k] = d[k] - y[k]``.
+            - coefficients : ndarray of float
+                Coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"a_priori"``.
+            - extra : dict
+                Always includes:
+                - ``"errors_posteriori"``: ndarray of float, shape ``(N,)`` with
+                  :math:`e_{\\text{post}}(k)`.
+                - ``"clamp_stats"``: dict with counters of denominator clamps.
+                Additionally includes ``"xi_min_f"``, ``"xi_min_b"``, and
+                ``"gamma"`` if ``return_internal_states=True``.
         """
         tic: float = time()
 
@@ -213,7 +270,6 @@ class StabFastRLS(AdaptiveFilter):
                 ),
                 self.xi_floor,
             )
-
             w_f += phi_hat_n * e_f_post
 
             e_b_line1: float = float(self.lambda_ * xi_min_b * phi_hat_np1[-1])
@@ -243,39 +299,26 @@ class StabFastRLS(AdaptiveFilter):
                 "inv_g_n3",
             )
 
-            if return_internal_states and xi_f_track is not None and xi_b_track is not None and gamma_track is not None:
-                xi_f_track[k] = xi_min_f
-                xi_b_track[k] = xi_min_b
-                gamma_track[k] = gamma_n_3
-
             y_k: float = float(np.dot(self.w, r[:-1]))
             outputs[k] = y_k
-
             e_k: float = float(d[k] - y_k)
             errors[k] = e_k
-
             e_post_k: float = float(e_k * gamma_n_3)
             errors_post[k] = e_post_k
 
             self.w += phi_hat_n * e_post_k
             self._record_history()
 
+            if return_internal_states and xi_f_track is not None:
+                xi_f_track[k], xi_b_track[k], gamma_track[k] = xi_min_f, xi_min_b, gamma_n_3
+
         runtime_s: float = float(time() - tic)
         if verbose:
             print(f"[StabFastRLS] Completed in {runtime_s * 1000:.02f} ms")
 
-        extra: Dict[str, Any] = {
-            "errors_posteriori": errors_post,
-            "clamp_stats": clamp_counter,
-        }
+        extra: Dict[str, Any] = {"errors_posteriori": errors_post, "clamp_stats": clamp_counter}
         if return_internal_states:
-            extra.update(
-                {
-                    "xi_min_f": xi_f_track,
-                    "xi_min_b": xi_b_track,
-                    "gamma": gamma_track,
-                }
-            )
+            extra.update({"xi_min_f": xi_f_track, "xi_min_b": xi_b_track, "gamma": gamma_track})
 
         return self._pack_results(
             outputs=outputs,

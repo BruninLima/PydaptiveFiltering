@@ -24,13 +24,70 @@ from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult
 
 class AffineProjectionCM(AdaptiveFilter):
     """
-    Implements the Affine-Projection Constant-Modulus (AP-CM) algorithm
-    for blind adaptive filtering.
+    Complex Affine-Projection Constant-Modulus (AP-CM) adaptive filter.
+
+    Blind affine-projection algorithm based on the constant-modulus criterion,
+    following Diniz (Alg. 13.4). This implementation uses a *unit-modulus*
+    reference (i.e., target magnitude equal to 1) obtained by normalizing the
+    affine-projection output vector.
+
+    Parameters
+    ----------
+    filter_order : int, optional
+        Adaptive FIR filter order ``M``. The number of coefficients is ``M + 1``.
+        Default is 5.
+    step_size : float, optional
+        Adaptation step size ``mu``. Default is 0.1.
+    memory_length : int, optional
+        Reuse factor ``L`` (number of past regressors reused). The affine-
+        projection block size is therefore ``P = L + 1`` columns. Default is 2.
+    gamma : float, optional
+        Levenberg-Marquardt regularization factor ``gamma`` used in the
+        ``(L + 1) x (L + 1)`` normal-equation system for numerical stability.
+        Default is 1e-6.
+    w_init : array_like of complex, optional
+        Initial coefficient vector ``w(0)`` with shape ``(M + 1,)``. If None,
+        initializes with zeros.
 
     Notes
     -----
-    - This is a BLIND algorithm: it does not require desired_signal.
-    - We still accept `desired_signal=None` in `optimize` to keep a unified API.
+    At iteration ``k``, form the regressor block matrix:
+
+    - ``X(k) ∈ C^{(M+1) x (L+1)}``, whose columns are the most recent regressor
+    vectors (newest in column 0).
+
+    The affine-projection output vector is:
+
+    .. math::
+        y_{ap}(k) = X^H(k) w(k)  \\in \\mathbb{C}^{L+1}.
+
+    This implementation uses a *unit-circle projection* (normalization) as the
+    constant-modulus "reference":
+
+    .. math::
+        d_{ap}(k) = \\frac{y_{ap}(k)}{|y_{ap}(k)|},
+
+    applied element-wise, with a small threshold to avoid division by zero.
+
+    The error vector is:
+
+    .. math::
+        e_{ap}(k) = d_{ap}(k) - y_{ap}(k).
+
+    The update direction ``g(k)`` is obtained by solving the regularized system:
+
+    .. math::
+        (X^H(k) X(k) + \\gamma I_{L+1})\\, g(k) = e_{ap}(k),
+
+    and the coefficient update is:
+
+    .. math::
+        w(k+1) = w(k) + \\mu X(k) g(k).
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+    Implementation*, 5th ed., Algorithm 13.4.
     """
     supports_complex: bool = True
     step_size: float
@@ -60,37 +117,36 @@ class AffineProjectionCM(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Executes the Affine-Projection Constant-Modulus (AP-CM) algorithm.
+        Executes the AP-CM adaptation loop over an input sequence.
 
         Parameters
         ----------
-        input_signal:
-            The input signal to be filtered.
-        desired_signal:
-            Ignored (kept only for API standardization).
-        verbose:
-            If True, prints runtime.
-        return_internal_states:
-            If True, returns selected internal values in `extra`.
+        input_signal : array_like of complex
+            Input sequence ``x[k]`` with shape ``(N,)`` (will be flattened).
+        desired_signal : None, optional
+            Ignored. This is a blind algorithm: the reference is derived from
+            the output via unit-modulus normalization.
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, includes the last internal states in ``result.extra``:
+            ``"last_update_factor"`` (``g(k)``) and ``"last_regressor_matrix"``
+            (``X(k)``).
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                y[k] = first component of the projection output vector.
-            errors:
-                e[k] = first component of the CM error vector.
-            coefficients:
-                coefficient history stored in the base class.
-            error_type:
-                set to "blind_constant_modulus".
-
-        Extra (when return_internal_states=True)
-        --------------------------------------
-        extra["last_update_factor"]:
-            Solution of the (regularized) linear system at the last iteration.
-        extra["last_regressor_matrix"]:
-            Final regressor matrix (shape n_coeffs x (memory_length+1)).
+            Result object with fields:
+            - outputs : ndarray of complex, shape ``(N,)``
+                Scalar output sequence, ``y[k] = y_ap(k)[0]``.
+            - errors : ndarray of complex, shape ``(N,)``
+                Scalar CM error sequence, ``e[k] = e_ap(k)[0]``.
+            - coefficients : ndarray of complex
+                Coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"blind_constant_modulus"``.
+            - extra : dict, optional
+                Present only if ``return_internal_states=True``.
         """
         tic: float = time()
 

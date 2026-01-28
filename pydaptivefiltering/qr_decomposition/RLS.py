@@ -33,32 +33,68 @@ ArrayLike = Union[np.ndarray, list]
 
 class QRRLS(AdaptiveFilter):
     """
-    QR-RLS (real-valued) using Givens rotations.
+    QR-RLS adaptive filter using Givens rotations (real-valued).
 
-    Implements Algorithm 9.1 (Diniz, 3rd ed.) in a QR-decomposition framework.
-    This version mirrors the provided MATLAB routine (QR_RLS.m) and keeps the
-    same internal state variables.
+    QR-decomposition RLS implementation based on Diniz (Alg. 9.1, 3rd ed.),
+    following the reference MATLAB routine ``QR_RLS.m``. This variant maintains
+    internal state variables closely matching the MATLAB code and applies
+    sequential real Givens rotations to a stacked system.
 
-    Key internal state (MATLAB naming)
-    ---------------------------------
-    ULineMatrix:
-        Square matrix updated by sequential Givens rotations (size n_coeffs x n_coeffs).
-    dLine_q2:
-        Transformed desired vector (size n_coeffs,).
-    gamma:
-        Likelihood scalar accumulated as a product of cosines in the Givens steps.
+    Parameters
+    ----------
+    filter_order : int
+        Adaptive FIR filter order ``M``. The number of coefficients is ``M+1``.
+    lamb : float, optional
+        Forgetting factor ``lambda`` with ``0 < lambda <= 1``. Default is 0.99.
+    w_init : array_like of float, optional
+        Initial coefficient vector ``w(0)`` with shape ``(M+1,)``. If None,
+        initializes with zeros.
+    denom_floor : float, optional
+        Small positive floor used to avoid division by (near) zero in scalar
+        denominators. Default is 1e-18.
 
     Notes
     -----
-    - Real-valued only (supports_complex=False).
-    - The returned `errors` correspond to the MATLAB `errorVector`:
-        e[k] = d_line * gamma
-      and the output is:
-        y[k] = d[k] - e[k]
-      Therefore we label `error_type="a_posteriori"` to match the MATLAB-style
-      “post-rotation” error quantity.
-    """
+    Real-valued only
+        This implementation is restricted to real-valued signals and coefficients
+        (``supports_complex=False``). The constraint is enforced via
+        ``@ensure_real_signals`` on :meth:`optimize`.
 
+    State variables (MATLAB naming)
+        This implementation keeps the same key state variables as ``QR_RLS.m``:
+
+        - ``ULineMatrix`` : ndarray, shape ``(M+1, M+1)``
+          Upper-triangular-like matrix updated by sequential Givens rotations.
+        - ``dLine_q2`` : ndarray, shape ``(M+1,)``
+          Transformed desired vector accumulated through the same rotations.
+        - ``gamma`` : float
+          Scalar accumulated as the product of Givens cosines in each iteration.
+
+    Givens-rotation structure (high level)
+        At each iteration, the algorithm applies Givens rotations to eliminate
+        components of the stacked vector ``[regressor; ULineMatrix]`` while
+        applying the same rotations to ``[d_line; dLine_q2]``. The resulting
+        system is then solved by back-substitution to obtain the updated weights.
+
+    Output/error conventions (MATLAB-style)
+        The returned ``errors`` correspond to the MATLAB ``errorVector``:
+
+        .. math::
+            e[k] = d_{line}[k] \\cdot \\gamma[k],
+
+        and the reported output is computed as:
+
+        .. math::
+            y[k] = d[k] - e[k].
+
+        Since this error is formed after the rotation steps (i.e., after the
+        QR-update stage), the method sets ``error_type="a_posteriori"``.
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 3rd ed., Algorithm 9.1 (QR-RLS).
+    """
     supports_complex: bool = False
 
     lamb: float
@@ -75,18 +111,6 @@ class QRRLS(AdaptiveFilter):
         *,
         denom_floor: float = 1e-18,
     ) -> None:
-        """
-        Parameters
-        ----------
-        filter_order:
-            FIR order M (number of coefficients is M+1).
-        lamb:
-            Forgetting factor λ, must satisfy 0 < λ <= 1.
-        w_init:
-            Optional initial coefficients (length M+1). If None, zeros are used.
-        denom_floor:
-            Small floor used to avoid division by (near) zero in scalar denominators.
-        """
         super().__init__(filter_order=int(filter_order), w_init=w_init)
 
         self.lamb = float(lamb)
@@ -121,21 +145,35 @@ class QRRLS(AdaptiveFilter):
         sin_t: float,
     ) -> tuple[np.ndarray, np.ndarray]:
         """
-        Apply a 2x2 real Givens rotation:
+        Applies a real 2x2 Givens rotation to a pair of stacked rows.
 
-            [ cos  -sin ] [row0] = [row0']
-            [ sin   cos ] [row1]   [row1']
+        The rotation is:
+
+        .. math::
+            \\begin{bmatrix}
+                \\cos\\theta & -\\sin\\theta \\\\
+                \\sin\\theta &  \\cos\\theta
+            \\end{bmatrix}
+            \\begin{bmatrix}
+                \\mathrm{row0} \\\\
+                \\mathrm{row1}
+            \\end{bmatrix}
+            =
+            \\begin{bmatrix}
+                \\mathrm{row0}' \\\\
+                \\mathrm{row1}'
+            \\end{bmatrix}.
 
         Parameters
         ----------
-        row0, row1:
-            1-D arrays (same length) representing stacked rows.
-        cos_t, sin_t:
+        row0, row1 : ndarray of float
+            1-D arrays with the same length (representing two rows to be rotated).
+        cos_t, sin_t : float
             Givens rotation cosine and sine.
 
         Returns
         -------
-        (row0_rot, row1_rot):
+        (row0_rot, row1_rot) : tuple of ndarray
             Rotated rows.
         """
         new0 = cos_t * row0 - sin_t * row1
@@ -152,41 +190,47 @@ class QRRLS(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Run QR-RLS adaptation over (x[k], d[k]) using the MATLAB-style recursion.
+        Executes the QR-RLS adaptation loop (MATLAB-style recursion).
 
         Parameters
         ----------
-        input_signal:
-            Input sequence x[k] (real), shape (N,).
-        desired_signal:
-            Desired sequence d[k] (real), shape (N,).
-        verbose:
-            If True, prints runtime.
-        return_internal_states:
-            If True, includes selected internal state in `result.extra`.
+        input_signal : array_like of float
+            Real-valued input sequence ``x[k]`` with shape ``(N,)`` (will be flattened).
+        desired_signal : array_like of float
+            Real-valued desired sequence ``d[k]`` with shape ``(N,)`` (will be flattened).
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, includes the last internal states in ``result.extra``:
+            ``"ULineMatrix_last"``, ``"dLine_q2_last"``, ``"gamma_last"``,
+            and ``"d_line_last"``.
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Estimated output y[k] (real).
-            errors:
-                MATLAB-style error quantity e[k] = d_line * gamma (real).
-            coefficients:
-                History of coefficients stored in the base class.
-            error_type:
-                "a_posteriori".
-
-        Extra (when return_internal_states=True)
-        --------------------------------------
-        extra["ULineMatrix_last"]:
-            Final ULineMatrix.
-        extra["dLine_q2_last"]:
-            Final dLine_q2.
-        extra["gamma_last"]:
-            gamma at the last iteration.
-        extra["d_line_last"]:
-            d_line at the last iteration.
+            Result object with fields:
+            - outputs : ndarray of float, shape ``(N,)``
+                Scalar output sequence as computed by the MATLAB-style routine:
+                ``y[k] = d[k] - e[k]``.
+            - errors : ndarray of float, shape ``(N,)``
+                MATLAB-style a posteriori error quantity:
+                ``e[k] = d_line[k] * gamma[k]``.
+            - coefficients : ndarray of float
+                Coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"a_posteriori"``.
+            - extra : dict, optional
+                Present only if ``return_internal_states=True`` with:
+                - ``ULineMatrix_last`` : ndarray
+                    Final ``ULineMatrix``.
+                - ``dLine_q2_last`` : ndarray
+                    Final ``dLine_q2``.
+                - ``gamma_last`` : float
+                    ``gamma`` at the last iteration.
+                - ``d_line_last`` : float
+                    ``d_line`` at the last iteration.
+                - ``forgetting_factor`` : float
+                    The forgetting factor ``lambda`` used.
         """
         t0 = perf_counter()
 

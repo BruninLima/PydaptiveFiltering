@@ -25,19 +25,84 @@ ArrayLike = Union[np.ndarray, list]
 
 class NormalizedLRLS(AdaptiveFilter):
     """
-    Normalized Lattice RLS (NLRLS) algorithm based on a posteriori error.
+    Normalized Lattice RLS (NLRLS) based on a posteriori error, complex-valued.
 
-    Implements Algorithm 7.6 (Diniz). The goal of the normalized lattice recursion
-    is improved numerical robustness: internal normalized variables (errors and
-    reflection-like coefficients) are designed to be magnitude-bounded by 1.
+    Implements Diniz (Algorithm 7.6). This variant introduces *normalized*
+    internal variables so that key quantities (normalized forward/backward errors
+    and reflection-like coefficients) are designed to be magnitude-bounded by 1,
+    improving numerical robustness.
+
+    The algorithm has two coupled stages:
+
+    1) **Prediction stage (lattice, order M)**:
+       Computes normalized forward/backward a posteriori errors (``bar_f``, ``bar_b``)
+       and updates normalized reflection-like coefficients ``rho``.
+
+    2) **Estimation stage (normalized ladder, length M+1)**:
+       Updates normalized coefficients ``rho_v`` and produces a normalized
+       a posteriori error ``bar_e``. The returned error is the *de-normalized*
+       error ``e = bar_e * xi_half``.
 
     Library conventions
     -------------------
-    - Complex-valued implementation (supports_complex=True).
-    - For API consistency, we expose rho_v (length M+1) as the "coefficient vector":
-        * self.w mirrors self.rho_v
-        * self.w_history stores rho_v trajectories
-        * optimize returns OptimizationResult with coefficients stacked from w_history
+    - Complex-valued implementation (``supports_complex=True``).
+    - The exposed coefficient vector is ``rho_v`` (length ``M+1``).
+      For compatibility with :class:`~pydaptivefiltering.base.AdaptiveFilter`:
+        * ``self.w`` mirrors ``self.rho_v`` at each iteration.
+        * history recorded by ``_record_history()`` corresponds to ``rho_v``.
+
+    Parameters
+    ----------
+    filter_order : int
+        Lattice order ``M`` (number of sections). The estimation stage uses
+        ``M+1`` coefficients.
+    lambda_factor : float, optional
+        Forgetting factor ``lambda`` used in the exponentially weighted updates.
+        Default is 0.99.
+    epsilon : float, optional
+        Small positive constant used for regularization in normalizations,
+        magnitude clipping, and denominator protection. Default is 1e-6.
+    w_init : array_like of complex, optional
+        Optional initialization for ``rho_v`` with length ``M+1``.
+        If None, initializes with zeros.
+    denom_floor : float, optional
+        Extra floor for denominators and sqrt protections. Default is 1e-12.
+
+    Notes
+    -----
+    Normalized variables
+    ~~~~~~~~~~~~~~~~~~~~
+    The implementation uses the following normalized quantities:
+
+    - ``xi_half``: square-root energy tracker (scalar). It normalizes the input/output
+      so that normalized errors stay bounded.
+    - ``bar_f``: normalized forward error for the current section.
+    - ``bar_b_prev`` / ``bar_b_curr``: normalized backward error vectors, shape ``(M+1,)``.
+    - ``bar_e``: normalized a posteriori error in the estimation stage.
+    - ``rho``: normalized reflection-like coefficients for the lattice stage, shape ``(M,)``.
+    - ``rho_v``: normalized coefficients for the estimation stage, shape ``(M+1,)``.
+
+    Magnitude bounding
+    ~~~~~~~~~~~~~~~~~~
+    Several variables are clipped to satisfy ``|z| <= 1``. The terms
+    ``sqrt(1 - |z|^2)`` act like cosine factors in the normalized recursions and
+    are safeguarded with ``_safe_sqrt`` to avoid negative arguments caused by
+    round-off.
+
+    Output and error returned
+    ~~~~~~~~~~~~~~~~~~~~~~~~~
+    The filter returns the de-normalized a posteriori error:
+
+    ``errors[k] = bar_e[k] * xi_half[k]``
+
+    and the output estimate:
+
+    ``outputs[k] = d[k] - errors[k]``.
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, Algorithm 7.6.
     """
 
     supports_complex: bool = True
@@ -106,28 +171,42 @@ class NormalizedLRLS(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Runs the Normalized LRLS adaptation.
+        Run the Normalized LRLS (NLRLS) recursion over paired sequences ``x[k]`` and ``d[k]``.
+
+        Parameters
+        ----------
+        input_signal : array_like of complex
+            Input sequence ``x[k]`` with shape ``(N,)``.
+        desired_signal : array_like of complex
+            Desired/reference sequence ``d[k]`` with shape ``(N,)``.
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, returns selected *final* internal states in ``result.extra``
+            (not full trajectories).
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Estimated output y[k].
-            errors:
-                A posteriori error e[k].
-            coefficients:
-                History of rho_v (stacked from w_history).
-            error_type:
-                "a_posteriori".
+            outputs : ndarray of complex, shape ``(N,)``
+                Estimated output sequence ``y[k] = d[k] - e_post[k]``.
+            errors : ndarray of complex, shape ``(N,)``
+                De-normalized a posteriori error ``e_post[k] = bar_e[k] * xi_half[k]``.
+            coefficients : ndarray
+                History of ``rho_v`` (mirrors ``self.rho_v`` via ``self.w``).
+            error_type : str
+                Set to ``"a_posteriori"``.
+            extra : dict, optional
+                Present only if ``return_internal_states=True`` (see below).
 
         Extra (when return_internal_states=True)
         --------------------------------------
-        extra["rho"]:
-            Final rho vector (length M).
-        extra["rho_v"]:
-            Final rho_v vector (length M+1).
-        extra["xi_half"]:
-            Final xi_half scalar.
+        rho : ndarray of complex, shape ``(M,)``
+            Final normalized lattice reflection-like coefficients.
+        rho_v : ndarray of complex, shape ``(M+1,)``
+            Final normalized estimation-stage coefficients.
+        xi_half : float
+            Final square-root energy tracker used for normalization.
         """
         t0 = perf_counter()
 

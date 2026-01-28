@@ -1,4 +1,4 @@
-# blind.kalman.py
+# kalman.kalman.py
 #
 #       Implements the Kalman Filter algorithm for COMPLEX or REAL valued data.
 #       (Algorithm 17.1 - book: Adaptive Filtering: Algorithms and Practical
@@ -111,52 +111,78 @@ def _mat_at_k(mat_or_seq: Union[np.ndarray, Sequence[np.ndarray]], k: int) -> np
 
 
 class Kalman(AdaptiveFilter):
-    """Kalman Filter for state estimation with complex or real-valued data.
+    """
+    Kalman filter for state estimation (real or complex-valued).
 
-    State-space model (standard form)
-    ---------------------------------
-    x(k) = A(k-1) x(k-1) + B(k) n(k)
-    y(k) = C^T(k) x(k)   + n1(k)
+    Implements the discrete-time Kalman filter recursion for linear state-space
+    models with additive process and measurement noise. Matrices may be constant
+    (single ``ndarray``) or time-varying (a sequence of arrays indexed by ``k``).
 
-    with covariances:
-    E[n(k)  n(k)^H]  = Rn(k)
-    E[n1(k) n1(k)^H] = Rn1(k)
+    The model used is:
+
+    .. math::
+        x(k) = A(k-1) x(k-1) + B(k) n(k),
+
+    .. math::
+        y(k) = C^T(k) x(k) + n_1(k),
+
+    where :math:`n(k)` is the process noise with covariance :math:`R_n(k)` and
+    :math:`n_1(k)` is the measurement noise with covariance :math:`R_{n1}(k)`.
 
     Notes
     -----
-    - This class integrates the Kalman recursion into the library-wide
-      `AdaptiveFilter`/`OptimizationResult` interface.
-    - `self.w` stores the current state estimate x(k|k) as a 1-D vector (n,).
-    - In this implementation, `OptimizationResult.coefficients` stores the
-      covariance history Re(k|k) with shape (N, n, n). To achieve this using
-      the standardized `_pack_results`, we store Re(k|k) snapshots in
-      `self.w_history` (overriding the typical meaning of w_history for this
-      non-FIR algorithm).
+    API integration
+    ~~~~~~~~~~~~~~~
+    This class inherits from :class:`~pydaptivefiltering.base.AdaptiveFilter` to
+    share a common interface. Here, the "weights" are the state estimate:
+    ``self.w`` stores the current state vector (flattened), and
+    ``self.w_history`` stores the covariance matrices over time.
+
+    Time-varying matrices
+    ~~~~~~~~~~~~~~~~~~~~~
+    Any of ``A``, ``C_T``, ``B``, ``Rn``, ``Rn1`` may be provided either as:
+    - a constant ``ndarray``, used for all k; or
+    - a sequence (list/tuple) of ``ndarray``, where element ``k`` is used at time k.
+
+    Dimensions
+    ~~~~~~~~~~
+    Let ``n`` be the state dimension, ``p`` the measurement dimension, and ``q``
+    the process-noise dimension. Then:
+
+    - ``A(k)`` has shape ``(n, n)``
+    - ``C_T(k)`` has shape ``(p, n)``  (note: this is :math:`C^T`)
+    - ``B(k)`` has shape ``(n, q)``
+    - ``Rn(k)`` has shape ``(q, q)``
+    - ``Rn1(k)`` has shape ``(p, p)``
+
+    If ``B`` is not provided, the implementation uses ``B = I`` (thus ``q = n``),
+    and expects ``Rn`` to be shape ``(n, n)``.
 
     Parameters
     ----------
-    A:
-        State transition matrix A(k-1), shape (n, n), or a sequence over k.
-    C_T:
-        Measurement matrix C^T(k), shape (p, n), or a sequence over k.
-    Rn:
-        Process noise covariance Rn(k), shape (q, q), or a sequence over k.
-    Rn1:
-        Measurement noise covariance Rn1(k), shape (p, p), or a sequence over k.
-    B:
-        Process noise input matrix B(k), shape (n, q). If None, identity is used
-        (q = n).
-    x_init:
-        Initial state estimate x(0|0), shape (n,), (n,1) or (1,n). If None, zeros.
-    Re_init:
-        Initial error covariance Re(0|0), shape (n, n). If None, identity.
+    A : ndarray or Sequence[ndarray]
+        State transition matrix :math:`A(k-1)` with shape ``(n, n)``.
+    C_T : ndarray or Sequence[ndarray]
+        Measurement matrix :math:`C^T(k)` with shape ``(p, n)``.
+    Rn : ndarray or Sequence[ndarray]
+        Process noise covariance :math:`R_n(k)` with shape ``(q, q)``.
+    Rn1 : ndarray or Sequence[ndarray]
+        Measurement noise covariance :math:`R_{n1}(k)` with shape ``(p, p)``.
+    B : ndarray or Sequence[ndarray], optional
+        Process noise input matrix :math:`B(k)` with shape ``(n, q)``.
+        If None, uses identity.
+    x_init : ndarray, optional
+        Initial state estimate :math:`x(0|0)`. Accepts shapes compatible with
+        ``(n,)``, ``(n,1)``, or ``(1,n)``. If None, initializes with zeros.
+    Re_init : ndarray, optional
+        Initial estimation error covariance :math:`R_e(0|0)` with shape ``(n, n)``.
+        If None, initializes with identity.
 
-    Raises
-    ------
-    ValueError
-        If the initial shapes are inconsistent.
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, Algorithm 17.1.
     """
-
     supports_complex: bool = True
 
     A: Union[np.ndarray, Sequence[np.ndarray]]
@@ -257,49 +283,52 @@ class Kalman(AdaptiveFilter):
         return_internal_states: bool = False,
         safe_eps: float = 1e-12,
     ) -> OptimizationResult:
-        """Execute the Kalman recursion for a sequence of measurements y(k).
+        """
+        Executes the Kalman recursion for a sequence of measurements ``y[k]``.
 
         Parameters
         ----------
-        input_signal:
-            Measurement sequence y(k). Accepted shapes:
-            - (N,)        for scalar measurements
-            - (N,p)       for p-dimensional measurements
-            - (N,p,1)     also accepted (will be squeezed to (N,p))
-        desired_signal:
+        input_signal : array_like
+            Measurement sequence ``y[k]``. Accepted shapes:
+            - ``(N,)``       for scalar measurements
+            - ``(N, p)``     for p-dimensional measurements
+            - ``(N, p, 1)``  also accepted (squeezed to ``(N, p)``)
+        desired_signal : array_like, optional
             Ignored (kept only for API standardization).
-        verbose:
-            If True, prints runtime.
-        return_internal_states:
-            If True, returns selected internal values in `result.extra`.
-        safe_eps:
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, returns selected internal values in ``result.extra``.
+        safe_eps : float, optional
             Small positive value used to regularize the innovation covariance
-            matrix when a linear solve fails (numerical stabilization).
+            matrix if a linear solve fails (numerical stabilization).
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                State estimates x(k|k), shape (N, n_states).
-            errors:
-                Innovations e(k) = y(k) - C^T(k) x(k|k-1), shape (N, n_meas).
-            coefficients:
-                Covariance history Re(k|k), shape (N, n_states, n_states).
-            error_type:
-                "innovation".
+            outputs : ndarray
+                State estimates ``x(k|k)``, shape ``(N, n)``.
+            errors : ndarray
+                Innovations ``v(k) = y(k) - C^T(k) x(k|k-1)``, shape ``(N, p)``.
+            coefficients : ndarray
+                Covariance history ``R_e(k|k)``, shape ``(N, n, n)``.
+            error_type : str
+                ``"innovation"``.
+            extra : dict, optional
+                Present only if ``return_internal_states=True``. See below.
 
         Extra (when return_internal_states=True)
         --------------------------------------
-        extra["kalman_gain_last"]:
-            Kalman gain K at the last iteration.
-        extra["predicted_state_last"]:
-            Predicted state x(k|k-1) at the last iteration (shape (n,)).
-        extra["predicted_cov_last"]:
-            Predicted covariance Re(k|k-1) at the last iteration.
-        extra["innovation_cov_last"]:
-            Innovation covariance S at the last iteration.
-        extra["safe_eps"]:
-            The stabilization epsilon used.
+        kalman_gain_last : ndarray
+            Kalman gain ``K`` at the last iteration, shape ``(n, p)``.
+        predicted_state_last : ndarray
+            Predicted state ``x(k|k-1)`` at the last iteration, shape ``(n,)``.
+        predicted_cov_last : ndarray
+            Predicted covariance ``R_e(k|k-1)`` at the last iteration, shape ``(n, n)``.
+        innovation_cov_last : ndarray
+            Innovation covariance ``S`` at the last iteration, shape ``(p, p)``.
+        safe_eps : float
+            The stabilization epsilon used when regularizing ``S``.
         """
         t0 = perf_counter()
 

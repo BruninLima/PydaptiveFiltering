@@ -27,39 +27,62 @@ ArrayLike = Union[np.ndarray, list]
 
 class SignError(AdaptiveFilter):
     """
-    Sign-Error LMS (real-valued).
+    Sign-Error LMS adaptive filter (real-valued).
 
-    This is a sign-error LMS variant that replaces the error term by its sign:
+    Low-complexity LMS variant that replaces the instantaneous error by its sign.
+    This reduces multiplications and can improve robustness under impulsive noise
+    in some scenarios, at the expense of slower convergence and/or larger
+    steady-state misadjustment.
 
-        y[k] = w^T x_k
-        e[k] = d[k] - y[k]
-        w <- w + mu * sign(e[k]) * x_k
+    Parameters
+    ----------
+    filter_order : int
+        Adaptive FIR filter order ``M``. The number of coefficients is ``M + 1``.
+    step_size : float, optional
+        Adaptation step size ``mu``. Default is 1e-2.
+    w_init : array_like of float, optional
+        Initial coefficient vector ``w(0)`` with shape ``(M + 1,)``. If None,
+        initializes with zeros.
 
     Notes
     -----
-    - Real-valued only: enforced by `ensure_real_signals`.
-    - Uses the unified base API via `validate_input`.
-    - Returns a priori error (computed before update).
+    Real-valued only
+        This implementation is restricted to real-valued signals and coefficients
+        (``supports_complex=False``). The constraint is enforced via
+        ``@ensure_real_signals`` on :meth:`optimize`.
+
+    At iteration ``k``, form the regressor vector (newest sample first):
+
+    .. math::
+        x_k = [x[k], x[k-1], \\ldots, x[k-M]]^T \\in \\mathbb{R}^{M+1}.
+
+    The a priori output and error are
+
+    .. math::
+        y[k] = w^T[k] x_k, \\qquad e[k] = d[k] - y[k].
+
+    The sign-error update implemented here is
+
+    .. math::
+        w[k+1] = w[k] + \\mu\\, \\operatorname{sign}(e[k])\\, x_k.
+
+    Implementation details
+        - ``numpy.sign(0) = 0``; therefore if ``e[k] == 0`` the update is null.
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 5th ed., Algorithm 4.1 (sign-based LMS variants).
     """
 
     supports_complex: bool = False
-
+    step_size: float
     def __init__(
         self,
         filter_order: int,
         step_size: float = 1e-2,
         w_init: Optional[ArrayLike] = None,
     ) -> None:
-        """
-        Parameters
-        ----------
-        filter_order:
-            FIR order M (number of taps is M+1).
-        step_size:
-            Step-size (mu).
-        w_init:
-            Optional initial coefficients (length M+1). If None, zeros.
-        """
         super().__init__(filter_order=int(filter_order), w_init=w_init)
         self.step_size = float(step_size)
 
@@ -73,30 +96,34 @@ class SignError(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Run Sign-Error LMS adaptation.
+        Executes the Sign-Error LMS adaptation loop over paired input/desired sequences.
 
         Parameters
         ----------
-        input_signal:
-            Input signal x[k] (real).
-        desired_signal:
-            Desired signal d[k] (real).
-        verbose:
-            If True, prints runtime.
-        return_internal_states:
-            If True, returns the last sign(e[k]) value in result.extra.
+        input_signal : array_like of float
+            Input sequence ``x[k]`` with shape ``(N,)`` (will be flattened).
+        desired_signal : array_like of float
+            Desired sequence ``d[k]`` with shape ``(N,)`` (will be flattened).
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, includes the last internal state in ``result.extra``:
+            ``"last_sign_error"`` (``sign(e[k])``).
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Filter output y[k].
-            errors:
-                A priori error e[k] = d[k] - y[k].
-            coefficients:
-                Coefficient history stored in the base class.
-            error_type:
-                "a_priori".
+            Result object with fields:
+            - outputs : ndarray of float, shape ``(N,)``
+                Scalar output sequence, ``y[k] = w^T[k] x_k``.
+            - errors : ndarray of float, shape ``(N,)``
+                Scalar a priori error sequence, ``e[k] = d[k] - y[k]``.
+            - coefficients : ndarray of float
+                Coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"a_priori"``.
+            - extra : dict, optional
+                Present only if ``return_internal_states=True``.
         """
         t0 = perf_counter()
 

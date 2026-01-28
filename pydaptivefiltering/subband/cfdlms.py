@@ -25,17 +25,105 @@ from pydaptivefiltering.utils.validation import ensure_real_signals
 
 class CFDLMS(AdaptiveFilter):
     """
-    Implements the Constrained Frequency-Domain LMS (CFDLMS) algorithm for real-valued data.
-    (Algorithm 12.4, Diniz)
+    Constrained Frequency-Domain LMS (CFDLMS) for real-valued signals (block adaptive).
+
+    Implements the Constrained Frequency-Domain LMS algorithm (Algorithm 12.4, Diniz)
+    for identifying/estimating a real-valued FIR system in a block-wise frequency-domain
+    framework with a time-domain constraint (to control circular convolution / enforce
+    effective FIR support).
+
+    Block structure and main variables
+    ----------------------------------
+    Let:
+        - M: number of subbands / FFT size (also the block length in frequency domain),
+        - L: decimation / number of fresh time samples per iteration (block advance),
+        - Nw: time-support (per subband) of the adaptive filters, so each subband filter
+              has length (Nw+1) in the *time-lag* axis (columns of `ww`).
+
+    Internal coefficient representation
+    -----------------------------------
+    The adaptive parameters are stored as a complex matrix:
+
+        ww  in C^{M x (Nw+1)}
+
+    where each row corresponds to one frequency bin (subband), and each column is a
+    delay-tap in the *block* (overlap) dimension.
+
+    For compatibility with the base API:
+        - `self.w` stores a flattened real view of `ww` (real part only),
+        - `OptimizationResult.coefficients` comes from the base `w_history` (flattened),
+        - the full matrix trajectory is returned in `result.extra["ww_history"]`.
+
+    Signal processing conventions (as implemented)
+    ----------------------------------------------
+    Per iteration k (block index):
+    - Build an M-length time vector from the most recent input segment (reversed):
+          x_p = [x[kL+M-1], ..., x[kL]]^T
+      then compute a *unitary* FFT:
+          ui = FFT(x_p) / sqrt(M)
+
+    - Maintain a regressor matrix `uu` with shape (M, Nw+1) containing the most recent
+      Nw+1 frequency-domain regressors (columns shift right each iteration).
+
+    - Compute frequency-domain output per bin:
+          uy = sum_j uu[:, j] * ww[:, j]
+      and return to time domain:
+          y_block = IFFT(uy) * sqrt(M)
+
+      Only the first L samples are used as the “valid” output of this block.
+
+    Error, energy smoothing, and update
+    -----------------------------------
+    The algorithm forms an L-length error (in the reversed time order used internally),
+    zero-pads it to length M, and FFTs it (unitary) to obtain `et`.
+
+    A smoothed energy estimate per bin is kept:
+        sig[k] = (1-a) sig[k-1] + a |ui|^2
+    where `a = smoothing`.
+
+    The normalized per-bin step is:
+        gain = step / (gamma + (Nw+1) * sig)
+
+    A preliminary frequency-domain correction is built:
+        wwc = gain[:,None] * conj(uu) * et[:,None]
+
+    Constrained / time-domain projection
+    ------------------------------------
+    The “constraint” is applied by transforming wwc along axis=0 (FFT across bins),
+    zeroing time indices >= L (i.e., enforcing an L-sample time support),
+    and transforming back (IFFT). This is the standard “constrained” step that reduces
+    circular-convolution artifacts.
+
+    Returned sequences
+    ------------------
+    - `outputs`: real-valued estimated output, length = n_iters * L
+    - `errors`:  real-valued output error (d - y), same length as outputs
+    - `error_type="output_error"` (block output error, not a priori scalar error)
+
+    Parameters
+    ----------
+    filter_order : int, default=5
+        Subband filter order Nw (number of taps is Nw+1 along the overlap dimension).
+    n_subbands : int, default=64
+        FFT size M (number of subbands / frequency bins).
+    decimation : int, optional
+        Block advance L (samples per iteration). If None, defaults to M//2.
+    step : float, default=0.1
+        Global step size (mu).
+    gamma : float, default=1e-2
+        Regularization constant in the normalization denominator (>0).
+    smoothing : float, default=0.01
+        Exponential smoothing factor a in (0,1].
+    w_init : array_like, optional
+        Initial coefficients. Can be either:
+        - matrix shape (M, Nw+1), or
+        - flat length M*(Nw+1), reshaped internally.
 
     Notes
     -----
-    - This algorithm is block-based: each iteration produces L time-domain outputs.
-    - Internally it uses complex FFT processing; outputs/errors returned are real.
-    - Coefficients are a subband matrix ww with shape (M, Nw+1).
-    - For compatibility with the base class, `self.w` stores a flattened view of `ww`.
-      The returned OptimizationResult.coefficients still comes from `self.w_history`
-      (flattened), and the full matrix history is provided in `extra["ww_history"]`.
+    - Real-valued interface: input_signal and desired_signal are enforced real.
+      Internally complex arithmetic is used due to FFT processing.
+    - This is a block algorithm: one iteration produces L output samples.
     """
     supports_complex: bool = False
 
@@ -147,44 +235,37 @@ class CFDLMS(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Executes the CFDLMS weight update process.
+        Run CFDLMS adaptation over real-valued (x[n], d[n]) in blocks.
 
         Parameters
         ----------
-        input_signal:
-            Input signal x[n] (real-valued).
-        desired_signal:
-            Desired signal d[n] (real-valued).
-        verbose:
-            If True, prints runtime.
-        return_internal_states:
-            If True, returns additional internal trajectories in result.extra.
+        input_signal : array_like of float
+            Input sequence x[n], shape (N,).
+        desired_signal : array_like of float
+            Desired sequence d[n], shape (N,).
+        verbose : bool, default=False
+            If True, prints runtime and basic iteration stats.
+        return_internal_states : bool, default=False
+            If True, includes additional internal trajectories in result.extra.
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Estimated output signal (real), length = n_iters * L.
-            errors:
-                Output error signal (real), same length as outputs.
-            coefficients:
-                Flattened coefficient history (from base `w_history`).
-            error_type:
+            outputs : ndarray of float, shape (n_iters * L,)
+                Concatenated block outputs (L per iteration).
+            errors : ndarray of float, shape (n_iters * L,)
+                Output error sequence e[n] = d[n] - y[n].
+            coefficients : ndarray
+                Flattened coefficient history (from base class; real part of ww).
+            error_type : str
                 "output_error".
-
-        Extra (always)
-        -------------
-        extra["ww_history"]:
-            List of coefficient matrices ww over iterations; each entry has shape (M, Nw+1).
-        extra["n_iters"]:
-            Number of block iterations.
-
-        Extra (when return_internal_states=True)
-        --------------------------------------
-        extra["sig"]:
-            Final smoothed energy per bin (M,).
-        extra["sig_history"]:
-            Energy history per iteration (n_iters, M).
+            extra : dict
+                Always contains:
+                    - "ww_history": list of ndarray, each shape (M, Nw+1)
+                    - "n_iters": int
+                If return_internal_states=True, also contains:
+                    - "sig": ndarray, shape (M,) final smoothed per-bin energy
+                    - "sig_history": ndarray, shape (n_iters, M)
         """
         tic: float = time()
 

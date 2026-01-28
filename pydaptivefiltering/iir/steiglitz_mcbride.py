@@ -24,20 +24,102 @@ from pydaptivefiltering.utils.validation import ensure_real_signals
 
 class SteiglitzMcBride(AdaptiveFilter):
     """
-    Implements the Steiglitz-McBride (SM) algorithm for real-valued IIR adaptive filters.
+    Steiglitz–McBride (SM) adaptive algorithm for IIR filters (real-valued).
+
+    The Steiglitz–McBride method is an iterative output-error (OE) approach
+    implemented via a sequence of *prefiltered equation-error* updates. The key
+    idea is to prefilter both the input ``x[k]`` and the desired signal ``d[k]``
+    by the inverse of the current denominator estimate, :math:`1/A(z)`. This
+    transforms the OE problem into a (locally) more linear regression and often
+    improves convergence compared to directly minimizing the OE surface.
+
+    This implementation follows the structure of Diniz (3rd ed., Alg. 10.4),
+    using per-sample prefiltering recursions and a gradient-type update driven
+    by the *filtered equation error*. It is restricted to **real-valued**
+    signals (enforced by ``ensure_real_signals``).
+
+    Parameters
+    ----------
+    zeros_order : int
+        Numerator order ``N`` (number of zeros). The feedforward part has
+        ``N + 1`` coefficients.
+    poles_order : int
+        Denominator order ``M`` (number of poles). The feedback part has ``M``
+        coefficients.
+    step_size : float, optional
+        Adaptation step size ``mu`` for the SM update. Default is 1e-3.
+    w_init : array_like of float, optional
+        Optional initial coefficient vector. If provided, it should have shape
+        ``(M + N + 1,)`` following the parameter order described below. If None,
+        the implementation initializes with zeros (and ignores ``w_init``).
 
     Notes
     -----
-    This implementation follows the *classic* Steiglitz-McBride idea:
-    - Build a prefiltered (approximately linear) regression using the current denominator estimate.
-    - Update coefficients using the *filtered equation error* (auxiliary error).
+    Parameterization (as implemented)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    The coefficient vector is arranged as:
 
-    Coefficient vector convention:
-    - First `poles_order` entries correspond to denominator (pole) parameters.
-    - Remaining entries correspond to numerator (zero) parameters.
+    - ``w[:M]``: feedback (pole) coefficients (often denoted ``a``)
+    - ``w[M:]``: feedforward (zero) coefficients (often denoted ``b``)
+
+    "True" IIR output and output error
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    With ``reg_x = [x(k), x(k-1), ..., x(k-N)]^T`` and an internal buffer of the
+    last ``M`` outputs, the method computes a "true IIR" output:
+
+    .. math::
+        y(k) = w^T(k)\\, [y(k-1),\\ldots,y(k-M),\\; x(k),\\ldots,x(k-N)]^T,
+
+    and the reported output error:
+
+    .. math::
+        e(k) = d(k) - y(k).
+
+    Prefiltering by 1/A(z) (as implemented)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Let ``a`` be the current feedback coefficient vector. The code implements
+    the prefilter :math:`1/A(z)` through the recursions:
+
+    .. math::
+        x_f(k) = x(k) + a^T x_f(k-1:k-M), \\qquad
+        d_f(k) = d(k) + a^T d_f(k-1:k-M),
+
+    where the past filtered values are stored in ``xf_buffer`` and ``df_buffer``.
+
+    Filtered equation error and update
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    The adaptation uses an auxiliary regressor built from the filtered signals
+    (named ``regressor_s`` in the code). For ``M > 0``:
+
+    .. math::
+        \\varphi_s(k) = [d_f(k-1),\\ldots,d_f(k-M),\\; x_f(k),\\ldots,x_f(k-N)]^T,
+
+    and for ``M = 0`` it reduces to the FIR case using only
+    ``[x_f(k),\\ldots,x_f(k-N)]``.
+
+    The filtered equation error is:
+
+    .. math::
+        e_s(k) = d_f(k) - w^T(k)\\, \\varphi_s(k),
+
+    and the coefficient update used here is:
+
+    .. math::
+        w(k+1) = w(k) + 2\\mu\\, \\varphi_s(k)\\, e_s(k).
+
+    Stability procedure
+    ~~~~~~~~~~~~~~~~~~~
+    After each update (for ``M > 0``), the feedback coefficients ``w[:M]`` are
+    stabilized by reflecting poles outside the unit circle back inside (pole
+    reflection). This helps keep the prefilter :math:`1/A(z)` stable.
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 3rd ed., Algorithm 10.4.
     """
-    supports_complex: bool = False
 
+    supports_complex: bool = False
     zeros_order: int
     poles_order: int
     step_size: float
@@ -53,18 +135,6 @@ class SteiglitzMcBride(AdaptiveFilter):
         step_size: float = 1e-3,
         w_init: Optional[Union[np.ndarray, list]] = None,
     ) -> None:
-        """
-        Parameters
-        ----------
-        zeros_order:
-            Numerator order (number of zeros).
-        poles_order:
-            Denominator order (number of poles).
-        step_size:
-            Step size used in the coefficient update.
-        w_init:
-            Optional initial coefficient vector. If None, initializes to zeros.
-        """
         super().__init__(filter_order=zeros_order + poles_order, w_init=w_init)
 
         self.zeros_order = int(zeros_order)
@@ -82,7 +152,8 @@ class SteiglitzMcBride(AdaptiveFilter):
 
     def _stability_procedure(self, a_coeffs: np.ndarray) -> np.ndarray:
         """
-        Enforces IIR stability by reflecting poles outside the unit circle back inside.
+        Reflects poles outside the unit circle back inside to ensure 
+        the prefilter $1/A(z)$ remains stable.
         """
         poly_coeffs: np.ndarray = np.concatenate(([1.0], -a_coeffs))
         poles: np.ndarray = np.roots(poly_coeffs)
@@ -103,41 +174,41 @@ class SteiglitzMcBride(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Executes the Steiglitz-McBride adaptation.
+        Executes the Steiglitz–McBride adaptation loop.
 
         Parameters
         ----------
-        input_signal:
-            Input signal x[k].
-        desired_signal:
-            Desired signal d[k].
-        verbose:
-            If True, prints runtime.
-        return_internal_states:
-            If True, returns the auxiliary (prefiltered) equation error in result.extra.
+        input_signal : array_like of float
+            Real-valued input sequence ``x[k]`` with shape ``(N,)``.
+        desired_signal : array_like of float
+            Real-valued desired/reference sequence ``d[k]`` with shape ``(N,)``.
+            Must have the same length as ``input_signal``.
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, includes the filtered equation-error trajectory in
+            ``result.extra["auxiliary_error"]`` with shape ``(N,)``.
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Output computed from the current IIR model.
-            errors:
-                Output error e[k] = d[k] - y[k] (for evaluation/monitoring).
-            coefficients:
-                History of coefficients stored in the base class.
-            error_type:
-                "a_posteriori".
-
-        Extra (when return_internal_states=True)
-        --------------------------------------
-        extra["auxiliary_error"]:
-            Filtered equation error sequence e_s[k] used in the SM update.
+            Result object with fields:
+            - outputs : ndarray of float, shape ``(N,)``
+                "True IIR" output sequence ``y[k]``.
+            - errors : ndarray of float, shape ``(N,)``
+                Output error sequence ``e[k] = d[k] - y[k]``.
+            - coefficients : ndarray of float
+                Coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"a_posteriori"`` (the update is driven by the filtered
+                equation error).
+            - extra : dict
+                Empty unless ``return_internal_states=True``.
         """
         tic: float = time()
 
         x: np.ndarray = np.asarray(input_signal, dtype=np.float64)
         d: np.ndarray = np.asarray(desired_signal, dtype=np.float64)
-
         n_samples: int = int(x.size)
 
         outputs: np.ndarray = np.zeros(n_samples, dtype=np.float64)
@@ -188,9 +259,7 @@ class SteiglitzMcBride(AdaptiveFilter):
         if verbose:
             print(f"[SteiglitzMcBride] Completed in {runtime_s * 1000:.02f} ms")
 
-        extra: Optional[Dict[str, Any]] = None
-        if return_internal_states:
-            extra = {"auxiliary_error": errors_s}
+        extra = {"auxiliary_error": errors_s} if return_internal_states else {}
 
         return self._pack_results(
             outputs=outputs,

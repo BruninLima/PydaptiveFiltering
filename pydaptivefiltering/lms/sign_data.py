@@ -26,20 +26,51 @@ ArrayLike = Union[np.ndarray, list]
 
 class SignData(AdaptiveFilter):
     """
-    Sign-Data LMS (complex-valued).
+    Complex Sign-Data LMS adaptive filter.
 
-    This is a low-complexity LMS variant where the input regressor is replaced by
-    its elementwise sign:
+    Low-complexity LMS variant in which the regressor vector is replaced by its
+    element-wise sign. This reduces multiplications (since the update uses a
+    ternary/sign regressor), at the expense of slower convergence and/or larger
+    steady-state misadjustment in many scenarios.
 
-        y[k] = w^H x_k
-        e[k] = d[k] - y[k]
-        w <- w + 2 * mu * conj(e[k]) * sign(x_k)
+    Parameters
+    ----------
+    filter_order : int
+        Adaptive FIR filter order ``M``. The number of coefficients is ``M + 1``.
+    step_size : float, optional
+        Adaptation step size ``mu``. Default is 1e-2.
+    w_init : array_like of complex, optional
+        Initial coefficient vector ``w(0)`` with shape ``(M + 1,)``. If None,
+        initializes with zeros.
 
     Notes
     -----
-    - Complex-valued implementation (supports_complex=True).
-    - Uses the unified base API via `@validate_input`.
-    - Returns a priori error by default (e[k] computed before update).
+    At iteration ``k``, form the regressor vector (newest sample first):
+
+    .. math::
+        x_k = [x[k], x[k-1], \\ldots, x[k-M]]^T \\in \\mathbb{C}^{M+1}.
+
+    The a priori output and error are
+
+    .. math::
+        y[k] = w^H[k] x_k, \\qquad e[k] = d[k] - y[k].
+
+    Define the element-wise sign regressor ``\\operatorname{sign}(x_k)``.
+    The update implemented here is
+
+    .. math::
+        w[k+1] = w[k] + 2\\mu\\, e^*[k] \\, \\operatorname{sign}(x_k).
+
+    Implementation details
+        - For complex inputs, ``numpy.sign`` applies element-wise and returns
+          ``x/|x|`` when ``x != 0`` and ``0`` when ``x == 0``.
+        - The factor ``2`` in the update matches the implementation in this
+          module (consistent with common LMS gradient conventions).
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 5th ed., Algorithm 4.1 (sign-based LMS variants).
     """
 
     supports_complex: bool = True
@@ -50,16 +81,6 @@ class SignData(AdaptiveFilter):
         step_size: float = 1e-2,
         w_init: Optional[ArrayLike] = None,
     ) -> None:
-        """
-        Parameters
-        ----------
-        filter_order:
-            FIR order M (number of taps is M+1).
-        step_size:
-            Step-size (mu).
-        w_init:
-            Optional initial coefficients (length M+1). If None, zeros.
-        """
         super().__init__(filter_order=int(filter_order), w_init=w_init)
         self.step_size = float(step_size)
 
@@ -72,30 +93,34 @@ class SignData(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Run Sign-Data LMS adaptation.
+        Executes the Sign-Data LMS adaptation loop over paired input/desired sequences.
 
         Parameters
         ----------
-        input_signal:
-            Input signal x[k].
-        desired_signal:
-            Desired signal d[k].
-        verbose:
-            If True, prints runtime.
-        return_internal_states:
-            If True, returns the last regressor sign vector in result.extra.
+        input_signal : array_like of complex
+            Input sequence ``x[k]`` with shape ``(N,)`` (will be flattened).
+        desired_signal : array_like of complex
+            Desired sequence ``d[k]`` with shape ``(N,)`` (will be flattened).
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, includes the last internal state in ``result.extra``:
+            ``"last_sign_regressor"`` (``sign(x_k)``).
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Filter output y[k].
-            errors:
-                A priori error e[k] = d[k] - y[k].
-            coefficients:
-                Coefficient history stored in the base class.
-            error_type:
-                "a_priori".
+            Result object with fields:
+            - outputs : ndarray of complex, shape ``(N,)``
+                Scalar output sequence, ``y[k] = w^H[k] x_k``.
+            - errors : ndarray of complex, shape ``(N,)``
+                Scalar a priori error sequence, ``e[k] = d[k] - y[k]``.
+            - coefficients : ndarray of complex
+                Coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"a_priori"``.
+            - extra : dict, optional
+                Present only if ``return_internal_states=True``.
         """
         t0 = perf_counter()
 

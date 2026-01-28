@@ -65,16 +65,84 @@ def _design_polyphase_nyquist_bank(M: int, nfd: int) -> np.ndarray:
 
 class DLCLLMS(AdaptiveFilter):
     """
-    Implements the Delayless Closed-Loop Subband LMS adaptive-filtering algorithm (DLCLLMS)
-    for real-valued fullband data. (Algorithm 12.3, Diniz)
+    Delayless Closed-Loop Subband LMS (DLCLLMS) for real-valued fullband signals.
+
+    Implements the Delayless Closed-Loop Subband LMS adaptive filtering algorithm
+    (Algorithm 12.3, Diniz) using:
+      - a DFT analysis bank (complex subband signals),
+      - a polyphase Nyquist / fractional-delay prototype (Ed) to realize the delayless
+        closed-loop structure,
+      - and an equivalent fullband FIR mapping (GG) used to generate the output in the
+        time domain.
+
+    High-level operation (as implemented)
+    -------------------------------------
+    Processing is block-based with block length:
+        L = M   (M = number of subbands / DFT size)
+
+    For each block k:
+      1) Form a reversed block x_p and pass each sample through a per-branch fractional-delay
+         structure (polyphase) driven by `Ed`, producing x_frac (length M).
+      2) Compute subband input:
+            x_sb = F @ x_frac
+         where F is the (non-unitary) DFT matrix (MATLAB dftmtx convention).
+      3) Map current subband coefficients to an equivalent fullband FIR:
+            GG = equivalent_fullband(w_sb)
+         and filter the fullband input block through GG (with state) to produce y_block.
+      4) Compute fullband error e_block = d_block - y_block.
+      5) Pass the reversed error block through the same fractional-delay structure to get e_frac,
+         then compute subband error:
+            e_sb = F @ e_frac
+      6) Update subband coefficients with an LMS-like recursion using a subband delay line x_cl
+         and a smoothed power estimate sig[m]:
+            sig[m] = (1-a) sig[m] + a |x_sb[m]|^2
+            mu_n  = step / (gamma + (Nw+1) * sig[m])
+            w_sb[m,:] <- w_sb[m,:] + 2 * mu_n * conj(e_sb[m]) * x_cl[m,:]
+
+    Coefficient representation and mapping
+    --------------------------------------
+    - Subband coefficients are stored in:
+          w_sb : complex ndarray, shape (M, Nw+1)
+
+    - For output synthesis and for the base API, an equivalent fullband FIR is built:
+          GG : real ndarray, length (M*Nw)
+
+      The mapping matches the provided MATLAB logic:
+        * Compute ww = real(F^H w_sb) / M
+        * For branch m=0: take ww[0, :Nw]
+        * For m>=1: convolve ww[m,:] with Ed[m-1,:] and extract a length-Nw segment
+          starting at (Dint+1), where Dint=(P-1)//2 and P is the polyphase length.
+
+    - The base-class coefficient vector `self.w` stores GG (float), and
+      `OptimizationResult.coefficients` contains the history of GG recorded **once per block**
+      (plus the initial entry).
+
+    Parameters
+    ----------
+    filter_order : int, default=5
+        Subband filter order Nw (number of taps per subband delay line is Nw+1).
+    n_subbands : int, default=4
+        Number of subbands M (DFT size). Also equals the processing block length L.
+    step : float, default=0.1
+        Global LMS step size.
+    gamma : float, default=1e-2
+        Regularization constant in the normalized step denominator (>0 recommended).
+    a : float, default=1e-2
+        Exponential smoothing factor for subband power sig in (0,1].
+    nyquist_len : int, default=2
+        Length Nfd of the Nyquist (fractional-delay) prototype used to build Ed.
+    w_init : array_like, optional
+        Initial subband coefficient matrix. Can be either:
+          - shape (M, Nw+1), or
+          - flat length M*(Nw+1), reshaped internally.
 
     Notes
     -----
-    - Processing is block-based with block length L = M (number of subbands).
-    - Internally uses complex subband signals (DFT analysis bank).
-    - The mapped equivalent fullband FIR GG (length M*Nw) is exposed via `self.w` (float).
-    - For compatibility with the base class, `OptimizationResult.coefficients` returns
-      `self.w_history` which stores the mapped GG **once per processed block**.
+    - Real-valued interface (input_signal and desired_signal enforced real). Internal
+      computations use complex subband signals.
+    - This implementation processes only `n_used = floor(N/M)*M` samples. Any tail
+      samples (N - n_used) are left with output=0 and error=d in that region.
+    - The reported `error_type` is "output_error" (fullband output error sequence).
     """
     supports_complex: bool = False
 
@@ -234,34 +302,41 @@ class DLCLLMS(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Executes the adaptation process for the DLCLLMS algorithm (faithful to dlcllms.m).
+        Run DLCLLMS adaptation block-by-block.
+
+        Parameters
+        ----------
+        input_signal : array_like of float
+            Fullband input x[n], shape (N,).
+        desired_signal : array_like of float
+            Fullband desired d[n], shape (N,).
+        verbose : bool, default=False
+            If True, prints runtime and block stats.
+        return_internal_states : bool, default=False
+            If True, returns additional internal trajectories in result.extra.
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Estimated fullband output y[n] (real), same length as input_signal.
-            errors:
-                Fullband error e[n] = d[n] - y[n] (real).
-            coefficients:
-                History of equivalent fullband FIR vectors GG (length M*Nw),
-                stored once per processed block (plus the initial entry).
+            outputs : ndarray of float, shape (N,)
+                Estimated fullband output y[n]. Only the first `n_used` samples are
+                produced by block processing; remaining tail (if any) is zero.
+            errors : ndarray of float, shape (N,)
+                Fullband error e[n] = d[n] - y[n]. Tail (if any) equals d[n] there.
+            coefficients : ndarray
+                History of equivalent fullband FIR vectors GG (length M*Nw), stored
+                once per processed block (plus initial entry).
+            error_type : str
+                "output_error".
 
-        Extra (always)
-        -------------
-        extra["n_blocks"]:
-            Number of processed blocks.
-        extra["block_len"]:
-            Block length (equals M).
-        extra["n_used"]:
-            Number of samples actually processed (multiple of M).
-
-        Extra (when return_internal_states=True)
-        --------------------------------------
-        extra["sig_history"]:
-            Smoothed subband power per block (n_blocks, M).
-        extra["w_sb_final"]:
-            Final subband coefficient matrix (M, Nw+1), complex.
+            extra : dict
+                Always contains:
+                    - "n_blocks": number of processed blocks
+                    - "block_len": block length (equals M)
+                    - "n_used": number of processed samples (multiple of M)
+                If return_internal_states=True, also contains:
+                    - "sig_history": ndarray (n_blocks, M) of smoothed subband power
+                    - "w_sb_final": final subband coefficient matrix (M, Nw+1)
         """
         tic: float = time()
 

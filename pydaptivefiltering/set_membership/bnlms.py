@@ -23,11 +23,83 @@ from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate
 
 class SMBNLMS(AdaptiveFilter):
     """
-    Implements the Set-membership Binormalized LMS (SM-BNLMS) algorithm for complex-valued data.
+    Set-Membership Binormalized LMS (SM-BNLMS) adaptive filter (complex-valued).
 
-    This algorithm is a specific case of SM-AP with L=1, designed to improve
-    convergence speed over SM-NLMS with low computational overhead by reusing
-    the previous regressor. (Algorithm 6.5, Diniz)
+    Implements Algorithm 6.5 (Diniz). This method can be viewed as a particular
+    set-membership affine-projection (SM-AP) case with projection order ``L = 1``,
+    i.e., it reuses the current and previous regressors to build a low-cost
+    two-vector update.
+
+    The filter updates **only** when the magnitude of the a priori error exceeds
+    a prescribed bound ``gamma_bar`` (set-membership criterion).
+
+    Parameters
+    ----------
+    filter_order : int
+        Adaptive FIR filter order ``M`` (number of coefficients is ``M + 1``).
+    gamma_bar : float
+        Set-membership bound ``\\bar{\\gamma}`` for the a priori error magnitude.
+        An update occurs only if ``|e[k]| > gamma_bar``.
+    gamma : float
+        Regularization factor used in the binormalized denominator. It must be
+        positive (or at least nonnegative) to improve numerical robustness.
+    w_init : array_like of complex, optional
+        Initial coefficient vector ``w(0)``, shape ``(M + 1,)``. If None, zeros.
+
+    Notes
+    -----
+    Let the tapped-delay regressor be
+
+    .. math::
+        x_k = [x[k], x[k-1], \\dots, x[k-M]]^T \\in \\mathbb{C}^{M+1}
+
+    and the previous regressor be ``x_{k-1}`` (as stored by the implementation).
+    The a priori output and error are
+
+    .. math::
+        y[k] = w^H[k] x_k, \\qquad e[k] = d[k] - y[k].
+
+    Set-membership condition
+        If ``|e[k]| \\le \\bar{\\gamma}``, no update is performed.
+
+        If ``|e[k]| > \\bar{\\gamma}``, define the SM step factor
+
+        .. math::
+            \\mu[k] = 1 - \\frac{\\bar{\\gamma}}{|e[k]|} \\in (0,1).
+
+    Binormalized denominator
+        Define
+
+        .. math::
+            a = \\|x_k\\|^2, \\quad b = \\|x_{k-1}\\|^2, \\quad c = x_{k-1}^H x_k,
+
+        and
+
+        .. math::
+            \\mathrm{den}[k] = \\gamma + a b - |c|^2.
+
+        (The code enforces a small positive floor if ``den`` becomes nonpositive.)
+
+    Update (as implemented)
+        The update uses two complex scalars ``\\lambda_1`` and ``\\lambda_2``:
+
+        .. math::
+            \\lambda_1[k] = \\frac{\\mu[k]\\, e[k] \\, \\|x_{k-1}\\|^2}{\\mathrm{den}[k]}, \\qquad
+            \\lambda_2[k] = -\\frac{\\mu[k]\\, e[k] \\, c^*}{\\mathrm{den}[k]}.
+
+        Then the coefficients are updated by
+
+        .. math::
+            w[k+1] = w[k] + \\lambda_1^*[k] x_k + \\lambda_2^*[k] x_{k-1}.
+
+    Returned error type
+        This implementation reports the **a priori** sequences (computed before
+        updating ``w``), so ``error_type="a_priori"``.
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, Algorithm 6.5.
     """
     supports_complex: bool = True
 
@@ -42,18 +114,6 @@ class SMBNLMS(AdaptiveFilter):
         gamma: float,
         w_init: Optional[Union[np.ndarray, list]] = None,
     ) -> None:
-        """
-        Parameters
-        ----------
-        filter_order:
-            FIR filter order (number of taps - 1). Number of coefficients is filter_order + 1.
-        gamma_bar:
-            Upper bound for the error magnitude (set-membership threshold).
-        gamma:
-            Regularization factor to avoid division by zero (and stabilize denominator).
-        w_init:
-            Optional initial coefficient vector. If None, initializes to zeros.
-        """
         super().__init__(filter_order=filter_order, w_init=w_init)
 
         self.gamma_bar = float(gamma_bar)
@@ -73,48 +133,48 @@ class SMBNLMS(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Executes the SM-BNLMS adaptation.
+        Executes the SM-BNLMS adaptation over paired sequences ``x[k]`` and ``d[k]``.
 
         Parameters
         ----------
-        input_signal:
-            Input signal x[k].
-        desired_signal:
-            Desired signal d[k].
-        verbose:
-            If True, prints runtime and update count.
-        return_internal_states:
-            If True, includes internal trajectories in result.extra.
+        input_signal : array_like of complex
+            Input sequence ``x[k]`` with shape ``(N,)`` (flattened internally).
+        desired_signal : array_like of complex
+            Desired sequence ``d[k]`` with shape ``(N,)`` (flattened internally).
+        verbose : bool, optional
+            If True, prints runtime and update count after completion.
+        return_internal_states : bool, optional
+            If True, includes internal trajectories in ``result.extra``:
+            ``mu``, ``den``, ``lambda1``, ``lambda2`` (each length ``N``). Entries
+            are zero when no update occurs.
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                A-priori output y[k] = w^H x_k.
-            errors:
-                A-priori error e[k] = d[k] - y[k].
-            coefficients:
-                History of coefficients stored in the base class.
-            error_type:
-                "a_priori".
-
-        Extra (always)
-        -------------
-        extra["n_updates"]:
-            Number of coefficient updates (iterations where |e(k)| > gamma_bar).
-        extra["update_mask"]:
-            Boolean array marking which iterations performed updates.
-
-        Extra (when return_internal_states=True)
-        --------------------------------------
-        extra["mu"]:
-            Trajectory of the SM step-size factor mu[k] (0 when no update).
-        extra["den"]:
-            Denominator trajectory used in lambda1/lambda2 (0 when no update).
-        extra["lambda1"]:
-            Lambda1 trajectory (0 when no update).
-        extra["lambda2"]:
-            Lambda2 trajectory (0 when no update).
+            Result object with fields:
+            - outputs : ndarray of complex, shape ``(N,)``
+                A priori output sequence ``y[k] = w^H[k] x_k``.
+            - errors : ndarray of complex, shape ``(N,)``
+                A priori error sequence ``e[k] = d[k] - y[k]``.
+            - coefficients : ndarray of complex
+                Coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"a_priori"``.
+            - extra : dict
+                Always present with:
+                - ``"n_updates"`` : int
+                    Number of coefficient updates (iterations where ``|e[k]| > gamma_bar``).
+                - ``"update_mask"`` : ndarray of bool, shape ``(N,)``
+                    Boolean mask indicating which iterations performed updates.
+                Additionally present only if ``return_internal_states=True``:
+                - ``"mu"`` : ndarray of float, shape ``(N,)``
+                    Step factor ``mu[k]`` (0 when no update).
+                - ``"den"`` : ndarray of float, shape ``(N,)``
+                    Denominator used in ``lambda1/lambda2`` (0 when no update).
+                - ``"lambda1"`` : ndarray of complex, shape ``(N,)``
+                    ``lambda1[k]`` (0 when no update).
+                - ``"lambda2"`` : ndarray of complex, shape ``(N,)``
+                    ``lambda2[k]`` (0 when no update).
         """
         tic: float = time()
 

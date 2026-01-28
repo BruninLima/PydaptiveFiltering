@@ -26,21 +26,48 @@ ArrayLike = Union[np.ndarray, list]
 
 class LMS(AdaptiveFilter):
     """
-    Complex LMS (Least-Mean Squares).
+    Complex Least-Mean Squares (LMS) adaptive filter.
 
-    Implements the complex LMS recursion (Algorithm 3.2 - Diniz) for adaptive FIR
-    filtering.
+    Standard complex LMS algorithm for adaptive FIR filtering, following Diniz
+    (Alg. 3.2). The method performs a stochastic-gradient update using the
+    instantaneous a priori error.
+
+    Parameters
+    ----------
+    filter_order : int
+        Adaptive FIR filter order ``M``. The number of coefficients is ``M + 1``.
+    step_size : float, optional
+        Adaptation step size ``mu``. Default is 1e-2.
+    w_init : array_like of complex, optional
+        Initial coefficient vector ``w(0)`` with shape ``(M + 1,)``. If None,
+        initializes with zeros.
 
     Notes
     -----
-    - Complex-valued implementation (supports_complex = True).
-    - Uses the unified base API via `@validate_input`:
-        * optimize(input_signal=..., desired_signal=...)
-        * optimize(x=..., d=...)
-        * optimize(x, d)
-    - This implementation returns the a priori error: e[k] = d[k] - y[k] where
-      y[k] = w[k]^H x_k, and then updates:
-          w[k+1] = w[k] + mu * conj(e[k]) * x_k
+    At iteration ``k``, form the regressor vector (newest sample first):
+
+    .. math::
+        x_k = [x[k], x[k-1], \\ldots, x[k-M]]^T \\in \\mathbb{C}^{M+1}.
+
+    The a priori output and error are
+
+    .. math::
+        y[k] = w^H[k] x_k, \\qquad e[k] = d[k] - y[k],
+
+    and the LMS update is
+
+    .. math::
+        w[k+1] = w[k] + \\mu\\, e^*[k] \\, x_k.
+
+    This implementation:
+        - uses complex arithmetic (``supports_complex=True``),
+        - returns the a priori error ``e[k]``,
+        - records coefficient history via the base class.
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 5th ed., Algorithm 3.2.
     """
 
     supports_complex: bool = True
@@ -53,16 +80,6 @@ class LMS(AdaptiveFilter):
         step_size: float = 1e-2,
         w_init: Optional[ArrayLike] = None,
     ) -> None:
-        """
-        Parameters
-        ----------
-        filter_order:
-            FIR order M (number of taps is M+1).
-        step_size:
-            Step-size (mu).
-        w_init:
-            Optional initial coefficients (length M+1). If None, zeros.
-        """
         super().__init__(filter_order=int(filter_order), w_init=w_init)
         self.step_size = float(step_size)
 
@@ -74,28 +91,29 @@ class LMS(AdaptiveFilter):
         verbose: bool = False,
     ) -> OptimizationResult:
         """
-        Run LMS adaptation.
+        Executes the LMS adaptation loop over paired input/desired sequences.
 
         Parameters
         ----------
-        input_signal:
-            Input signal x[k].
-        desired_signal:
-            Desired signal d[k].
-        verbose:
-            If True, prints runtime.
+        input_signal : array_like of complex
+            Input sequence ``x[k]`` with shape ``(N,)`` (will be flattened).
+        desired_signal : array_like of complex
+            Desired sequence ``d[k]`` with shape ``(N,)`` (will be flattened).
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Filter output y[k].
-            errors:
-                A priori error e[k] = d[k] - y[k].
-            coefficients:
-                History of coefficients stored in the base class.
-            error_type:
-                "a_priori".
+            Result object with fields:
+            - outputs : ndarray of complex, shape ``(N,)``
+                Scalar output sequence, ``y[k] = w^H[k] x_k``.
+            - errors : ndarray of complex, shape ``(N,)``
+                Scalar a priori error sequence, ``e[k] = d[k] - y[k]``.
+            - coefficients : ndarray of complex
+                Coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"a_priori"``.
         """
         tic: float = perf_counter()
 

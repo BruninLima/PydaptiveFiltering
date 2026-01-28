@@ -29,35 +29,84 @@ class RBF(AdaptiveFilter):
     """
     Radial Basis Function (RBF) adaptive model (real-valued).
 
-    Implements Algorithm 11.5 (Diniz) with online adaptation of:
-    - output weights w (length n_neurons),
-    - centers/centroids (reference vectors) `vet` (shape n_neurons x input_dim),
-    - spreads `sigma` (length n_neurons).
+    Online adaptation of an RBF network with Gaussian basis functions, following
+    Diniz (Alg. 11.5). The algorithm updates:
+    - output weights ``w`` (one weight per neuron),
+    - centers ``c_i`` (stored in ``vet``),
+    - spreads ``sigma_i`` (stored in ``sigma``).
 
-    Model (common form)
-    -------------------
-    For regressor u[k] (shape input_dim,), the i-th basis function is:
-
-        phi_i(u[k]) = exp( -||u[k] - c_i||^2 / sigma_i^2 )
-
-    Output:
-        y[k] = sum_i w_i * phi_i(u[k])
-
-    Input handling
-    --------------
-    `optimize` accepts:
-    1) input_signal as a regressor matrix with shape (N, input_dim), where each row is u[k].
-    2) input_signal as a 1D signal x[k] with shape (N,). In this case, regressors are built
-       as tapped-delay vectors of length input_dim:
-           u[k] = [x[k], x[k-1], ..., x[k-input_dim+1]]
+    Parameters
+    ----------
+    n_neurons : int
+        Number of RBF neurons (basis functions).
+    input_dim : int
+        Dimension of the regressor vector ``u[k]``. If :meth:`optimize` is called
+        with a 1D input signal, this is interpreted as the tap length.
+    ur : float, optional
+        Step size for center updates. Default is 1e-2.
+    uw : float, optional
+        Step size for output-weight updates. Default is 1e-2.
+    us : float, optional
+        Step size for spread (sigma) updates. Default is 1e-2.
+    w_init : array_like of float, optional
+        Initial output-weight vector ``w(0)`` with shape ``(n_neurons,)``.
+        If None, initializes from a standard normal distribution.
+    sigma_init : float, optional
+        Initial spread value used for all neurons (must be positive). Default is 1.0.
+    centers_init_scale : float, optional
+        Scale used for random initialization of centers. Default is 0.5.
+    rng : numpy.random.Generator, optional
+        Random generator used for reproducible initialization.
+    safe_eps : float, optional
+        Small positive constant used to guard denominators (e.g., ``sigma^2`` and
+        ``sigma^3``). Default is 1e-12.
 
     Notes
     -----
-    - Real-valued only: enforced by `ensure_real_signals`.
-    - The base class coefficient vector `self.w` is used for the neuron output weights.
-      Coefficient history in `OptimizationResult.coefficients` corresponds to w over time.
-    """
+    Real-valued only
+        This implementation is restricted to real-valued signals and parameters
+        (``supports_complex=False``). The constraint is enforced via
+        ``@ensure_real_signals`` on :meth:`optimize`.
 
+    Model
+        For a regressor vector ``u[k] \\in \\mathbb{R}^{D}``, define Gaussian basis
+        functions:
+
+        .. math::
+            \\phi_i(u[k]) = \\exp\\left(-\\frac{\\|u[k] - c_i\\|^2}{\\sigma_i^2}\\right),
+
+        where ``c_i`` is the center and ``sigma_i > 0`` is the spread of neuron ``i``.
+        The network output is
+
+        .. math::
+            y[k] = \\sum_{i=1}^{Q} w_i\\, \\phi_i(u[k]) = w^T \\phi(u[k]),
+
+        where ``Q = n_neurons`` and ``\\phi(u[k]) \\in \\mathbb{R}^{Q}`` stacks all
+        activations.
+
+    Input formats
+        The method :meth:`optimize` accepts two input formats:
+
+        1. **Regressor matrix** ``U`` with shape ``(N, input_dim)``:
+           each row is used directly as ``u[k]``.
+
+        2. **Scalar input signal** ``x[k]`` with shape ``(N,)``:
+           tapped-delay regressors of length ``input_dim`` are built as
+
+           .. math::
+               u[k] = [x[k], x[k-1], \\ldots, x[k-input\\_dim+1]]^T.
+
+    Library conventions
+        - ``OptimizationResult.coefficients`` stores the history of the **output
+          weights** ``w`` (the neuron output layer).
+        - Centers and spreads are returned via ``result.extra`` when
+          ``return_internal_states=True``.
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 5th ed., Algorithm 11.5.
+    """
     supports_complex: bool = False
 
     def __init__(
@@ -74,30 +123,6 @@ class RBF(AdaptiveFilter):
         rng: Optional[np.random.Generator] = None,
         safe_eps: float = 1e-12,
     ) -> None:
-        """
-        Parameters
-        ----------
-        n_neurons:
-            Number of RBF neurons (basis functions).
-        input_dim:
-            Dimension of the regressor u[k]. If input_signal is 1D, this is the tap length.
-        ur:
-            Step-size for center updates.
-        uw:
-            Step-size for output weight updates.
-        us:
-            Step-size for spread (sigma) updates.
-        w_init:
-            Optional initialization for output weights w (length n_neurons). If None, random normal.
-        sigma_init:
-            Initial sigma value for all neurons.
-        centers_init_scale:
-            Scale factor used for random initialization of centers.
-        rng:
-            Optional numpy random generator for reproducible initialization.
-        safe_eps:
-            Small epsilon to protect denominators (sigma^2, sigma^3).
-        """
         n_neurons = int(n_neurons)
         input_dim = int(input_dim)
         if n_neurons <= 0:
@@ -166,41 +191,43 @@ class RBF(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Run RBF online adaptation.
+        Executes the RBF online adaptation loop.
 
         Parameters
         ----------
-        input_signal:
+        input_signal : array_like of float
             Either:
-              - regressor matrix with shape (N, input_dim), or
-              - 1D signal x[k] with shape (N,) (tapped-delay regressors are built internally).
-        desired_signal:
-            Desired output d[k], shape (N,).
-        verbose:
-            If True, prints runtime.
-        return_internal_states:
-            If True, returns final centers/spreads and selected debug info in `result.extra`.
+            - regressor matrix ``U`` with shape ``(N, input_dim)``, or
+            - scalar input signal ``x[k]`` with shape ``(N,)`` (tapped-delay
+              regressors are built internally).
+        desired_signal : array_like of float
+            Desired sequence ``d[k]`` with shape ``(N,)`` (will be flattened).
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, includes final centers/spreads and last activation vector
+            in ``result.extra``.
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Estimated output y[k].
-            errors:
-                A priori error e[k] = d[k] - y[k].
-            coefficients:
-                History of neuron output weights w (stacked from base history).
-            error_type:
-                "a_priori".
-
-        Extra (when return_internal_states=True)
-        --------------------------------------
-        extra["centers_last"]:
-            Final centers array `vet` (n_neurons, input_dim).
-        extra["sigma_last"]:
-            Final sigma vector (n_neurons,).
-        extra["last_phi"]:
-            Last basis-function activation vector phi(u[k]) (n_neurons,).
+            Result object with fields:
+            - outputs : ndarray of float, shape ``(N,)``
+                Scalar output sequence ``y[k] = w^T \\phi(u[k])``.
+            - errors : ndarray of float, shape ``(N,)``
+                Scalar a priori error sequence, ``e[k] = d[k] - y[k]``.
+            - coefficients : ndarray of float
+                Output-weight history recorded by the base class.
+            - error_type : str
+                Set to ``"a_priori"``.
+            - extra : dict, optional
+                Present only if ``return_internal_states=True`` with:
+                - ``centers_last`` : ndarray of float
+                    Final centers array (shape ``(n_neurons, input_dim)``).
+                - ``sigma_last`` : ndarray of float
+                    Final spreads vector (shape ``(n_neurons,)``).
+                - ``last_phi`` : ndarray of float
+                    Last basis-function activation vector ``\\phi(u[k])`` (shape ``(n_neurons,)``).
         """
         t0 = perf_counter()
 

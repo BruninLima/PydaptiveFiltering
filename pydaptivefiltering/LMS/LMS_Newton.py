@@ -26,31 +26,85 @@ ArrayLike = Union[np.ndarray, list]
 
 class LMSNewton(AdaptiveFilter):
     """
-    LMS-Newton (complex-valued).
+    Complex LMS-Newton adaptive filter.
 
-    This algorithm approximates a Newton step by maintaining a recursive estimate of
-    the inverse input correlation matrix, which tends to accelerate convergence in
-    correlated-input scenarios.
+    LMS-Newton accelerates the standard complex LMS by preconditioning the
+    instantaneous gradient with a recursive estimate of the inverse input
+    correlation matrix. This often improves convergence speed for strongly
+    correlated inputs, at the cost of maintaining and updating a full
+    ``(M+1) x (M+1)`` matrix per iteration.
+
+    Parameters
+    ----------
+    filter_order : int
+        Adaptive FIR filter order ``M``. The number of coefficients is ``M + 1``.
+    alpha : float
+        Forgetting factor ``alpha`` used in the inverse-correlation recursion,
+        with ``0 < alpha < 1``. Values closer to 1 yield smoother tracking; smaller
+        values adapt faster.
+    initial_inv_rx : array_like of complex
+        Initial inverse correlation matrix ``P(0)`` with shape ``(M + 1, M + 1)``.
+        Typical choices are scaled identities, e.g. ``delta^{-1} I``.
+    step : float, optional
+        Adaptation step size ``mu``. Default is 1e-2.
+    w_init : array_like of complex, optional
+        Initial coefficient vector ``w(0)`` with shape ``(M + 1,)``. If None,
+        initializes with zeros.
+    safe_eps : float, optional
+        Small positive constant used to guard denominators in the matrix recursion.
+        Default is 1e-12.
 
     Notes
     -----
-    - Complex-valued implementation (supports_complex = True).
-    - Uses the unified base API via `@validate_input`:
-        * optimize(input_signal=..., desired_signal=...)
-        * optimize(x=..., d=...)
-        * optimize(x, d)
+    Complex-valued
+        This implementation assumes complex arithmetic (``supports_complex=True``),
+        with the a priori output computed as ``y[k] = w^H[k] x_k``.
 
-    Recursion (one common form)
-    ---------------------------
-    Let P[k] approximate R_x^{-1}. With forgetting factor alpha (0 < alpha < 1),
-    and regressor x_k (shape (M+1,)), define:
+    Recursion (as implemented)
+        Let the regressor vector be
 
-        phi = x_k^H P x_k
-        denom = (1-alpha)/alpha + phi
-        P <- (P - (P x_k x_k^H P)/denom) / (1-alpha)
-        w <- w + mu * conj(e[k]) * (P x_k)
+        .. math::
+            x_k = [x[k], x[k-1], \\ldots, x[k-M]]^T \\in \\mathbb{C}^{M+1},
 
-    where e[k] = d[k] - w^H x_k.
+        and define the output and a priori error as
+
+        .. math::
+            y[k] = w^H[k] x_k, \\qquad e[k] = d[k] - y[k].
+
+        Maintain an estimate ``P[k] \\approx R_x^{-1}`` using a normalized rank-1 update.
+        With
+
+        .. math::
+            p_k = P[k] x_k, \\qquad \\phi_k = x_k^H p_k,
+
+        the denominator is
+
+        .. math::
+            \\mathrm{denom}_k = \\frac{1-\\alpha}{\\alpha} + \\phi_k,
+
+        and the update used here is
+
+        .. math::
+            P[k+1] =
+            \\frac{1}{1-\\alpha}
+            \\left(
+                P[k] - \\frac{p_k p_k^H}{\\mathrm{denom}_k}
+            \\right).
+
+        The coefficient update uses the preconditioned regressor ``P[k+1] x_k``:
+
+        .. math::
+            w[k+1] = w[k] + \\mu\\, e^*[k] \\, (P[k+1] x_k).
+
+    Relationship to RLS
+        The recursion for ``P`` is algebraically similar to an RLS covariance update
+        with a particular normalization; however, the coefficient update remains
+        LMS-like, controlled by the step size ``mu``.
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 5th ed., Algorithm 4.2.
     """
 
     supports_complex: bool = True
@@ -69,22 +123,6 @@ class LMSNewton(AdaptiveFilter):
         *,
         safe_eps: float = 1e-12,
     ) -> None:
-        """
-        Parameters
-        ----------
-        filter_order:
-            FIR order M (number of taps is M+1).
-        alpha:
-            Forgetting factor (0 < alpha < 1).
-        initial_inv_rx:
-            Initial inverse correlation matrix P[0], shape (M+1, M+1).
-        step:
-            Step-size mu.
-        w_init:
-            Optional initial coefficients (length M+1). If None, zeros.
-        safe_eps:
-            Small epsilon used to guard denominators.
-        """
         super().__init__(filter_order=int(filter_order), w_init=w_init)
 
         self.alpha = float(alpha)
@@ -110,28 +148,29 @@ class LMSNewton(AdaptiveFilter):
         verbose: bool = False,
     ) -> OptimizationResult:
         """
-        Run LMS-Newton adaptation.
+        Executes the LMS-Newton adaptation loop over paired input/desired sequences.
 
         Parameters
         ----------
-        input_signal:
-            Input signal x[k].
-        desired_signal:
-            Desired signal d[k].
-        verbose:
-            If True, prints runtime.
+        input_signal : array_like of complex
+            Input sequence ``x[k]`` with shape ``(N,)`` (will be flattened).
+        desired_signal : array_like of complex
+            Desired sequence ``d[k]`` with shape ``(N,)`` (will be flattened).
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Filter output y[k].
-            errors:
-                A priori error e[k] = d[k] - y[k].
-            coefficients:
-                History of coefficients stored in the base class.
-            error_type:
-                "a_priori".
+            Result object with fields:
+            - outputs : ndarray of complex, shape ``(N,)``
+                Scalar output sequence, ``y[k] = w^H[k] x_k``.
+            - errors : ndarray of complex, shape ``(N,)``
+                Scalar a priori error sequence, ``e[k] = d[k] - y[k]``.
+            - coefficients : ndarray of complex
+                Coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"a_priori"``.
         """
         tic: float = perf_counter()
 

@@ -23,15 +23,78 @@ from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult
 
 class Sato(AdaptiveFilter):
     """
-    Implements the Sato algorithm for blind adaptive filtering with complex-valued data.
+    Sato blind adaptive algorithm (complex-valued).
+
+    The Sato criterion is an early blind equalization method particularly
+    associated with multilevel PAM/QAM-type signals. It adapts an FIR equalizer
+    by pulling the output toward a fixed magnitude level through the complex
+    sign function, using a dispersion constant ``zeta``.
+
+    This implementation follows Diniz (Alg. 13.3) and estimates ``zeta`` from
+    the *input sequence* via sample moments.
+
+    Parameters
+    ----------
+    filter_order : int, optional
+        FIR filter order ``M``. The number of coefficients is ``M + 1``.
+        Default is 5.
+    step_size : float, optional
+        Adaptation step size ``mu``. Default is 0.01.
+    w_init : array_like of complex, optional
+        Initial coefficient vector ``w(0)`` with shape ``(M + 1,)``. If None,
+        initializes with zeros.
 
     Notes
     -----
-    - This is a BLIND algorithm: it does not require desired_signal.
-    - We keep `desired_signal=None` in `optimize` only for API standardization.
-    """
-    supports_complex: bool = True
+    Let the regressor vector be ``x_k = [x[k], x[k-1], ..., x[k-M]]^T`` and the
+    output:
 
+    .. math::
+        y(k) = w^H(k) x_k.
+
+    Define the complex sign function (unit-circle projection):
+
+    .. math::
+        \\mathrm{csgn}(y) =
+        \\begin{cases}
+        \\dfrac{y}{|y|}, & |y| > 0 \\\\
+        0, & |y| = 0
+        \\end{cases}
+
+    The Sato error is:
+
+    .. math::
+        e(k) = y(k) - \\zeta\\, \\mathrm{csgn}(y(k)).
+
+    The coefficient update used here is:
+
+    .. math::
+        w(k+1) = w(k) - \\mu\\, e^*(k)\\, x_k.
+
+    Dispersion constant
+    ~~~~~~~~~~~~~~~~~~~
+    In this implementation, the dispersion constant is estimated from the input
+    using sample moments:
+
+    .. math::
+        \\zeta \\approx \\frac{\\mathbb{E}[|x|^2]}{\\mathbb{E}[|x|]}
+        \\approx \\frac{\\frac{1}{N}\\sum_k |x(k)|^2}
+                     {\\frac{1}{N}\\sum_k |x(k)|},
+
+    with a small ``safe_eps`` to avoid division by zero.
+
+    Numerical stability
+    ~~~~~~~~~~~~~~~~~~~
+    To avoid instability when ``|y(k)|`` is very small, this implementation
+    sets ``csgn(y(k)) = 0`` when ``|y(k)| <= safe_eps``.
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 5th ed., Algorithm 13.3.
+    """
+
+    supports_complex: bool = True
     step_size: float
     n_coeffs: int
 
@@ -41,16 +104,6 @@ class Sato(AdaptiveFilter):
         step_size: float = 0.01,
         w_init: Optional[Union[np.ndarray, list]] = None,
     ) -> None:
-        """
-        Parameters
-        ----------
-        filter_order:
-            FIR filter order (number of taps - 1). Number of coefficients is filter_order + 1.
-        step_size:
-            Adaptation step size.
-        w_init:
-            Optional initial coefficient vector. If None, initializes to zeros.
-        """
         super().__init__(filter_order, w_init=w_init)
         self.step_size = float(step_size)
         self.n_coeffs = int(filter_order + 1)
@@ -64,39 +117,40 @@ class Sato(AdaptiveFilter):
         safe_eps: float = 1e-12,
     ) -> OptimizationResult:
         """
-        Executes the Sato blind adaptive algorithm.
+        Executes the Sato adaptation loop over an input sequence.
 
         Parameters
         ----------
-        input_signal:
-            Input signal to be filtered.
-        desired_signal:
-            Ignored (kept only for API standardization).
-        verbose:
-            If True, prints runtime.
-        return_internal_states:
-            If True, returns internal signals in result.extra.
-        safe_eps:
-            Small epsilon used to avoid division by zero.
+        input_signal : array_like of complex
+            Input sequence ``x[k]`` with shape ``(N,)`` (will be flattened).
+        desired_signal : None, optional
+            Ignored. This is a blind algorithm: no desired reference is used.
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, includes internal signals in ``result.extra``:
+            ``"dispersion_constant"`` (estimated ``zeta``) and
+            ``"sato_sign_track"`` (trajectory of ``csgn(y(k))`` with shape
+            ``(N,)``).
+        safe_eps : float, optional
+            Small epsilon used to avoid division by zero when estimating
+            ``zeta`` and to gate the computation of ``csgn(y(k))`` when ``|y(k)|``
+            is close to zero. Default is 1e-12.
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Filter output y[k].
-            errors:
-                Sato error defined here as: e[k] = y[k] - gamma * sign(y[k]).
-            coefficients:
-                History of coefficients stored in the base class.
-            error_type:
-                "blind_sato".
-
-        Extra (when return_internal_states=True)
-        --------------------------------------
-        extra["sato_sign_track"]:
-            Track of sign(y[k]) = y[k]/|y[k]| (with safe handling around zero), length N.
-        extra["dispersion_constant"]:
-            Scalar gamma used by the Sato criterion.
+            Result object with fields:
+            - outputs : ndarray of complex, shape ``(N,)``
+                Output sequence ``y[k]``.
+            - errors : ndarray of complex, shape ``(N,)``
+                Sato error sequence ``e[k] = y(k) - zeta*csgn(y(k))``.
+            - coefficients : ndarray of complex
+                Coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"blind_sato"``.
+            - extra : dict, optional
+                Present only if ``return_internal_states=True``.
         """
         tic: float = time()
 

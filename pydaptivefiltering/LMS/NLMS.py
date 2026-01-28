@@ -26,21 +26,62 @@ ArrayLike = Union[np.ndarray, list]
 
 class NLMS(AdaptiveFilter):
     """
-    Complex NLMS (Normalized Least-Mean Squares).
+    Complex Normalized Least-Mean Squares (NLMS) adaptive filter.
 
-    Implements the normalized LMS recursion (Algorithm 4.3 - Diniz) for adaptive
-    FIR filtering. The update uses a step normalized by the regressor energy:
+    Normalized LMS algorithm for adaptive FIR filtering, following Diniz
+    (Alg. 4.3). The method normalizes the step size by the instantaneous
+    regressor energy to improve stability and reduce sensitivity to input
+    scaling.
 
-        y[k] = w[k]^H x_k
-        e[k] = d[k] - y[k]
-        mu_k = mu / (||x_k||^2 + gamma)
-        w[k+1] = w[k] + mu_k * conj(e[k]) * x_k
+    Parameters
+    ----------
+    filter_order : int
+        Adaptive FIR filter order ``M``. The number of coefficients is ``M + 1``.
+    step_size : float, optional
+        Base adaptation step size ``mu``. Default is 1e-2.
+    gamma : float, optional
+        Regularization constant ``gamma`` used in the normalization denominator
+        to avoid division by zero (or near-zero regressor energy). Default is 1e-6.
+    w_init : array_like of complex, optional
+        Initial coefficient vector ``w(0)`` with shape ``(M + 1,)``. If None,
+        initializes with zeros.
 
     Notes
     -----
-    - Complex-valued implementation (supports_complex = True).
-    - Uses the unified base API via `@validate_input`.
-    - `gamma` is a regularization constant to avoid division by zero.
+    At iteration ``k``, form the regressor vector (newest sample first):
+
+    .. math::
+        x_k = [x[k], x[k-1], \\ldots, x[k-M]]^T \\in \\mathbb{C}^{M+1}.
+
+    The a priori output and error are
+
+    .. math::
+        y[k] = w^H[k] x_k, \\qquad e[k] = d[k] - y[k].
+
+    Define the instantaneous regressor energy
+
+    .. math::
+        \\|x_k\\|^2 = x_k^H x_k,
+
+    and the normalized step size
+
+    .. math::
+        \\mu_k = \\frac{\\mu}{\\|x_k\\|^2 + \\gamma}.
+
+    The NLMS update is then
+
+    .. math::
+        w[k+1] = w[k] + \\mu_k\\, e^*[k] \\, x_k.
+
+    This implementation:
+        - uses complex arithmetic (``supports_complex=True``),
+        - returns the a priori error ``e[k]``,
+        - records coefficient history via the base class.
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 5th ed., Algorithm 4.3.
     """
 
     supports_complex: bool = True
@@ -55,18 +96,6 @@ class NLMS(AdaptiveFilter):
         gamma: float = 1e-6,
         w_init: Optional[ArrayLike] = None,
     ) -> None:
-        """
-        Parameters
-        ----------
-        filter_order:
-            FIR order M (number of taps is M+1).
-        step_size:
-            Base step-size (mu).
-        gamma:
-            Regularization to avoid division by (near) zero.
-        w_init:
-            Optional initial coefficients (length M+1). If None, zeros.
-        """
         super().__init__(filter_order=int(filter_order), w_init=w_init)
         self.step_size = float(step_size)
         self.gamma = float(gamma)
@@ -79,28 +108,29 @@ class NLMS(AdaptiveFilter):
         verbose: bool = False,
     ) -> OptimizationResult:
         """
-        Run NLMS adaptation.
+        Executes the NLMS adaptation loop over paired input/desired sequences.
 
         Parameters
         ----------
-        input_signal:
-            Input signal x[k].
-        desired_signal:
-            Desired signal d[k].
-        verbose:
-            If True, prints runtime.
+        input_signal : array_like of complex
+            Input sequence ``x[k]`` with shape ``(N,)`` (will be flattened).
+        desired_signal : array_like of complex
+            Desired sequence ``d[k]`` with shape ``(N,)`` (will be flattened).
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Filter output y[k].
-            errors:
-                A priori error e[k] = d[k] - y[k].
-            coefficients:
-                History of coefficients stored in the base class.
-            error_type:
-                "a_priori".
+            Result object with fields:
+            - outputs : ndarray of complex, shape ``(N,)``
+                Scalar output sequence, ``y[k] = w^H[k] x_k``.
+            - errors : ndarray of complex, shape ``(N,)``
+                Scalar a priori error sequence, ``e[k] = d[k] - y[k]``.
+            - coefficients : ndarray of complex
+                Coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"a_priori"``.
         """
         tic: float = perf_counter()
 

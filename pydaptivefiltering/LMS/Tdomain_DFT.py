@@ -28,26 +28,80 @@ ArrayLike = Union[np.ndarray, list]
 
 class TDomainDFT(AdaptiveFilter):
     """
-    Transform-Domain LMS using a DFT (complex-valued).
+    Transform-Domain LMS using a unitary DFT (complex-valued).
 
-    Implements a transform-domain LMS variant (Algorithm 4.4 - Diniz) where the
-    regressor is transformed via a unitary DFT:
+    Transform-domain LMS algorithm (Diniz, Alg. 4.4) in which the time-domain
+    regressor is mapped to the frequency domain using a *unitary* Discrete
+    Fourier Transform (DFT). Adaptation is performed in the transform domain
+    with per-bin normalization based on a smoothed power estimate. The time-domain
+    coefficient vector is recovered via the inverse unitary DFT.
 
-        z_k = FFT(x_k) / sqrt(N)
-        y[k] = w_z^H z_k
-        e[k] = d[k] - y[k]
-        P_z[k] = alpha * |z_k|^2 + (1-alpha) * P_z[k-1]
-        w_z <- w_z + mu * conj(e[k]) * z_k / (gamma + P_z[k])
+    Parameters
+    ----------
+    filter_order : int
+        Adaptive FIR filter order ``M``. The number of coefficients is ``M + 1``.
+        The DFT size is ``N = M + 1``.
+    gamma : float
+        Regularization factor ``gamma`` used in the per-bin normalization
+        denominator to avoid division by zero (or near-zero power).
+    alpha : float
+        Smoothing factor ``alpha`` for the transform-bin power estimate,
+        typically close to 1.
+    initial_power : float
+        Initial power estimate used to initialize all transform bins.
+    step_size : float, optional
+        Adaptation step size ``mu``. Default is 1e-2.
+    w_init : array_like of complex, optional
+        Initial time-domain coefficient vector ``w(0)`` with shape ``(M + 1,)``.
+        If None, initializes with zeros.
 
-    Time-domain coefficients are recovered by:
-        w = IFFT(w_z) * sqrt(N)
+    Notes
+    -----
+    At iteration ``k``, form the time-domain regressor vector (newest sample first):
 
-    Library conventions
-    -------------------
-    - Complex-valued implementation (`supports_complex=True`).
-    - `OptimizationResult.coefficients` stores time-domain coefficient history (self.w_history).
-    - Transform-domain coefficient history is provided in `result.extra["coefficients_dft"]`
-      when requested.
+    .. math::
+        x_k = [x[k], x[k-1], \\ldots, x[k-M]]^T \\in \\mathbb{C}^{N}.
+
+    Define the *unitary* DFT (energy-preserving) transform-domain regressor:
+
+    .. math::
+        z_k = \\frac{\\mathrm{DFT}(x_k)}{\\sqrt{N}}.
+
+    Adaptation is performed in the transform domain with weights ``w_z[k]``.
+    The a priori output and error are
+
+    .. math::
+        y[k] = w_z^H[k] z_k, \\qquad e[k] = d[k] - y[k].
+
+    A smoothed per-bin power estimate ``p[k]`` is updated as
+
+    .. math::
+        p[k] = \\alpha\\,|z_k|^2 + (1-\\alpha)\\,p[k-1],
+
+    where ``|z_k|^2`` is taken element-wise.
+
+    The normalized transform-domain LMS update used here is
+
+    .. math::
+        w_z[k+1] = w_z[k] + \\mu\\, e^*[k] \\, \\frac{z_k}{\\gamma + p[k]},
+
+    with element-wise division.
+
+    The time-domain coefficients are recovered via the inverse unitary DFT:
+
+    .. math::
+        w[k] = \\mathrm{IDFT}(w_z[k])\\,\\sqrt{N}.
+
+    Implementation details
+        - ``OptimizationResult.coefficients`` stores the **time-domain** coefficient
+          history recorded by the base class (``self.w`` after inverse transform).
+        - If ``return_internal_states=True``, the transform-domain coefficient history
+          is returned in ``result.extra["coefficients_dft"]``.
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 5th ed., Algorithm 4.4.
     """
 
     supports_complex: bool = True
@@ -61,22 +115,6 @@ class TDomainDFT(AdaptiveFilter):
         step_size: float = 1e-2,
         w_init: Optional[ArrayLike] = None,
     ) -> None:
-        """
-        Parameters
-        ----------
-        filter_order:
-            FIR order M (number of taps is M+1). The DFT size is N = M+1.
-        gamma:
-            Small positive constant to avoid division by (near) zero in each bin.
-        alpha:
-            Smoothing factor for power estimation (typically close to 1).
-        initial_power:
-            Initial power estimate for all bins.
-        step_size:
-            Step-size (mu).
-        w_init:
-            Optional initial coefficients in time domain (length M+1). If None, zeros.
-        """
         super().__init__(filter_order=int(filter_order), w_init=w_init)
 
         self.gamma = float(gamma)
@@ -101,30 +139,40 @@ class TDomainDFT(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Run Transform-Domain LMS (DFT) adaptation.
+        Executes the Transform-Domain LMS (DFT) adaptation loop.
 
         Parameters
         ----------
-        input_signal:
-            Input signal x[k].
-        desired_signal:
-            Desired signal d[k].
-        verbose:
-            If True, prints runtime.
-        return_internal_states:
-            If True, returns extra sequences such as DFT coefficients history and final power vector.
+        input_signal : array_like of complex
+            Input sequence ``x[k]`` with shape ``(N,)`` (will be flattened).
+        desired_signal : array_like of complex
+            Desired sequence ``d[k]`` with shape ``(N,)`` (will be flattened).
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, includes transform-domain internal states in ``result.extra``:
+            ``"coefficients_dft"``, ``"power_vector_last"``, and ``"sqrtN"``.
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Filter output y[k] (a priori).
-            errors:
-                A priori error e[k] = d[k] - y[k].
-            coefficients:
-                Time-domain coefficient history stored in the base class.
-            error_type:
-                "a_priori".
+            Result object with fields:
+            - outputs : ndarray of complex, shape ``(N,)``
+                Scalar a priori output sequence, ``y[k] = w_z^H[k] z_k``.
+            - errors : ndarray of complex, shape ``(N,)``
+                Scalar a priori error sequence, ``e[k] = d[k] - y[k]``.
+            - coefficients : ndarray of complex
+                **Time-domain** coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"a_priori"``.
+            - extra : dict, optional
+                Present only if ``return_internal_states=True`` with:
+                - ``coefficients_dft`` : ndarray of complex
+                    Transform-domain coefficient history.
+                - ``power_vector_last`` : ndarray of float
+                    Final per-bin power estimate ``p[k]``.
+                - ``sqrtN`` : float
+                    The unitary normalization factor ``\\sqrt{N}``.
         """
         t0 = perf_counter()
 

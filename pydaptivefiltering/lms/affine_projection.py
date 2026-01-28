@@ -27,17 +27,65 @@ ArrayLike = Union[np.ndarray, list]
 
 class AffineProjection(AdaptiveFilter):
     """
-    Complex Affine Projection Algorithm (APA).
+    Complex Affine-Projection Algorithm (APA) adaptive filter.
 
-    Implements Algorithm 4.6 (Diniz) using an affine-projection update with data reuse.
+    Affine-projection LMS-type algorithm that reuses the last ``L+1`` regressor
+    vectors to accelerate convergence relative to LMS/NLMS, following Diniz
+    (Alg. 4.6). Per iteration, the method solves a small linear system of size
+    ``(L+1) x (L+1)``.
+
+    Parameters
+    ----------
+    filter_order : int
+        Adaptive FIR filter order ``M``. The number of coefficients is ``M + 1``.
+    step_size : float, optional
+        Adaptation step size (relaxation factor) ``mu``. Default is 1e-2.
+    gamma : float, optional
+        Diagonal loading (regularization) ``gamma`` applied to the projection
+        correlation matrix for numerical stability. Default is 1e-6.
+    L : int, optional
+        Reuse factor (projection order). The algorithm uses ``L + 1`` most recent
+        regressors. Default is 2.
+    w_init : array_like of complex, optional
+        Initial coefficient vector ``w(0)`` with shape ``(M + 1,)``. If None,
+        initializes with zeros.
 
     Notes
     -----
-    - This implementation supports complex-valued data (supports_complex=True).
-    - The base decorator `@validate_input` allows calling optimize with:
-        * optimize(input_signal=..., desired_signal=...)
-        * optimize(x=..., d=...)
-        * optimize(x, d)
+    At iteration ``k``, form the projection matrix and desired vector:
+
+    - ``X(k) ∈ C^{(L+1) x (M+1)}``, whose rows are regressor vectors, with the most
+      recent regressor at row 0.
+    - ``d_vec(k) ∈ C^{L+1}``, stacking the most recent desired samples, with
+      ``d[k]`` at index 0.
+
+    The projection output and error vectors are:
+
+    .. math::
+        y_{vec}(k) = X(k)\\,w^*(k) \\in \\mathbb{C}^{L+1},
+
+    .. math::
+        e_{vec}(k) = d_{vec}(k) - y_{vec}(k).
+
+    The update direction ``u(k)`` is obtained by solving the regularized system:
+
+    .. math::
+        (X(k)X^H(k) + \\gamma I_{L+1})\\,u(k) = e_{vec}(k),
+
+    and the coefficient update is:
+
+    .. math::
+        w(k+1) = w(k) + \\mu X^H(k)\\,u(k).
+
+    This implementation returns only the *most recent* scalar components:
+
+    - ``y[k] = y_vec(k)[0]``
+    - ``e[k] = e_vec(k)[0]``
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 5th ed., Algorithm 4.6.
     """
 
     supports_complex: bool = True
@@ -54,20 +102,6 @@ class AffineProjection(AdaptiveFilter):
         L: int = 2,
         w_init: Optional[ArrayLike] = None,
     ) -> None:
-        """
-        Parameters
-        ----------
-        filter_order:
-            FIR order M (number of taps is M+1).
-        step_size:
-            Step-size / relaxation factor (mu).
-        gamma:
-            Diagonal loading regularization to ensure invertibility.
-        L:
-            Data reuse factor (projection order). Uses L+1 past regressors.
-        w_init:
-            Optional initial weights (length M+1). If None, initializes to zeros.
-        """
         super().__init__(filter_order=int(filter_order), w_init=w_init)
         self.step_size = float(step_size)
         self.gamma = float(gamma)
@@ -82,37 +116,37 @@ class AffineProjection(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Run APA adaptation.
+        Executes the Affine Projection adaptation loop over paired input/desired sequences.
 
         Parameters
         ----------
-        input_signal:
-            Input signal x[k].
-        desired_signal:
-            Desired signal d[k].
-        verbose:
-            If True, prints runtime.
-        return_internal_states:
-            If True, returns the last regressor matrix and last correlation matrix in result.extra.
+        input_signal : array_like of complex
+            Input sequence ``x[k]`` with shape ``(N,)`` (will be flattened).
+        desired_signal : array_like of complex
+            Desired sequence ``d[k]`` with shape ``(N,)`` (will be flattened).
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, includes the last internal states in ``result.extra``:
+            ``"last_regressor_matrix"`` (``X(k)``) and
+            ``"last_correlation_matrix"`` (``X(k)X^H(k) + gamma I``).
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Filter output y[k] (a priori).
-            errors:
-                Error e[k] = d[k] - y[k] (a priori).
-            coefficients:
-                Coefficient history (self.w_history) as a 2D array.
-            error_type:
-                "a_priori".
-            extra (optional):
-                last_regressor_matrix, last_correlation_matrix.
+            Result object with fields:
+            - outputs : ndarray of complex, shape ``(N,)``
+                Scalar output sequence, ``y[k] = y_vec(k)[0]``.
+            - errors : ndarray of complex, shape ``(N,)``
+                Scalar a priori error sequence, ``e[k] = e_vec(k)[0]``.
+            - coefficients : ndarray of complex
+                Coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"a_priori"``.
+            - extra : dict, optional
+                Present only if ``return_internal_states=True``.
         """
         tic: float = perf_counter()
-
-        x: np.ndarray = np.asarray(input_signal).ravel()
-        d: np.ndarray = np.asarray(desired_signal).ravel()
 
         dtype = complex
         x = np.asarray(input_signal, dtype=dtype).ravel()

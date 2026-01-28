@@ -24,10 +24,97 @@ from pydaptivefiltering.utils.validation import ensure_real_signals
 
 class ErrorEquation(AdaptiveFilter):
     """
-    Implements the Equation Error RLS algorithm for real-valued IIR adaptive filtering.
-    """
-    supports_complex: bool = False
+    Equation-Error RLS for adaptive IIR filtering (real-valued).
 
+    The equation-error approach avoids the non-convexity of direct IIR
+    output-error minimization by adapting the coefficients using an auxiliary
+    (linear-in-parameters) error in which past outputs in the feedback path are
+    replaced by past desired samples. This yields a quadratic (RLS-suitable)
+    criterion while still producing a "true IIR" output for evaluation.
+
+    This implementation follows Diniz (3rd ed., Alg. 10.3) and is restricted to
+    **real-valued** signals (enforced by ``ensure_real_signals``).
+
+    Parameters
+    ----------
+    zeros_order : int
+        Numerator order ``N`` (number of zeros). The feedforward part has
+        ``N + 1`` coefficients.
+    poles_order : int
+        Denominator order ``M`` (number of poles). The feedback part has ``M``
+        coefficients.
+    forgetting_factor : float, optional
+        Exponential forgetting factor ``lambda``. Default is 0.99.
+    epsilon : float, optional
+        Positive initialization for the inverse correlation matrix used by RLS.
+        Internally, the inverse covariance is initialized as:
+
+        .. math::
+            S(0) = \\frac{1}{\\epsilon} I.
+
+        Default is 1e-3.
+    w_init : array_like of float, optional
+        Optional initial coefficient vector. If provided, it should have shape
+        ``(M + N + 1,)`` following the parameter order described below. If None,
+        the implementation initializes with zeros (and ignores ``w_init``).
+
+    Notes
+    -----
+    Parameterization (as implemented)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    The coefficient vector is arranged as:
+
+    - ``w[:M]``: feedback (pole) coefficients (denoted ``a`` in literature)
+    - ``w[M:]``: feedforward (zero) coefficients (denoted ``b``)
+
+    Regressors and two outputs
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    At time ``k``, define ``reg_x = [x(k), x(k-1), ..., x(k-N)]^T``.
+    The algorithm forms two regressors:
+
+    - Output regressor (uses past *true outputs*):
+
+      .. math::
+          \\varphi_y(k) = [y(k-1), \\ldots, y(k-M),\\; x(k), \\ldots, x(k-N)]^T.
+
+    - Equation regressor (uses past *desired samples*):
+
+      .. math::
+          \\varphi_e(k) = [d(k-1), \\ldots, d(k-M),\\; x(k), \\ldots, x(k-N)]^T.
+
+    The reported output is the "true IIR" output computed with the output
+    regressor:
+
+    .. math::
+        y(k) = w^T(k)\\, \\varphi_y(k),
+
+    while the auxiliary "equation" output is:
+
+    .. math::
+        y_{eq}(k) = w^T(k)\\, \\varphi_e(k).
+
+    The adaptation is driven by the *equation error*:
+
+    .. math::
+        e_{eq}(k) = d(k) - y_{eq}(k),
+
+    whereas the "output error" used for evaluation is:
+
+    .. math::
+        e(k) = d(k) - y(k).
+
+    Stability procedure
+    ~~~~~~~~~~~~~~~~~~~
+    After each update, the feedback coefficients ``w[:M]`` are stabilized by
+    reflecting any poles outside the unit circle back inside (pole reflection).
+
+    References
+    ----------
+    .. [1] P. S. R. Diniz, *Adaptive Filtering: Algorithms and Practical
+       Implementation*, 3rd ed., Algorithm 10.3.
+    """
+
+    supports_complex: bool = False
     zeros_order: int
     poles_order: int
     forgetting_factor: float
@@ -45,26 +132,6 @@ class ErrorEquation(AdaptiveFilter):
         epsilon: float = 1e-3,
         w_init: Optional[Union[np.ndarray, list]] = None,
     ) -> None:
-        """
-        Parameters
-        ----------
-        zeros_order:
-            Numerator order (number of zeros).
-        poles_order:
-            Denominator order (number of poles).
-        forgetting_factor:
-            Forgetting factor (lambda), typically close to 1.
-        epsilon:
-            Regularization / initialization parameter for the inverse correlation matrix.
-        w_init:
-            Optional initial coefficient vector. If None, initializes to zeros.
-
-        Notes
-        -----
-        Coefficient vector convention:
-        - First `poles_order` entries correspond to denominator (pole) parameters.
-        - Remaining entries correspond to numerator (zero) parameters.
-        """
         super().__init__(filter_order=zeros_order + poles_order, w_init=w_init)
 
         self.zeros_order = int(zeros_order)
@@ -72,7 +139,7 @@ class ErrorEquation(AdaptiveFilter):
         self.forgetting_factor = float(forgetting_factor)
         self.epsilon = float(epsilon)
 
-        self.n_coeffs = int(self.poles_order + 1 + self.zeros_order)
+        self.n_coeffs = int(self.poles_order + self.zeros_order + 1)
         self.w = np.zeros(self.n_coeffs, dtype=np.float64)
 
         self.Sd = (1.0 / self.epsilon) * np.eye(self.n_coeffs, dtype=np.float64)
@@ -83,6 +150,7 @@ class ErrorEquation(AdaptiveFilter):
     def _stability_procedure(self, a_coeffs: np.ndarray) -> np.ndarray:
         """
         Enforces IIR stability by reflecting poles outside the unit circle back inside.
+        This ensures the recursive part of the filter does not diverge.
         """
         poly_coeffs: np.ndarray = np.concatenate(([1.0], -a_coeffs))
         poles: np.ndarray = np.roots(poly_coeffs)
@@ -104,46 +172,46 @@ class ErrorEquation(AdaptiveFilter):
         return_internal_states: bool = False,
     ) -> OptimizationResult:
         """
-        Executes the Equation Error RLS algorithm for IIR filters.
+        Executes the equation-error RLS adaptation loop.
 
         Parameters
         ----------
-        input_signal:
-            Input signal x[k].
-        desired_signal:
-            Desired signal d[k].
-        verbose:
-            If True, prints runtime.
-        return_internal_states:
-            If True, returns pole coefficients trajectory in result.extra.
+        input_signal : array_like of float
+            Real-valued input sequence ``x[k]`` with shape ``(N,)``.
+        desired_signal : array_like of float
+            Real-valued desired/reference sequence ``d[k]`` with shape ``(N,)``.
+            Must have the same length as ``input_signal``.
+        verbose : bool, optional
+            If True, prints the total runtime after completion.
+        return_internal_states : bool, optional
+            If True, includes the time history of the feedback (pole)
+            coefficients in ``result.extra["a_coefficients"]`` with shape
+            ``(N, poles_order)`` (or None if ``poles_order == 0``).
 
         Returns
         -------
         OptimizationResult
-            outputs:
-                Filter output y[k] computed from the output equation.
-            errors:
-                Output error e[k] = d[k] - y[k].
-            coefficients:
-                History of coefficients stored in the base class.
-            error_type:
-                "equation_error".
-
-        Extra (always)
-        -------------
-        extra["auxiliary_errors"]:
-            Equation-error based auxiliary error sequence.
-
-        Extra (when return_internal_states=True)
-        --------------------------------------
-        extra["a_coefficients"]:
-            Trajectory of denominator (pole) coefficients, shape (N, poles_order).
+            Result object with fields:
+            - outputs : ndarray of float, shape ``(N,)``
+                "True IIR" output sequence ``y[k]`` computed with past outputs.
+            - errors : ndarray of float, shape ``(N,)``
+                Output error sequence ``e[k] = d[k] - y[k]``.
+            - coefficients : ndarray of float
+                Coefficient history recorded by the base class.
+            - error_type : str
+                Set to ``"equation_error"``.
+            - extra : dict
+                Always includes:
+                - ``"auxiliary_errors"``: ndarray of float, shape ``(N,)`` with
+                  the equation error ``e_eq[k] = d[k] - y_eq[k]`` used to drive
+                  the RLS update.
+                Additionally includes ``"a_coefficients"`` if
+                ``return_internal_states=True``.
         """
         tic: float = time()
 
         x: np.ndarray = np.asarray(input_signal, dtype=np.float64)
         d: np.ndarray = np.asarray(desired_signal, dtype=np.float64)
-
         n_samples: int = int(x.size)
 
         outputs: np.ndarray = np.zeros(n_samples, dtype=np.float64)
@@ -159,9 +227,13 @@ class ErrorEquation(AdaptiveFilter):
         x_padded: np.ndarray = np.zeros(n_samples + self.zeros_order, dtype=np.float64)
         x_padded[self.zeros_order:] = x
 
+        
+
         for k in range(n_samples):
             reg_x: np.ndarray = x_padded[k : k + self.zeros_order + 1][::-1]
+            
             reg_y: np.ndarray = np.concatenate((self.y_buffer, reg_x))
+            
             reg_e: np.ndarray = np.concatenate((self.d_buffer, reg_x))
 
             y_out: float = float(np.dot(self.w, reg_y))
@@ -192,9 +264,7 @@ class ErrorEquation(AdaptiveFilter):
         if verbose:
             print(f"[ErrorEquation] Completed in {runtime_s * 1000:.02f} ms")
 
-        extra: Dict[str, Any] = {
-            "auxiliary_errors": errors_aux,
-        }
+        extra: Dict[str, Any] = {"auxiliary_errors": errors_aux}
         if return_internal_states:
             extra["a_coefficients"] = a_track
 
