@@ -154,7 +154,7 @@ Roadmap for each algorithm family:
 ## Documentation
 
 - 📖 API reference (pdoc): `<docs/>`
-- 🧪 Examples and notebooks: `<examples/Jupyter Notebooks/>`
+- 🧪 Examples and notebooks: [Notebooks](examples/Jupyter%20Notebooks/)
 
 ---
 
