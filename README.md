@@ -19,10 +19,10 @@
 
 
 ## 📌 Table of Contents
-* [Algorithms & Progress](#-project-status--algorithms)
 * [Installation](#install-instructions)
-* [Usage Examples](#-examples-of-uses)
-* [Neural Adaptation (MLP)](#-quick-example-neural-adaptive-filtering-mlp)
+* [Usage Examples](#quickstart-60-seconds)
+* [Algorithms & Progress](#algorithms-overview)
+* [License](#-license)
 
 ---
 
