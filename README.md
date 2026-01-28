@@ -35,6 +35,7 @@ The project is currently on its early stages (v0.9). The planned order of work f
 - [1/1] Kalman Filters
 
 **simplified_puap:** The `set_membership.simplified_puap.py` implementation is currently under technical review and may not exhibit expected convergence in this version.
+
 **complex_rbf:** The `nonlinear.complex_rbf.py` implementation is currently under technical review and may exhibit unexpected warnings in this version.
 
 ---
