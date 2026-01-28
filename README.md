@@ -1,207 +1,239 @@
 # pydaptivefiltering
 
-<!---<img src="exemplo-image.png" alt="exemplo imagem">--->
+<!--
+  PLACEHOLDER: Project banner / logo
+  Replace the path below with your image (e.g., docs/assets/banner.png).
+-->
+<p align="center">
+  <img src="<!-- LINK_OR_PATH_TO_BANNER_IMAGE -->" alt="pydaptivefiltering banner" width="900">
+</p>
 
-> **A high-performance Python package for Adaptive Filtering.** > Implementations are strictly based on the book *Adaptive Filtering: Algorithms and Practical Implementation* by **Paulo S. R. Diniz**.
+<p align="center">
+  <strong>High-performance adaptive filtering in Python</strong><br>
+  Implementations based on <em>Adaptive Filtering: Algorithms and Practical Implementation</em> (Paulo S. R. Diniz).
+</p>
 
-## 🛠️ Description
-
-This package provides a modern Python alternative to the **MATLAB Adaptive Filtering Toolbox**.
-
-## 📌 Table of Contents
-* [Algorithms & Progress](#-project-status--algorithms)
-* [Installation](#install-instructions)
-* [Usage Examples](#-examples-of-uses)
-* [Neural Adaptation (MLP)](#-quick-example-neural-adaptive-filtering-mlp)
-
-## 🚀 Project Status & Algorithms
-
-The package currently covers the vast majority of classical and advanced linear adaptive algorithms, all validated via `pytest` with steady-state convergence scenarios.
-
-## 🏗️ Architecture
-
-O pacote foi desenhado seguindo princípios de POO (Programação Orientada a Objetos) para garantir que todos os algoritmos compartilhem a mesma interface, facilitando o benchmarking.
-
-```mermaid
-classDiagram
-    class AdaptiveFilter {
-        <<Abstract>>
-        +w: ndarray
-        +optimize(x, d)
-        +_record_history()
-        #_pack_results()
-    }
-
-    class FIR_Filters {
-        +LMS / NLMS
-        +RLS
-        +AP / PUAP
-    }
-
-    class IIR_Filters {
-        +RLSIIR
-        +SteiglitzMcBride
-        +Gauss-Newton
-    }
-
-    class Nonlinear_Filters {
-        +Volterra
-        +Bilinear
-        +MultilayerPerceptron
-    }
-
-    class Lattice_QR {
-        +LatticeRLS
-        +FastTransversal
-        +QR_RLS
-    }
-
-    class State_Space {
-        +KalmanFilter
-    }
-
-    AdaptiveFilter <|-- FIR_Filters
-    AdaptiveFilter <|-- IIR_Filters
-    AdaptiveFilter <|-- Nonlinear_Filters
-    AdaptiveFilter <|-- Lattice_QR
-    AdaptiveFilter <|-- State_Space
-```
-
-### Current Implementation
-
-The project is currently on its early stages (v0.9). The planned order of work for every kind of algorithm is: (Algorithm(1), Examples(2), Notebooks(3)). The following is the planned and current progress for each of the algorithms:
-
-- [11/11] LMS based algorithms
-- [2/2] RLS based algorithms 
-- [5*/5] SetMembership Algorithms
-- [4/4] Lattice-based RLS 
-- [2/2] Fast Transversal RLS
-- [1/1] QR
-- [5/5] IIR Filters
-- [6*/6] Nonlinear Filters
-- [3/3] Subband Filters
-- [4/4] BlindFilters
-- [1/1] Kalman Filters
-
-**simplified_puap:** The `set_membership.simplified_puap.py` implementation is currently under technical review and may not exhibit expected convergence in this version.
-
-**complex_rbf:** The `nonlinear.complex_rbf.py` implementation is currently under technical review and may exhibit unexpected warnings in this version.
-
-
+<!--
+  PLACEHOLDER: Badges
+  Replace with your actual badge links (PyPI, CI, coverage, docs, license).
+-->
+<p align="center">
+  <a href="<!-- LINK_TO_PYPI -->"><img src="<!-- BADGE_PYPI_VERSION -->" alt="PyPI version"></a>
+  <a href="<!-- LINK_TO_CI -->"><img src="<!-- BADGE_CI_STATUS -->" alt="CI status"></a>
+  <a href="<!-- LINK_TO_COVERAGE -->"><img src="<!-- BADGE_COVERAGE -->" alt="Coverage"></a>
+  <a href="<!-- LINK_TO_DOCS -->"><img src="<!-- BADGE_DOCS -->" alt="Docs"></a>
+  <a href="<!-- LINK_TO_LICENSE -->"><img src="<!-- BADGE_LICENSE -->" alt="License"></a>
+</p>
 
 ---
-## 💻 Requirements
 
-* **Python 3.10+** (Officially tested on 3.12.7)
-* **NumPy** and **SciPy**
+## Why pydaptivefiltering?
 
+- ✅ **Research-grade correctness**: extensive automated tests (steady-state + tracking scenarios).
+- ⚡ **Performance-first**: optimized code paths where applicable.
+- 🧩 **Consistent API** across algorithms (`optimize` → `outputs`, `errors`, `coefficients`, `extra`).
+- 📚 **Readable math**: docstrings include equations and references to Diniz’ book.
+
+**Docs:** <!-- LINK_TO_DOCS -->  
+**Notebooks:** <!-- LINK_TO_NOTEBOOKS_FOLDER -->  
+**Issue tracker:** <!-- LINK_TO_ISSUES -->  
 
 ---
-## Install Instructions
 
-To install the package with pip:
+## Install
 
-```
+```bash
 pip install pydaptivefiltering
 ```
 
+### Requirements
+
+- Python **3.10+** (tested on <!-- PYTHON_VERSION_TESTED e.g. 3.12 -->)
+- NumPy, SciPy
+
 ---
-## ☕ Examples of uses
 
-The package is designed to be intuitive for both research and production. You can easily compare linear and non-linear approaches for system identification or signal prediction.
+## Quickstart (60 seconds)
 
-A comprehensive collection of Jupyter Notebooks is available at `<Examples/Jupyter Notebooks/>`, covering:
-* **System Identification:** Comparing LMS vs. RLS convergence.
-* **Non-linear Modeling:** Using Volterra and Bilinear filters to model saturation and feedback.
-* **Neural Adaptation:** Benchmarking MLP with Momentum against classical adaptive filters.
+System identification (example with Volterra-RLS):
 
-Basic usage pattern:
 ```python
-import pydaptivefiltering as pdf
 import numpy as np
+import pydaptivefiltering as pdf
 
-# 1. Define your data (Input and Desired)
-x = np.random.randn(5000)
-d = my_system_output(x)
+rng = np.random.default_rng(0)
 
-# 2. Instantiate the filter
-filt = pdf.VolterraRLS(memory=3, forgetting_factor=0.99)
+# Synthetic system: d[k] = 0.7 x[k] - 0.2 x[k-1] + noise
+N = 5000
+x = rng.standard_normal(N)
+d = np.zeros(N)
+for k in range(1, N):
+    d[k] = 0.7*x[k] - 0.2*x[k-1] + 0.05*rng.standard_normal()
 
-# 3. Optimize and Analyze
-results = filt.optimize(x, d)
-print(f"Final MSE: {np.mean(results['errors'][-100:]**2)}")
+filt = pdf.VolterraRLS(memory=3, forgetting_factor=0.99, delta=1.0)
+res = filt.optimize(x, d)
+
+mse_tail = np.mean(res["errors"][-500:]**2)
+print("Final tail MSE:", mse_tail)
+print("Final coefficient vector length:", res["coefficients"][-1].size)
 ```
 
-
+> Tip: `res["extra"]` may include additional trajectories when `return_internal_states=True`.
 
 ---
-## ⚡ Quick Example: Neural Adaptive Filtering (MLP)
 
-The package now supports a **Multilayer Perceptron (MLP)** designed for adaptive filtering tasks, featuring Backpropagation with Momentum and selectable activation functions (`tanh`, `sigmoid`).
+## Example: Neural Adaptive Filtering (MLP)
+
+Nonlinear system:
+\[
+d(k) = x(k)^2 + 0.5\,x(k-1) + \eta(k)
+\]
 
 ```python
 import numpy as np
 import matplotlib.pyplot as plt
-from pydaptivefiltering as pdf 
+import pydaptivefiltering as pdf
 
-# --- 1. Generate Non-linear Data ---
-# System: d(k) = x(k)^2 + 0.5*x(k-1)
+rng = np.random.default_rng(1)
+
 N = 3000
-x = np.random.uniform(-1, 1, N)
+x = rng.uniform(-1, 1, N)
 d = np.zeros(N)
 for k in range(1, N):
-    d[k] = (x[k]**2) + 0.5*x[k-1] + 0.01*np.random.randn()
+    d[k] = (x[k]**2) + 0.5*x[k-1] + 0.01*rng.standard_normal()
 
-# --- 2. Initialize the Adaptive MLP ---
-# Configuration: 3 inputs [x(k), d(k-1), x(k-1)], 8 hidden neurons, Tanh activation
 mlp = pdf.MultilayerPerceptron(
-    n_neurons=8, 
-    input_dim=3, 
-    step=0.01, 
-    momentum=0.9, 
-    activation='tanh'
+    n_neurons=8,
+    input_dim=3,
+    step_size=0.01,   # Keep consistent with the library API
+    momentum=0.9,
+    activation="tanh",
 )
 
-# --- 3. Run Optimization ---
 res = mlp.optimize(x, d)
 
-# --- 4. Visualize ---
-plt.plot(10*np.log10(res['errors']**2), alpha=0.5, label='Squared Error (dB)')
-plt.title(f"MLP Convergence (Final MSE: {np.mean(res['errors'][-500:]**2):.5f})")
-plt.legend()
+plt.plot(10*np.log10(res["errors"]**2 + 1e-12), alpha=0.8)
+plt.title(f"MLP Convergence (Final MSE: {np.mean(res['errors'][-500:]**2):.6f})")
+plt.xlabel("Iteration")
+plt.ylabel("Squared Error (dB)")
 plt.show()
 ```
+
+<!-- PLACEHOLDER: Put a convergence plot screenshot here -->
+<p align="center">
+  <img src="<!-- LINK_OR_PATH_TO_MLP_PLOT_IMAGE -->" alt="MLP convergence plot" width="750">
+</p>
+
 ---
 
-## 🧪 Technical Validation
+## Algorithms (overview)
 
-The package uses rigorous unit testing to ensure the mathematical integrity of each structure. We currently maintain **70+ automated tests** covering:
+> This is an overview. For the full list, check the documentation: <!-- LINK_TO_DOCS -->
 
-1. **Numerical Stability:** Floating-point operations for complex structures (Lattice/QR).
-2. **Convergence Accuracy:** Verification of steady-state MSE (Mean Square Error) against system noise levels.
-3. **Tracking Performance:** Capability of algorithms to adapt to abrupt system changes (Step response).
+| Category | Examples (classes) | Data type | Notes |
+|---|---|---:|---|
+| LMS family | `LMS`, `NLMS`, `AP`, ... | Real/Complex | classic + normalized/projection variants |
+| RLS family | `RLS`, `RLSAlt`, `QRRLS`, ... | Real/Complex | numerically stable variants included |
+| Set-membership | `SMNLMS`, `SMAffineProjection`, ... | Complex | updates only when \|e(k)\| exceeds threshold |
+| Nonlinear | `VolterraLMS/RLS`, `BilinearRLS`, `RBF`, `MultilayerPerceptron` | Real | nonlinear modeling + neural adaptation |
+| Subband | `OLSBLMS`, `DLCLLMS`, `CFDLMS` | Real | block/subband processing |
 
-To run tests locally:
+---
+
+## Project status
+
+Current release: **v<!-- VERSION -->** (<!-- STABILITY: e.g., early-stage / stable -->)
+
+Roadmap for each algorithm family:
+1) implementation  
+2) examples  
+3) notebooks
+
+### Known limitations (this release)
+
+- ⚠️ `set_membership.simplified_puap.py`: under technical review (convergence may differ from reference).
+- ⚠️ `nonlinear.complex_rbf.py`: under technical review (may emit warnings).
+
+---
+
+## Documentation
+
+- 📖 API reference (pdoc): <!-- LINK_TO_DOCS -->
+- 🧪 Examples and notebooks: <!-- LINK_TO_NOTEBOOKS_FOLDER -->
+- 🧠 Mathematical background: <!-- LINK_TO_BACKGROUND_DOC_OR_WIKI -->
+
+### Building docs locally (placeholder)
+
+```bash
+# Example (adjust to your workflow)
+pdoc pydaptivefiltering -o docs
+```
+
+---
+
+## Testing
+
+We maintain automated tests covering:
+- numerical stability (e.g., QR/Lattice)
+- steady-state convergence vs. noise floors
+- tracking behavior under abrupt system changes
+
+Run locally:
 
 ```bash
 pytest
-
 ```
 
 ---
-## 📝 License
 
-This project is under the license found at [LICENSE](LICENSE.md).
+## Performance notes (optional)
 
-
-![GitHub repo size](https://img.shields.io/github/repo-size/BruninLima/PydaptiveFiltering?style=for-the-badge)
-![GitHub language count](https://img.shields.io/github/languages/count/BruninLima/PydaptiveFiltering?style=for-the-badge)
-![GitHub forks](https://img.shields.io/github/forks/BruninLima/PydaptiveFiltering?style=for-the-badge)
-![Bitbucket open issues](https://img.shields.io/bitbucket/issues/BruninLima/PydaptiveFiltering?style=for-the-badge)
-![Bitbucket open pull requests](https://img.shields.io/bitbucket/pr-raw/BruninLima/PydaptiveFiltering?style=for-the-badge)
+- Many algorithms are online/sample-by-sample.
+- Some subband methods are block-based and return output/error in blocks.
+- See each class docstring for computational complexity notes.
 
 ---
-## 📖 References
 
-* **Diniz, P. S. R.** (2020). *Adaptive Filtering: Algorithms and Practical Implementation*. Springer.
-* MATLAB Adaptive Filtering Toolbox.
+## Citing
+
+If you use this package in academic work, please cite:
+
+```bibtex
+@software{pydaptivefiltering,
+  title        = {pydaptivefiltering: High-performance adaptive filtering in Python},
+  author       = {<!-- YOUR_NAME -->},
+  year         = {<!-- YEAR -->},
+  url          = {<!-- REPO_URL -->},
+  version      = {<!-- VERSION -->}
+}
+```
+
+---
+
+## Contributing
+
+PRs are welcome! Suggested workflow:
+1) add/adjust tests in `tests/`
+2) run `pytest`
+3) keep docstrings updated (equations + examples)
+
+**Development guide:** <!-- LINK_TO_CONTRIBUTING_MD -->  
+**Code of conduct:** <!-- LINK_TO_CODE_OF_CONDUCT -->  
+
+---
+
+## License
+
+See [`LICENSE.md`](LICENSE.md).
+
+---
+
+## References
+
+- Diniz, P. S. R. (2020). *Adaptive Filtering: Algorithms and Practical Implementation*. Springer.
+- MATLAB Adaptive Filtering Toolbox (for comparison).
+
+<!-- PLACEHOLDER: Footer image (institution / lab / sponsor) -->
+<p align="center">
+  <img src="<!-- LINK_OR_PATH_TO_FOOTER_IMAGE -->" alt="Footer image" width="650">
+</p>
