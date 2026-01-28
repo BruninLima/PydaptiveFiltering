@@ -101,7 +101,6 @@ class ComplexRBF(AdaptiveFilter):
         if sigma_init <= 0.0:
             raise ValueError(f"sigma_init must be > 0. Got {sigma_init}.")
 
-        # filter_order used as "generic size indicator" (n_neurons-1 => n_neurons taps)
         super().__init__(filter_order=n_neurons - 1, w_init=None)
 
         self.n_neurons = n_neurons
@@ -112,7 +111,6 @@ class ComplexRBF(AdaptiveFilter):
 
         self._rng = rng if rng is not None else np.random.default_rng()
 
-        # weights
         if w_init is None:
             w0 = self._rng.standard_normal(n_neurons) + 1j * self._rng.standard_normal(n_neurons)
             self.w = w0.astype(complex)
@@ -122,16 +120,13 @@ class ComplexRBF(AdaptiveFilter):
                 raise ValueError(f"w_init must have length {n_neurons}, got {w0.size}.")
             self.w = w0
 
-        # centers (complex), shape (n_neurons, input_dim)
         self.vet = 0.5 * (
             self._rng.standard_normal((n_neurons, input_dim))
             + 1j * self._rng.standard_normal((n_neurons, input_dim))
         ).astype(complex)
 
-        # spreads (real), shape (n_neurons,)
         self.sigma = np.ones(n_neurons, dtype=float) * float(sigma_init)
 
-        # reset base history with correct initial w
         self.w_history = []
         self._record_history()
 
@@ -159,7 +154,6 @@ class ComplexRBF(AdaptiveFilter):
         returns: (n_neurons,)
         """
         diff = u[None, :] - centers
-        # squared Euclidean distance in C^d: sum(Re^2 + Im^2)
         return np.sum(diff.real**2 + diff.imag**2, axis=1)
 
     def optimize(
@@ -217,7 +211,6 @@ class ComplexRBF(AdaptiveFilter):
         x_in = np.asarray(input_signal)
         d = np.asarray(desired_signal, dtype=complex).ravel()
 
-        # Build regressors
         if x_in.ndim == 1:
             U = self._build_regressors_from_signal(x_in, self.input_dim)
         elif x_in.ndim == 2:
@@ -243,39 +236,33 @@ class ComplexRBF(AdaptiveFilter):
             u = U[k, :]
             last_u = u
 
-            # activations
             dis_sq = self._squared_distance_complex(u, self.vet)
             sigma_sq = np.maximum(self.sigma**2, float(safe_eps))
             f = np.exp(-dis_sq / sigma_sq)
             last_f = f
 
-            # output and error (a priori)
-            y_k = complex(np.vdot(self.w, f))  # conj(w) @ f
+            
+            w_old = self.w.copy()
+            y_k = complex(np.vdot(w_old, f))
             outputs[k] = y_k
-            e_k = d[k] - y_k
+            e_k = d[k] - y_k 
             errors[k] = e_k
 
-            # weight update (kept as in your code: 2*uw*e*f)
-            self.w = self.w + (2.0 * self.uw) * e_k * f
-
-            # sigma update (kept structurally similar, with protections)
+            self.w = w_old + (2.0 * self.uw) * np.conj(e_k) * f
+            phi = np.real(e_k * w_old)    
             denom_sigma = np.maximum(self.sigma**3, float(safe_eps))
             grad_sigma = (
-                (2.0 * self.us)
+                (4.0 * self.us)
                 * f
-                * (e_k.real * self.w.real + e_k.imag * self.w.imag)
+                * phi
                 * dis_sq
                 / denom_sigma
             )
-            self.sigma = self.sigma + grad_sigma
-            self.sigma = np.maximum(self.sigma, float(safe_eps))
+            self.sigma = np.maximum(self.sigma + grad_sigma, float(safe_eps))
 
-            # centers update (vectorized over neurons; same intent as your loop)
-            denom_c = np.maximum(self.sigma**2, float(safe_eps))
-            term = (e_k.real * self.w.real)[:, None] * (u - self.vet).real + 1j * (
-                (e_k.imag * self.w.imag)[:, None] * (u - self.vet).imag
-            )
-            self.vet = self.vet + (2.0 * self.ur) * (f[:, None] * term) / denom_c[:, None]
+            denom_c = np.maximum(self.sigma**2, safe_eps)
+
+            self.vet = self.vet + (2.0 * self.ur) * (f[:, None] * phi[:, None]) * (u - self.vet) / denom_c[:, None]
 
             self._record_history()
 
