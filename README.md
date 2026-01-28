@@ -238,6 +238,7 @@ print(f"Innovation std: {innov.std():.3f}")
 ### Known limitations (this release)
 
 - I need to populate the python examples.
+- TODO: Implement whats new on the v5 of the Matlab Toolbox
 ---
 
 ## Notebooks
@@ -258,6 +259,6 @@ This project is under the license found at [LICENSE](LICENSE.md).
 ## References
 
 - Diniz, P. S. R. (2020). *Adaptive Filtering: Algorithms and Practical Implementation*. Springer.
-- MATLAB Adaptive Filtering Toolbox (for comparison).
+- MATLAB Adaptive Filtering Toolbox v4.
 
 > Documentation and docstrings were refined using AI assistance to ensure the NumPy/SciPy documentation standards and mathematical clarity.
