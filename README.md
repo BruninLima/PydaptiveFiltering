@@ -20,15 +20,21 @@
 ## Algorithms (overview)
 
 > This is an overview. For the full list, check the documentation: <a href="https://BruninLima.github.io/pydaptivefiltering/index.html">Docs</a>
+Algorithms categories are based on the chapters of the book <em>Adaptive Filtering: Algorithms and Practical Implementation</em> (Paulo S. R. Diniz).
 
-| Category | Examples (classes) | Data type | Notes |
-|---|---|---:|---|
-| LMS family | `LMS`, `NLMS`, `AP`, ... | Real/Complex | classic + normalized/projection variants |
-| RLS family | `RLS`, `RLSAlt`, `QRRLS`, ... | Real/Complex | numerically stable variants included |
-| Set-membership | `SMNLMS`, `SMAffineProjection`, ... | Complex | updates only when \|e(k)\| exceeds threshold |
-| Nonlinear | `VolterraLMS/RLS`, `BilinearRLS`, `RBF`, `MultilayerPerceptron` | Real | nonlinear modeling + neural adaptation |
-| Subband | `OLSBLMS`, `DLCLLMS`, `CFDLMS` | Real | block/subband processing |
-
+| Module / Category | Examples (classes) | Data type | Notes |
+|---|---|---|---|
+| `lms/` (LMS family) | `LMS`, `NLMS`, `AP`, … | Real/Complex | Classic LMS and normalized/projection variants. |
+| `rls/` (RLS family) | `RLS`, `RLSAlt`, … | Complex | Standard RLS + alternative recursion variants. |
+| `fast_rls/` (Fast transversal RLS) | `FastRLS`, `StabFastRLS`, … | Real/Complex | Fast transversal implementations; stability-oriented variants. |
+| `qr_decomposition/` (QR-RLS) | `QRRLS` | Real | Numerically stable RLS via Givens rotations / QR-style recursion. |
+| `set_membership/` (Set-membership) | `SMNLMS`, `SMBNLMS`, `SMAffineProjection`, `SimplifiedSMAP` | Complex | Updates only when \|e(k)\| exceeds a threshold (`gamma_bar`). |
+| `nonlinear/` (Nonlinear) | `VolterraLMS`, `VolterraRLS`, `RBF`, `MultilayerPerceptron`, … | Real | Volterra (2nd-order), RBF networks, adaptive MLP with momentum. |
+| `subband/` (Subband / frequency-domain) | `OLSBLMS`, `DLCLLMS`, `CFDLMS` | Real | Block/subband processing; some internals use complex FFT but I/O is real. |
+| `lattice/` (Lattice-based RLS) | <!-- e.g., `LatticeRLS`, `...` --> | Real/Complex | Lattice/QR-like numerically stable structures (fill with your class names). |
+| `iir/` (IIR adaptive filters) | <!-- e.g., `IIRLMS`, `...` --> | Real/Complex | Adaptive IIR structures (fill with your class names). |
+| `blind/` (Blind filtering) | <!-- e.g., `CMA`, `...` --> | Complex | Blind/adaptive criteria without desired signal (fill with your class names). |
+| `kalman/` (Kalman filters) | `Kalman`, … | Real | State-space filtering (and parameter estimation if supported). |
 ---
 
 ## 📌 Table of Contents
