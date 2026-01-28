@@ -27,19 +27,6 @@
 
 ---
 
-## Why pydaptivefiltering?
-
-- ✅ **Research-grade correctness**: extensive automated tests (steady-state + tracking scenarios).
-- ⚡ **Performance-first**: optimized code paths where applicable.
-- 🧩 **Consistent API** across algorithms (`optimize` → `outputs`, `errors`, `coefficients`, `extra`).
-- 📚 **Readable math**: docstrings include equations and references to Diniz’ book.
-
-**Docs:** <!-- LINK_TO_DOCS -->  
-**Notebooks:** <!-- LINK_TO_NOTEBOOKS_FOLDER -->  
-**Issue tracker:** <!-- LINK_TO_ISSUES -->  
-
----
-
 ## Install
 
 ```bash
@@ -152,7 +139,7 @@ Roadmap for each algorithm family:
 ### Known limitations (this release)
 
 - ⚠️ `set_membership.simplified_puap.py`: under technical review (convergence may differ from reference).
-- ⚠️ `nonlinear.complex_rbf.py`: under technical review (may emit warnings).
+- ⚠️ `nonlinear.complex_rbf.py`: under technical review (convergence may differ from reference).
 
 ---
 
@@ -160,73 +147,19 @@ Roadmap for each algorithm family:
 
 - 📖 API reference (pdoc): <!-- LINK_TO_DOCS -->
 - 🧪 Examples and notebooks: <!-- LINK_TO_NOTEBOOKS_FOLDER -->
-- 🧠 Mathematical background: <!-- LINK_TO_BACKGROUND_DOC_OR_WIKI -->
-
-### Building docs locally (placeholder)
-
-```bash
-# Example (adjust to your workflow)
-pdoc pydaptivefiltering -o docs
-```
 
 ---
 
-## Testing
+## 📝 License
 
-We maintain automated tests covering:
-- numerical stability (e.g., QR/Lattice)
-- steady-state convergence vs. noise floors
-- tracking behavior under abrupt system changes
+This project is under the license found at [LICENSE](LICENSE.md).
 
-Run locally:
 
-```bash
-pytest
-```
-
----
-
-## Performance notes (optional)
-
-- Many algorithms are online/sample-by-sample.
-- Some subband methods are block-based and return output/error in blocks.
-- See each class docstring for computational complexity notes.
-
----
-
-## Citing
-
-If you use this package in academic work, please cite:
-
-```bibtex
-@software{pydaptivefiltering,
-  title        = {pydaptivefiltering: High-performance adaptive filtering in Python},
-  author       = {<!-- YOUR_NAME -->},
-  year         = {<!-- YEAR -->},
-  url          = {<!-- REPO_URL -->},
-  version      = {<!-- VERSION -->}
-}
-```
-
----
-
-## Contributing
-
-PRs are welcome! Suggested workflow:
-1) add/adjust tests in `tests/`
-2) run `pytest`
-3) keep docstrings updated (equations + examples)
-
-**Development guide:** <!-- LINK_TO_CONTRIBUTING_MD -->  
-**Code of conduct:** <!-- LINK_TO_CODE_OF_CONDUCT -->  
-
----
-
-## License
-
-See [`LICENSE.md`](LICENSE.md).
-
----
+![GitHub repo size](https://img.shields.io/github/repo-size/BruninLima/PydaptiveFiltering?style=for-the-badge)
+![GitHub language count](https://img.shields.io/github/languages/count/BruninLima/PydaptiveFiltering?style=for-the-badge)
+![GitHub forks](https://img.shields.io/github/forks/BruninLima/PydaptiveFiltering?style=for-the-badge)
+![Bitbucket open issues](https://img.shields.io/bitbucket/issues/BruninLima/PydaptiveFiltering?style=for-the-badge)
+![Bitbucket open pull requests](https://img.shields.io/bitbucket/pr-raw/BruninLima/PydaptiveFiltering?style=for-the-badge)
 
 ## References
 
