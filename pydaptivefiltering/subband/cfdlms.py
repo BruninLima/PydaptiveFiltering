@@ -108,7 +108,7 @@ class CFDLMS(AdaptiveFilter):
         FFT size M (number of subbands / frequency bins).
     decimation : int, optional
         Block advance L (samples per iteration). If None, defaults to M//2.
-    step : float, default=0.1
+    step_size : float, default=0.1
         Global step size (mu).
     gamma : float, default=1e-2
         Regularization constant in the normalization denominator (>0).
@@ -139,7 +139,7 @@ class CFDLMS(AdaptiveFilter):
         filter_order: int = 5,
         n_subbands: int = 64,
         decimation: Optional[int] = None,
-        step: float = 0.1,
+        step_size: float = 0.1,
         gamma: float = 1e-2,
         smoothing: float = 0.01,
         w_init: Optional[Union[np.ndarray, list]] = None,
@@ -161,7 +161,7 @@ class CFDLMS(AdaptiveFilter):
         self.L = int(decimation)
         self.Nw = int(filter_order)
 
-        self.step = float(step)
+        self.step_size = float(step_size)
         self.gamma = float(gamma)
         self.smoothing = float(smoothing)
 
@@ -295,7 +295,7 @@ class CFDLMS(AdaptiveFilter):
         sig = self.sig
 
         a = self.smoothing
-        u_step = self.step
+        u_step = self.step_size
         gamma = self.gamma
         sqrtM = np.sqrt(M)
 

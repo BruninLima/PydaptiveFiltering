@@ -118,7 +118,7 @@ class LMSNewton(AdaptiveFilter):
         filter_order: int,
         alpha: float,
         initial_inv_rx: np.ndarray,
-        step: float = 1e-2,
+        step_size: float = 1e-2,
         w_init: Optional[ArrayLike] = None,
         *,
         safe_eps: float = 1e-12,
@@ -137,7 +137,7 @@ class LMSNewton(AdaptiveFilter):
             )
         self.inv_rx = P0
 
-        self.step_size = float(step)
+        self.step_size = float(step_size)
         self._safe_eps = float(safe_eps)
 
     @validate_input

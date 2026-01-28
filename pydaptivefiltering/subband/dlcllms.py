@@ -123,7 +123,7 @@ class DLCLLMS(AdaptiveFilter):
         Subband filter order Nw (number of taps per subband delay line is Nw+1).
     n_subbands : int, default=4
         Number of subbands M (DFT size). Also equals the processing block length L.
-    step : float, default=0.1
+    step_size : float, default=0.1
         Global LMS step size.
     gamma : float, default=1e-2
         Regularization constant in the normalized step denominator (>0 recommended).
@@ -150,7 +150,7 @@ class DLCLLMS(AdaptiveFilter):
         self,
         filter_order: int = 5,
         n_subbands: int = 4,
-        step: float = 0.1,
+        step_size: float = 0.1,
         gamma: float = 1e-2,
         a: float = 1e-2,
         nyquist_len: int = 2,
@@ -164,7 +164,7 @@ class DLCLLMS(AdaptiveFilter):
         if self.Nw <= 0:
             raise ValueError("filter_order must be a positive integer.")
 
-        self.step: float = float(step)
+        self.step_size: float = float(step_size)
         self.gamma: float = float(gamma)
         self.a: float = float(a)
 
@@ -412,7 +412,7 @@ class DLCLLMS(AdaptiveFilter):
 
                 self.sig[m] = (1.0 - self.a) * self.sig[m] + self.a * (np.abs(xsb[m]) ** 2)
 
-                mu_n = self.step / (self.gamma + (self.Nw + 1) * self.sig[m])
+                mu_n = self.step_size / (self.gamma + (self.Nw + 1) * self.sig[m])
 
                 self.w_sb[m, :] = self.w_sb[m, :] + 2.0 * mu_n * np.conj(esb[m]) * self.x_cl[m, :]
 

@@ -119,7 +119,7 @@ class OLSBLMS(AdaptiveFilter):
         Synthesis bank fk with shape (M, Lf).
     filter_order : int
         Subband FIR order Nw (number of taps per subband is Nw+1).
-    step : float, default=0.1
+    step_size : float, default=0.1
         Global LMS step-size factor.
     gamma : float, default=1e-2
         Regularization term in the normalized denominator (>0 recommended).
@@ -157,7 +157,7 @@ class OLSBLMS(AdaptiveFilter):
         analysis_filters: ArrayLike,
         synthesis_filters: ArrayLike,
         filter_order: int,
-        step: float = 0.1,
+        step_size: float = 0.1,
         gamma: float = 1e-2,
         a: float = 0.01,
         decimation_factor: Optional[int] = None,
@@ -171,7 +171,7 @@ class OLSBLMS(AdaptiveFilter):
         if self.Nw <= 0:
             raise ValueError("filter_order must be a positive integer.")
 
-        self.step = float(step)
+        self.step_size = float(step_size)
         self.gamma = float(gamma)
         self.a = float(a)
 
@@ -338,7 +338,7 @@ class OLSBLMS(AdaptiveFilter):
 
                 sig_ol[m] = (1.0 - self.a) * sig_ol[m] + self.a * (xsb[m, k] ** 2)
 
-                mu_m = (2.0 * self.step) / (self.gamma + (self.Nw + 1) * sig_ol[m])
+                mu_m = (2.0 * self.step_size) / (self.gamma + (self.Nw + 1) * sig_ol[m])
 
                 self.w_mat[m, :] = self.w_mat[m, :] + mu_m * e_sb[m, k] * x_ol[m, :]
 
