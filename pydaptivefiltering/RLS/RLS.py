@@ -40,7 +40,7 @@ class RLS(AdaptiveFilter):
     delta : float
         Positive initialization factor for the inverse correlation matrix:
         ``S_d(0) = (1/delta) I``.
-    lamb : float
+    forgetting_factor : float
         Forgetting factor ``lambda`` with ``0 < lambda <= 1``.
     w_init : array_like of complex, optional
         Initial coefficient vector ``w(0)`` with shape ``(M + 1,)``. If None,
@@ -99,7 +99,7 @@ class RLS(AdaptiveFilter):
 
     supports_complex: bool = True
 
-    lamb: float
+    forgetting_factor: float
     delta: float
     S_d: np.ndarray
 
@@ -107,16 +107,16 @@ class RLS(AdaptiveFilter):
         self,
         filter_order: int,
         delta: float,
-        lamb: float,
+        forgetting_factor: float,
         w_init: Optional[ArrayLike] = None,
         *,
         safe_eps: float = 1e-12,
     ) -> None:
         super().__init__(filter_order=int(filter_order), w_init=w_init)
 
-        self.lamb = float(lamb)
-        if not (0.0 < self.lamb <= 1.0):
-            raise ValueError(f"lamb must satisfy 0 < lamb <= 1. Got lamb={self.lamb}.")
+        self.forgetting_factor = float(forgetting_factor)
+        if not (0.0 < self.forgetting_factor <= 1.0):
+            raise ValueError(f"forgetting_factor must satisfy 0 < forgetting_factor <= 1. Got forgetting_factor={self.forgetting_factor}.")
 
         self.delta = float(delta)
         if self.delta <= 0.0:
@@ -202,7 +202,7 @@ class RLS(AdaptiveFilter):
             errors[k] = e_k
 
             Sx: np.ndarray = self.S_d @ self.regressor
-            den: complex = self.lamb + complex(np.vdot(self.regressor, Sx))
+            den: complex = self.forgetting_factor + complex(np.vdot(self.regressor, Sx))
             if abs(den) < self._safe_eps:
                 den = den + (self._safe_eps + 0.0j)
 
@@ -211,7 +211,7 @@ class RLS(AdaptiveFilter):
 
             self.w = self.w + np.conj(e_k) * g
 
-            self.S_d = (self.S_d - np.outer(g, np.conj(Sx))) / self.lamb
+            self.S_d = (self.S_d - np.outer(g, np.conj(Sx))) / self.forgetting_factor
 
             if return_internal_states:
                 yk_post = complex(np.vdot(self.w, self.regressor))

@@ -56,7 +56,7 @@ Returned dictionary keys:
 - `extra`: optional internal states (when enabled)
 
 
-### System identification (example with Volterra-RLS):
+### System identification (Complex example with RLS):
 
 ```python
 import numpy as np
@@ -64,22 +64,28 @@ import pydaptivefiltering as pdf
 
 rng = np.random.default_rng(0)
 
-# Synthetic system: d[k] = 0.7 x[k] - 0.2 x[k-1] + noise
+# True system (complex FIR)
+w_true = np.array([0.5+0.2j, -0.4+0.5j, 0.1-0.1j, 0.2+0j, -0.1+0.1j, 0.0+0.05j])
+M = len(w_true) - 1
+
+# Data
 N = 5000
-x = rng.standard_normal(N)
-d = np.zeros(N)
-for k in range(1, N):
-    d[k] = 0.7*x[k] - 0.2*x[k-1] + 0.05*rng.standard_normal()
+x = (rng.standard_normal(N) + 1j*rng.standard_normal(N)) / np.sqrt(2)
+noise = 0.05 * (rng.standard_normal(N) + 1j*rng.standard_normal(N)) / np.sqrt(2)
 
-filt = pdf.VolterraRLS(memory=3, forgetting_factor=0.99, delta=1.0)
-res = filt.optimize(x, d)
+# Desired: d[k] = w^H x_k + noise
+x_pad = np.concatenate([np.zeros(M, dtype=complex), x])
+d = np.array([np.vdot(w_true, x_pad[k:k+M+1][::-1]) for k in range(N)]) + noise
 
-mse_tail = np.mean(res["errors"][-500:]**2)
-print("Final tail MSE:", mse_tail)
-print("Final coefficient vector length:", res["coefficients"][-1].size)
+# RLS
+rls = pdf.RLS(filter_order=M, delta=1.0, forgetting_factor=0.995)
+res = rls.optimize(x, d)
 ```
 
-> Tip: `res["extra"]` may include additional trajectories when `return_internal_states=True`.
+<!-- PLACEHOLDER: Put a convergence plot screenshot here -->
+<p align="center">
+  <img src="examples/Jupyter Notebooks/RLS/docs/assets/rls_weights_vs_true.png" alt="Coefficients convergence plot" width="750">
+</p>
 
 ---
 
@@ -132,19 +138,20 @@ plt.show()
 > This is an overview. For the full list, check the documentation: <a href="https://BruninLima.github.io/pydaptivefiltering/index.html">Docs</a>
 Algorithms categories are based on the chapters of the book <em>Adaptive Filtering: Algorithms and Practical Implementation</em> (Paulo S. R. Diniz).
 
-| Module / Category | Examples (classes) | Data type |
+| Module / Category | Exported classes (examples) | Data type |
 |---|---|---|
-| `lms/` (LMS family) | `LMS`, `NLMS`, `AP`, … | Real/Complex |
-| `rls/` (RLS family) | `RLS`, `RLSAlt`, … | Complex |
-| `fast_rls/` (Fast transversal RLS) | `FastRLS`, `StabFastRLS`, … | Real/Complex |
+| `lms/` (LMS family) | `LMS`, `NLMS`, `AffineProjection`, `SignData`, `SignError`, `DualSign`, `LMSNewton`, `Power2ErrorLMS`, `TDomainLMS`, `TDomainDCT`, `TDomainDFT` | Real/Complex |
+| `rls/` (RLS family) | `RLS`, `RLSAlt` | Complex |
+| `set_membership/` (Set-membership) | `SMNLMS`, `SMBNLMS`, `SMAffineProjection`, `SimplifiedSMAP`, `SimplifiedSMPUAP` | Complex |
+| `lattice/` (Lattice-based RLS) | `LRLSPosteriori`, `LRLSErrorFeedback`, `LRLSPriori`, `NormalizedLRLS` | Real/Complex |
+| `fast_rls/` (Fast Transversal RLS) | `FastRLS`, `StabFastRLS` | Complex |
 | `qr_decomposition/` (QR-RLS) | `QRRLS` | Real |
-| `set_membership/` (Set-membership) | `SMNLMS`, `SMBNLMS`, `SMAffineProjection`, `SimplifiedSMAP` | Complex |
-| `nonlinear/` (Nonlinear) | `VolterraLMS`, `VolterraRLS`, `RBF`, `MultilayerPerceptron`, … | Real |
-| `subband/` (Subband / frequency-domain) | `OLSBLMS`, `DLCLLMS`, `CFDLMS` | Real |
-| `lattice/` (Lattice-based RLS) | <!-- e.g., `LatticeRLS`, `...` --> | Real/Complex |
-| `iir/` (IIR adaptive filters) | <!-- e.g., `IIRLMS`, `...` --> | Real/Complex |
-| `blind/` (Blind filtering) | <!-- e.g., `CMA`, `...` --> | Complex |
-| `kalman/` (Kalman filters) | `Kalman`, … | Real |
+| `iir/` (Adaptive IIR) | `ErrorEquation`, `GaussNewton`, `GaussNewtonGradient`, `RLSIIR`, `SteiglitzMcBride` | Real/Complex |
+| `nonlinear/` (Nonlinear models) | `VolterraLMS`, `VolterraRLS`, `BilinearRLS`, `RBF`, `ComplexRBF`, `MultilayerPerceptron` | Real/Complex |
+| `subband/` (Subband) | `OLSBLMS`, `DLCLLMS`, `CFDLMS` | Real |
+| `blind/` (Blind equalization) | `CMA`, `Godard`, `Sato`, `AffineProjectionCM` | Complex |
+| `kalman/` (Kalman) | `Kalman` | Real |
+| `base/` (Core API) | `AdaptiveFilter` | N/A |
 ---
 
 ### Known limitations (this release)
