@@ -102,24 +102,26 @@ import pydaptivefiltering as pdf
 
 rng = np.random.default_rng(1)
 
+# Data
 N = 3000
 x = rng.uniform(-1, 1, N)
 d = np.zeros(N)
 for k in range(1, N):
     d[k] = (x[k]**2) + 0.5*x[k-1] + 0.01*rng.standard_normal()
 
+# MLP
 mlp = pdf.MultilayerPerceptron(
     n_neurons=8,
     input_dim=3,
-    step_size=0.01,   # Keep consistent with the library API
+    step_size=0.01,
     momentum=0.9,
     activation="tanh",
 )
 
 res = mlp.optimize(x, d)
 
-plt.plot(10*np.log10(res["errors"]**2 + 1e-12), alpha=0.8)
-plt.title(f"MLP Convergence (Final MSE: {np.mean(res['errors'][-500:]**2):.6f})")
+plt.plot(10*np.log10(res.errors**2 + 1e-12), alpha=0.8)
+plt.title(f"MLP Convergence (Final MSE: {np.mean(res.errors[-500:]**2):.6f})")
 plt.xlabel("Iteration")
 plt.ylabel("Squared Error (dB)")
 plt.show()
@@ -192,7 +194,6 @@ res = kf.optimize(y)
 x_hat = res.outputs
 innov = res.errors
 
-# 3) Tiny diagnostics (good for README)
 rmse_pos = np.sqrt(np.mean((x_hat[:, 0] - x_true[:, 0])**2))
 rmse_vel = np.sqrt(np.mean((x_hat[:, 1] - x_true[:, 1])**2))
 
