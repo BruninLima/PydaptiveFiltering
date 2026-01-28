@@ -147,7 +147,7 @@ class OLSBLMS(AdaptiveFilter):
     M: int
     Nw: int
     L: int
-    step: float
+    step_size: float
     gamma: float
     a: float
 

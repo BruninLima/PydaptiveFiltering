@@ -130,7 +130,7 @@ class CFDLMS(AdaptiveFilter):
     M: int
     L: int
     Nw: int
-    step: float
+    step_size: float
     gamma: float
     smoothing: float
 
