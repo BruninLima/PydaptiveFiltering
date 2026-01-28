@@ -18,6 +18,55 @@ This package provides a modern Python alternative to the **MATLAB Adaptive Filte
 
 The package currently covers the vast majority of classical and advanced linear adaptive algorithms, all validated via `pytest` with steady-state convergence scenarios.
 
+## 🏗️ Architecture
+
+O pacote foi desenhado seguindo princípios de POO (Programação Orientada a Objetos) para garantir que todos os algoritmos compartilhem a mesma interface, facilitando o benchmarking.
+
+```mermaid
+classDiagram
+    class AdaptiveFilter {
+        <<Abstract>>
+        +w: ndarray
+        +optimize(x, d)
+        +_record_history()
+        #_pack_results()
+    }
+
+    class FIR_Filters {
+        +LMS / NLMS
+        +RLS
+        +AP / PUAP
+    }
+
+    class IIR_Filters {
+        +RLSIIR
+        +SteiglitzMcBride
+        +Gauss-Newton
+    }
+
+    class Nonlinear_Filters {
+        +Volterra
+        +Bilinear
+        +MultilayerPerceptron
+    }
+
+    class Lattice_QR {
+        +LatticeRLS
+        +FastTransversal
+        +QR_RLS
+    }
+
+    class State_Space {
+        +KalmanFilter
+    }
+
+    AdaptiveFilter <|-- FIR_Filters
+    AdaptiveFilter <|-- IIR_Filters
+    AdaptiveFilter <|-- Nonlinear_Filters
+    AdaptiveFilter <|-- Lattice_QR
+    AdaptiveFilter <|-- State_Space
+```
+
 ### Current Implementation
 
 The project is currently on its early stages (v0.9). The planned order of work for every kind of algorithm is: (Algorithm(1), Examples(2), Notebooks(3)). The following is the planned and current progress for each of the algorithms:
@@ -37,6 +86,8 @@ The project is currently on its early stages (v0.9). The planned order of work f
 **simplified_puap:** The `set_membership.simplified_puap.py` implementation is currently under technical review and may not exhibit expected convergence in this version.
 
 **complex_rbf:** The `nonlinear.complex_rbf.py` implementation is currently under technical review and may exhibit unexpected warnings in this version.
+
+
 
 ---
 ## 💻 Requirements
