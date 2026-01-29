@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pydaptivefiltering"
-version = "1.0"
+version = "1.0.0"
 description = "A modern Python implementation of the AdaptiveFiltering toolbox."
 readme = "README.md"
 license-files = ["LICENSE"]

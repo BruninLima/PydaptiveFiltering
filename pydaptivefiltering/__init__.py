@@ -12,7 +12,7 @@ from .nonlinear import *
 from .subband import *
 from .blind import *
 from .kalman import *
-__version__ = "0.9"
+__version__ = "1.0.0"
 __author__ = "BruninLima"
 
 __all__ = ["AdaptiveFilter",
