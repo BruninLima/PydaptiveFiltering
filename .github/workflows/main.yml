@@ -28,10 +28,7 @@ jobs:
           python -m pip install -U pip
           # Instala a lib em modo editável
           python -m pip install -e .
-          # Se você tiver extras:
-          # python -m pip install -e ".[dev]"
-          # python -m pip install -e ".[examples]"
-
+          python -m pip install -e ".[dev]"
       - name: Run unit tests
         env:
           MPLBACKEND: Agg
