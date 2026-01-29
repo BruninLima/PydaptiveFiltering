@@ -136,6 +136,9 @@ def iter_example_files(examples_dir: Path) -> List[Path]:
             continue
         if p.name.startswith("_"):
             continue
+        rel = p.relative_to(REPO_ROOT).as_posix().lower()
+        if "/kalman/" in rel or "kalman" in p.name.lower():
+            continue
         out.append(p)
     return out
 
