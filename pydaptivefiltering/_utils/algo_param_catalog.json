@@ -1,0 +1,2515 @@
+{
+  "generated_from": "C:\\Users\\bruno\\Documents\\DSc\\codes\\PydaptiveFiltering",
+  "algorithms": {
+    "LMS": {
+      "family": "lms",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', step_size: 'float' = 0.01, w_init: 'Optional[ArrayLike]' = None) -> 'None'",
+      "required_params": [
+        "filter_order"
+      ],
+      "optional_params": [
+        "step_size",
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.lms.lms",
+      "qualname": "LMS"
+    },
+    "NLMS": {
+      "family": "lms",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', step_size: 'float' = 0.01, gamma: 'float' = 1e-06, w_init: 'Optional[ArrayLike]' = None) -> 'None'",
+      "required_params": [
+        "filter_order"
+      ],
+      "optional_params": [
+        "step_size",
+        "gamma",
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "gamma",
+          "required": false,
+          "default": 1e-06,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.lms.nlms",
+      "qualname": "NLMS"
+    },
+    "AffineProjection": {
+      "family": "lms",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', step_size: 'float' = 0.01, gamma: 'float' = 1e-06, L: 'int' = 2, w_init: 'Optional[ArrayLike]' = None) -> 'None'",
+      "required_params": [
+        "filter_order"
+      ],
+      "optional_params": [
+        "step_size",
+        "gamma",
+        "L",
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "gamma",
+          "required": false,
+          "default": 1e-06,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "L",
+          "required": false,
+          "default": 2,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.lms.affine_projection",
+      "qualname": "AffineProjection"
+    },
+    "SignData": {
+      "family": "lms",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', step_size: 'float' = 0.01, w_init: 'Optional[ArrayLike]' = None) -> 'None'",
+      "required_params": [
+        "filter_order"
+      ],
+      "optional_params": [
+        "step_size",
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.lms.sign_data",
+      "qualname": "SignData"
+    },
+    "SignError": {
+      "family": "lms",
+      "supports_complex": false,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', step_size: 'float' = 0.01, w_init: 'Optional[ArrayLike]' = None) -> 'None'",
+      "required_params": [
+        "filter_order"
+      ],
+      "optional_params": [
+        "step_size",
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.lms.sign_error",
+      "qualname": "SignError"
+    },
+    "DualSign": {
+      "family": "lms",
+      "supports_complex": false,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', rho: 'float', gamma: 'float', step_size: 'float' = 0.01, w_init: 'Optional[ArrayLike]' = None, *, safe_eps: 'float' = 1e-12) -> 'None'",
+      "required_params": [
+        "filter_order",
+        "rho",
+        "gamma"
+      ],
+      "optional_params": [
+        "step_size",
+        "w_init",
+        "safe_eps"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "rho",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "gamma",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "safe_eps",
+          "required": false,
+          "default": 1e-12,
+          "annotation": "float",
+          "kind": "KEYWORD_ONLY"
+        }
+      ],
+      "module": "pydaptivefiltering.lms.dual_sign",
+      "qualname": "DualSign"
+    },
+    "LMSNewton": {
+      "family": "lms",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', forgetting_factor: 'float', initial_inv_rx: 'np.ndarray', step_size: 'float' = 0.01, w_init: 'Optional[ArrayLike]' = None, *, safe_eps: 'float' = 1e-12) -> 'None'",
+      "required_params": [
+        "filter_order",
+        "forgetting_factor",
+        "initial_inv_rx"
+      ],
+      "optional_params": [
+        "step_size",
+        "w_init",
+        "safe_eps"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "forgetting_factor",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "initial_inv_rx",
+          "required": true,
+          "default": null,
+          "annotation": "np.ndarray",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "safe_eps",
+          "required": false,
+          "default": 1e-12,
+          "annotation": "float",
+          "kind": "KEYWORD_ONLY"
+        }
+      ],
+      "module": "pydaptivefiltering.lms.lms_newton",
+      "qualname": "LMSNewton"
+    },
+    "Power2ErrorLMS": {
+      "family": "lms",
+      "supports_complex": false,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', bd: 'int', tau: 'float', step_size: 'float' = 0.01, w_init: 'Optional[ArrayLike]' = None) -> 'None'",
+      "required_params": [
+        "filter_order",
+        "bd",
+        "tau"
+      ],
+      "optional_params": [
+        "step_size",
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "bd",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "tau",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.lms.power2_error",
+      "qualname": "Power2ErrorLMS"
+    },
+    "TDomainLMS": {
+      "family": "lms",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', gamma: 'float', alpha: 'float', initial_power: 'float', transform_matrix: 'np.ndarray', step_size: 'float' = 0.01, w_init: 'Optional[ArrayLike]' = None, *, assume_unitary: 'bool' = True) -> 'None'",
+      "required_params": [
+        "filter_order",
+        "gamma",
+        "alpha",
+        "initial_power",
+        "transform_matrix"
+      ],
+      "optional_params": [
+        "step_size",
+        "w_init",
+        "assume_unitary"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "gamma",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "alpha",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "initial_power",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "transform_matrix",
+          "required": true,
+          "default": null,
+          "annotation": "np.ndarray",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "assume_unitary",
+          "required": false,
+          "default": true,
+          "annotation": "bool",
+          "kind": "KEYWORD_ONLY"
+        }
+      ],
+      "module": "pydaptivefiltering.lms.tdomain",
+      "qualname": "TDomainLMS"
+    },
+    "TDomainDCT": {
+      "family": "lms",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', gamma: 'float', alpha: 'float', initial_power: 'float', step_size: 'float' = 0.01, w_init: 'Optional[ArrayLike]' = None) -> 'None'",
+      "required_params": [
+        "filter_order",
+        "gamma",
+        "alpha",
+        "initial_power"
+      ],
+      "optional_params": [
+        "step_size",
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "gamma",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "alpha",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "initial_power",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.lms.tdomain_dct",
+      "qualname": "TDomainDCT"
+    },
+    "TDomainDFT": {
+      "family": "lms",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', gamma: 'float', alpha: 'float', initial_power: 'float', step_size: 'float' = 0.01, w_init: 'Optional[ArrayLike]' = None) -> 'None'",
+      "required_params": [
+        "filter_order",
+        "gamma",
+        "alpha",
+        "initial_power"
+      ],
+      "optional_params": [
+        "step_size",
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "gamma",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "alpha",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "initial_power",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.lms.tdomain_dft",
+      "qualname": "TDomainDFT"
+    },
+    "RLS": {
+      "family": "rls",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', delta: 'float', forgetting_factor: 'float', w_init: 'Optional[ArrayLike]' = None, *, safe_eps: 'float' = 1e-12) -> 'None'",
+      "required_params": [
+        "filter_order",
+        "delta",
+        "forgetting_factor"
+      ],
+      "optional_params": [
+        "w_init",
+        "safe_eps"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "delta",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "forgetting_factor",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "safe_eps",
+          "required": false,
+          "default": 1e-12,
+          "annotation": "float",
+          "kind": "KEYWORD_ONLY"
+        }
+      ],
+      "module": "pydaptivefiltering.rls.rls",
+      "qualname": "RLS"
+    },
+    "RLSAlt": {
+      "family": "rls",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', delta: 'float', forgetting_factor: 'float', w_init: 'Optional[ArrayLike]' = None, *, safe_eps: 'float' = 1e-12) -> 'None'",
+      "required_params": [
+        "filter_order",
+        "delta",
+        "forgetting_factor"
+      ],
+      "optional_params": [
+        "w_init",
+        "safe_eps"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "delta",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "forgetting_factor",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "safe_eps",
+          "required": false,
+          "default": 1e-12,
+          "annotation": "float",
+          "kind": "KEYWORD_ONLY"
+        }
+      ],
+      "module": "pydaptivefiltering.rls.rls_alt",
+      "qualname": "RLSAlt"
+    },
+    "SMNLMS": {
+      "family": "set_membership",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', gamma_bar: 'float', gamma: 'float', w_init: 'Optional[Union[np.ndarray, list]]' = None) -> 'None'",
+      "required_params": [
+        "filter_order",
+        "gamma_bar",
+        "gamma"
+      ],
+      "optional_params": [
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "gamma_bar",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "gamma",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[Union[np.ndarray, list]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.set_membership.nlms",
+      "qualname": "SMNLMS"
+    },
+    "SMBNLMS": {
+      "family": "set_membership",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', gamma_bar: 'float', gamma: 'float', w_init: 'Optional[Union[np.ndarray, list]]' = None) -> 'None'",
+      "required_params": [
+        "filter_order",
+        "gamma_bar",
+        "gamma"
+      ],
+      "optional_params": [
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "gamma_bar",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "gamma",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[Union[np.ndarray, list]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.set_membership.bnlms",
+      "qualname": "SMBNLMS"
+    },
+    "SMAffineProjection": {
+      "family": "set_membership",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', gamma_bar: 'float', gamma_bar_vector: 'Union[np.ndarray, list]', gamma: 'float', L: 'int', w_init: 'Optional[Union[np.ndarray, list]]' = None) -> 'None'",
+      "required_params": [
+        "filter_order",
+        "gamma_bar",
+        "gamma_bar_vector",
+        "gamma",
+        "L"
+      ],
+      "optional_params": [
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "gamma_bar",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "gamma_bar_vector",
+          "required": true,
+          "default": null,
+          "annotation": "Union[np.ndarray, list]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "gamma",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "L",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[Union[np.ndarray, list]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.set_membership.affine_projection",
+      "qualname": "SMAffineProjection"
+    },
+    "SimplifiedSMPUAP": {
+      "family": "set_membership",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', gamma_bar: 'float', gamma: 'float', L: 'int', up_selector: 'Union[np.ndarray, list]', w_init: 'Optional[Union[np.ndarray, list]]' = None) -> 'None'",
+      "required_params": [
+        "filter_order",
+        "gamma_bar",
+        "gamma",
+        "L",
+        "up_selector"
+      ],
+      "optional_params": [
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "gamma_bar",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "gamma",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "L",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "up_selector",
+          "required": true,
+          "default": null,
+          "annotation": "Union[np.ndarray, list]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[Union[np.ndarray, list]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.set_membership.simplified_puap",
+      "qualname": "SimplifiedSMPUAP"
+    },
+    "SimplifiedSMAP": {
+      "family": "set_membership",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', gamma_bar: 'float', gamma: 'float', L: 'int', w_init: 'Optional[Union[np.ndarray, list]]' = None) -> 'None'",
+      "required_params": [
+        "filter_order",
+        "gamma_bar",
+        "gamma",
+        "L"
+      ],
+      "optional_params": [
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "gamma_bar",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "gamma",
+          "required": true,
+          "default": null,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "L",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[Union[np.ndarray, list]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.set_membership.simplified_ap",
+      "qualname": "SimplifiedSMAP"
+    },
+    "LRLSPosteriori": {
+      "family": "lattice",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', lambda_factor: 'float' = 0.99, epsilon: 'float' = 0.1, w_init: 'Optional[Union[np.ndarray, list]]' = None, denom_floor: 'float' = 1e-12, xi_floor: 'Optional[float]' = None) -> 'None'",
+      "required_params": [
+        "filter_order"
+      ],
+      "optional_params": [
+        "lambda_factor",
+        "epsilon",
+        "w_init",
+        "denom_floor",
+        "xi_floor"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "lambda_factor",
+          "required": false,
+          "default": 0.99,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "epsilon",
+          "required": false,
+          "default": 0.1,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[Union[np.ndarray, list]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "denom_floor",
+          "required": false,
+          "default": 1e-12,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "xi_floor",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[float]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.lattice.lrls_posteriori",
+      "qualname": "LRLSPosteriori"
+    },
+    "LRLSErrorFeedback": {
+      "family": "lattice",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', lambda_factor: 'float' = 0.99, epsilon: 'float' = 0.1, w_init: 'Optional[ComplexArrayLike]' = None, safe_eps: 'float' = 1e-12) -> 'None'",
+      "required_params": [
+        "filter_order"
+      ],
+      "optional_params": [
+        "lambda_factor",
+        "epsilon",
+        "w_init",
+        "safe_eps"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "lambda_factor",
+          "required": false,
+          "default": 0.99,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "epsilon",
+          "required": false,
+          "default": 0.1,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ComplexArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "safe_eps",
+          "required": false,
+          "default": 1e-12,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.lattice.lrls_error_feedback",
+      "qualname": "LRLSErrorFeedback"
+    },
+    "LRLSPriori": {
+      "family": "lattice",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', lambda_factor: 'float' = 0.99, epsilon: 'float' = 0.1, w_init: 'Optional[Union[np.ndarray, list]]' = None, denom_floor: 'float' = 1e-12) -> 'None'",
+      "required_params": [
+        "filter_order"
+      ],
+      "optional_params": [
+        "lambda_factor",
+        "epsilon",
+        "w_init",
+        "denom_floor"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "lambda_factor",
+          "required": false,
+          "default": 0.99,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "epsilon",
+          "required": false,
+          "default": 0.1,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[Union[np.ndarray, list]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "denom_floor",
+          "required": false,
+          "default": 1e-12,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.lattice.lrls_priori",
+      "qualname": "LRLSPriori"
+    },
+    "NormalizedLRLS": {
+      "family": "lattice",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', lambda_factor: 'float' = 0.99, epsilon: 'float' = 1e-06, w_init: 'Optional[ArrayLike]' = None, denom_floor: 'float' = 1e-12) -> 'None'",
+      "required_params": [
+        "filter_order"
+      ],
+      "optional_params": [
+        "lambda_factor",
+        "epsilon",
+        "w_init",
+        "denom_floor"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "lambda_factor",
+          "required": false,
+          "default": 0.99,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "epsilon",
+          "required": false,
+          "default": 1e-06,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "denom_floor",
+          "required": false,
+          "default": 1e-12,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.lattice.normalized_lrls",
+      "qualname": "NormalizedLRLS"
+    },
+    "FastRLS": {
+      "family": "fast_rls",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', forgetting_factor: 'float' = 0.99, epsilon: 'float' = 0.1, w_init: 'Optional[Union[np.ndarray, list]]' = None, *, safe_eps: 'float' = 1e-30) -> 'None'",
+      "required_params": [
+        "filter_order"
+      ],
+      "optional_params": [
+        "forgetting_factor",
+        "epsilon",
+        "w_init",
+        "safe_eps"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "forgetting_factor",
+          "required": false,
+          "default": 0.99,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "epsilon",
+          "required": false,
+          "default": 0.1,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[Union[np.ndarray, list]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "safe_eps",
+          "required": false,
+          "default": 1e-30,
+          "annotation": "float",
+          "kind": "KEYWORD_ONLY"
+        }
+      ],
+      "module": "pydaptivefiltering.fast_rls.fast_rls",
+      "qualname": "FastRLS"
+    },
+    "StabFastRLS": {
+      "family": "fast_rls",
+      "supports_complex": false,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', forgetting_factor: 'float' = 0.99, epsilon: 'float' = 0.1, kappa1: 'float' = 1.5, kappa2: 'float' = 2.5, kappa3: 'float' = 1.0, w_init: 'Optional[Union[np.ndarray, list]]' = None, denom_floor: 'Optional[float]' = None, xi_floor: 'Optional[float]' = None, gamma_clip: 'Optional[float]' = None) -> 'None'",
+      "required_params": [
+        "filter_order"
+      ],
+      "optional_params": [
+        "forgetting_factor",
+        "epsilon",
+        "kappa1",
+        "kappa2",
+        "kappa3",
+        "w_init",
+        "denom_floor",
+        "xi_floor",
+        "gamma_clip"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "forgetting_factor",
+          "required": false,
+          "default": 0.99,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "epsilon",
+          "required": false,
+          "default": 0.1,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "kappa1",
+          "required": false,
+          "default": 1.5,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "kappa2",
+          "required": false,
+          "default": 2.5,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "kappa3",
+          "required": false,
+          "default": 1.0,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[Union[np.ndarray, list]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "denom_floor",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[float]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "xi_floor",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[float]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "gamma_clip",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[float]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.fast_rls.stab_fast_rls",
+      "qualname": "StabFastRLS"
+    },
+    "QRRLS": {
+      "family": "qr_rls",
+      "supports_complex": false,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int', lamb: 'float' = 0.99, w_init: 'Optional[ArrayLike]' = None, *, denom_floor: 'float' = 1e-18) -> 'None'",
+      "required_params": [
+        "filter_order"
+      ],
+      "optional_params": [
+        "lamb",
+        "w_init",
+        "denom_floor"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "lamb",
+          "required": false,
+          "default": 0.99,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "denom_floor",
+          "required": false,
+          "default": 1e-18,
+          "annotation": "float",
+          "kind": "KEYWORD_ONLY"
+        }
+      ],
+      "module": "pydaptivefiltering.qr_decomposition.rls",
+      "qualname": "QRRLS"
+    },
+    "ErrorEquation": {
+      "family": "iir",
+      "supports_complex": false,
+      "has_kwargs": false,
+      "signature": "(self, zeros_order: 'int', poles_order: 'int', forgetting_factor: 'float' = 0.99, epsilon: 'float' = 0.001, w_init: 'Optional[Union[np.ndarray, list]]' = None) -> 'None'",
+      "required_params": [
+        "zeros_order",
+        "poles_order"
+      ],
+      "optional_params": [
+        "forgetting_factor",
+        "epsilon",
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "zeros_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "poles_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "forgetting_factor",
+          "required": false,
+          "default": 0.99,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "epsilon",
+          "required": false,
+          "default": 0.001,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[Union[np.ndarray, list]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.iir.error_equation",
+      "qualname": "ErrorEquation"
+    },
+    "GaussNewton": {
+      "family": "iir",
+      "supports_complex": false,
+      "has_kwargs": false,
+      "signature": "(self, zeros_order: 'int', poles_order: 'int', alpha: 'float' = 0.05, step_size: 'float' = 1.0, delta: 'float' = 0.001, w_init: 'Optional[Union[np.ndarray, list]]' = None) -> 'None'",
+      "required_params": [
+        "zeros_order",
+        "poles_order"
+      ],
+      "optional_params": [
+        "alpha",
+        "step_size",
+        "delta",
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "zeros_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "poles_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "alpha",
+          "required": false,
+          "default": 0.05,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 1.0,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "delta",
+          "required": false,
+          "default": 0.001,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[Union[np.ndarray, list]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.iir.gauss_newton",
+      "qualname": "GaussNewton"
+    },
+    "GaussNewtonGradient": {
+      "family": "iir",
+      "supports_complex": false,
+      "has_kwargs": false,
+      "signature": "(self, zeros_order: 'int', poles_order: 'int', step_size: 'float' = 0.001, w_init: 'Optional[Union[np.ndarray, list]]' = None) -> 'None'",
+      "required_params": [
+        "zeros_order",
+        "poles_order"
+      ],
+      "optional_params": [
+        "step_size",
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "zeros_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "poles_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 0.001,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[Union[np.ndarray, list]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.iir.gauss_newton_gradient",
+      "qualname": "GaussNewtonGradient"
+    },
+    "RLSIIR": {
+      "family": "iir",
+      "supports_complex": false,
+      "has_kwargs": false,
+      "signature": "(self, zeros_order: 'int', poles_order: 'int', forgetting_factor: 'float' = 0.99, delta: 'float' = 0.001, w_init: 'Optional[Union[np.ndarray, list]]' = None) -> 'None'",
+      "required_params": [
+        "zeros_order",
+        "poles_order"
+      ],
+      "optional_params": [
+        "forgetting_factor",
+        "delta",
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "zeros_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "poles_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "forgetting_factor",
+          "required": false,
+          "default": 0.99,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "delta",
+          "required": false,
+          "default": 0.001,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[Union[np.ndarray, list]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.iir.rls_iir",
+      "qualname": "RLSIIR"
+    },
+    "SteiglitzMcBride": {
+      "family": "iir",
+      "supports_complex": false,
+      "has_kwargs": false,
+      "signature": "(self, zeros_order: 'int', poles_order: 'int', step_size: 'float' = 0.001, w_init: 'Optional[Union[np.ndarray, list]]' = None) -> 'None'",
+      "required_params": [
+        "zeros_order",
+        "poles_order"
+      ],
+      "optional_params": [
+        "step_size",
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "zeros_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "poles_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 0.001,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[Union[np.ndarray, list]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.iir.steiglitz_mcbride",
+      "qualname": "SteiglitzMcBride"
+    },
+    "BilinearRLS": {
+      "family": "nonlinear",
+      "supports_complex": false,
+      "has_kwargs": false,
+      "signature": "(self, forgetting_factor: 'float' = 0.98, delta: 'float' = 1.0, w_init: 'Optional[ArrayLike]' = None, *, safe_eps: 'float' = 1e-12) -> 'None'",
+      "required_params": [],
+      "optional_params": [
+        "forgetting_factor",
+        "delta",
+        "w_init",
+        "safe_eps"
+      ],
+      "params": [
+        {
+          "name": "forgetting_factor",
+          "required": false,
+          "default": 0.98,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "delta",
+          "required": false,
+          "default": 1.0,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "safe_eps",
+          "required": false,
+          "default": 1e-12,
+          "annotation": "float",
+          "kind": "KEYWORD_ONLY"
+        }
+      ],
+      "module": "pydaptivefiltering.nonlinear.bilinear_rls",
+      "qualname": "BilinearRLS"
+    },
+    "ComplexRBF": {
+      "family": "nonlinear",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, n_neurons: 'int', input_dim: 'int', ur: 'float' = 0.01, uw: 'float' = 0.01, us: 'float' = 0.01, w_init: 'Optional[ArrayLike]' = None, *, sigma_init: 'float' = 1.0, rng: 'Optional[np.random.Generator]' = None) -> 'None'",
+      "required_params": [
+        "n_neurons",
+        "input_dim"
+      ],
+      "optional_params": [
+        "ur",
+        "uw",
+        "us",
+        "w_init",
+        "sigma_init",
+        "rng"
+      ],
+      "params": [
+        {
+          "name": "n_neurons",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "input_dim",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "ur",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "uw",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "us",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "sigma_init",
+          "required": false,
+          "default": 1.0,
+          "annotation": "float",
+          "kind": "KEYWORD_ONLY"
+        },
+        {
+          "name": "rng",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[np.random.Generator]",
+          "kind": "KEYWORD_ONLY"
+        }
+      ],
+      "module": "pydaptivefiltering.nonlinear.complex_rbf",
+      "qualname": "ComplexRBF"
+    },
+    "MultilayerPerceptron": {
+      "family": "nonlinear",
+      "supports_complex": false,
+      "has_kwargs": false,
+      "signature": "(self, n_neurons: 'int' = 10, input_dim: 'int' = 3, step_size: 'float' = 0.01, momentum: 'float' = 0.9, activation: 'str' = 'tanh', w_init: 'Optional[ArrayLike]' = None, *, rng: 'Optional[np.random.Generator]' = None) -> 'None'",
+      "required_params": [],
+      "optional_params": [
+        "n_neurons",
+        "input_dim",
+        "step_size",
+        "momentum",
+        "activation",
+        "w_init",
+        "rng"
+      ],
+      "params": [
+        {
+          "name": "n_neurons",
+          "required": false,
+          "default": 10,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "input_dim",
+          "required": false,
+          "default": 3,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "momentum",
+          "required": false,
+          "default": 0.9,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "activation",
+          "required": false,
+          "default": "tanh",
+          "annotation": "str",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "rng",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[np.random.Generator]",
+          "kind": "KEYWORD_ONLY"
+        }
+      ],
+      "module": "pydaptivefiltering.nonlinear.mlp",
+      "qualname": "MultilayerPerceptron"
+    },
+    "RBF": {
+      "family": "nonlinear",
+      "supports_complex": false,
+      "has_kwargs": false,
+      "signature": "(self, n_neurons: 'int', input_dim: 'int', ur: 'float' = 0.01, uw: 'float' = 0.01, us: 'float' = 0.01, w_init: 'Optional[ArrayLike]' = None, *, sigma_init: 'float' = 1.0, centers_init_scale: 'float' = 0.5, rng: 'Optional[np.random.Generator]' = None, safe_eps: 'float' = 1e-12) -> 'None'",
+      "required_params": [
+        "n_neurons",
+        "input_dim"
+      ],
+      "optional_params": [
+        "ur",
+        "uw",
+        "us",
+        "w_init",
+        "sigma_init",
+        "centers_init_scale",
+        "rng",
+        "safe_eps"
+      ],
+      "params": [
+        {
+          "name": "n_neurons",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "input_dim",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "ur",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "uw",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "us",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "sigma_init",
+          "required": false,
+          "default": 1.0,
+          "annotation": "float",
+          "kind": "KEYWORD_ONLY"
+        },
+        {
+          "name": "centers_init_scale",
+          "required": false,
+          "default": 0.5,
+          "annotation": "float",
+          "kind": "KEYWORD_ONLY"
+        },
+        {
+          "name": "rng",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[np.random.Generator]",
+          "kind": "KEYWORD_ONLY"
+        },
+        {
+          "name": "safe_eps",
+          "required": false,
+          "default": 1e-12,
+          "annotation": "float",
+          "kind": "KEYWORD_ONLY"
+        }
+      ],
+      "module": "pydaptivefiltering.nonlinear.rbf",
+      "qualname": "RBF"
+    },
+    "VolterraLMS": {
+      "family": "nonlinear",
+      "supports_complex": false,
+      "has_kwargs": false,
+      "signature": "(self, memory: 'int' = 3, step_size: 'Union[float, np.ndarray, list]' = 0.01, w_init: 'Optional[ArrayLike]' = None, *, safe_eps: 'float' = 1e-12) -> 'None'",
+      "required_params": [],
+      "optional_params": [
+        "memory",
+        "step_size",
+        "w_init",
+        "safe_eps"
+      ],
+      "params": [
+        {
+          "name": "memory",
+          "required": false,
+          "default": 3,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 0.01,
+          "annotation": "Union[float, np.ndarray, list]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "safe_eps",
+          "required": false,
+          "default": 1e-12,
+          "annotation": "float",
+          "kind": "KEYWORD_ONLY"
+        }
+      ],
+      "module": "pydaptivefiltering.nonlinear.volterra_lms",
+      "qualname": "VolterraLMS"
+    },
+    "VolterraRLS": {
+      "family": "nonlinear",
+      "supports_complex": false,
+      "has_kwargs": false,
+      "signature": "(self, memory: 'int' = 3, forgetting_factor: 'float' = 0.98, delta: 'float' = 1.0, w_init: 'Optional[ArrayLike]' = None, *, safe_eps: 'float' = 1e-12) -> 'None'",
+      "required_params": [],
+      "optional_params": [
+        "memory",
+        "forgetting_factor",
+        "delta",
+        "w_init",
+        "safe_eps"
+      ],
+      "params": [
+        {
+          "name": "memory",
+          "required": false,
+          "default": 3,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "forgetting_factor",
+          "required": false,
+          "default": 0.98,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "delta",
+          "required": false,
+          "default": 1.0,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "safe_eps",
+          "required": false,
+          "default": 1e-12,
+          "annotation": "float",
+          "kind": "KEYWORD_ONLY"
+        }
+      ],
+      "module": "pydaptivefiltering.nonlinear.volterra_rls",
+      "qualname": "VolterraRLS"
+    },
+    "CFDLMS": {
+      "family": "subband",
+      "supports_complex": false,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int' = 5, n_subbands: 'int' = 64, decimation: 'Optional[int]' = None, step_size: 'float' = 0.1, gamma: 'float' = 0.01, smoothing: 'float' = 0.01, w_init: 'Optional[ArrayLike]' = None) -> 'None'",
+      "required_params": [],
+      "optional_params": [
+        "filter_order",
+        "n_subbands",
+        "decimation",
+        "step_size",
+        "gamma",
+        "smoothing",
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": false,
+          "default": 5,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "n_subbands",
+          "required": false,
+          "default": 64,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "decimation",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[int]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 0.1,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "gamma",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "smoothing",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.subband.cfdlms",
+      "qualname": "CFDLMS"
+    },
+    "DLCLLMS": {
+      "family": "subband",
+      "supports_complex": false,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int' = 5, n_subbands: 'int' = 4, step_size: 'float' = 0.1, gamma: 'float' = 0.01, a: 'float' = 0.01, nyquist_len: 'int' = 2, w_init: 'Optional[ArrayLike]' = None) -> 'None'",
+      "required_params": [],
+      "optional_params": [
+        "filter_order",
+        "n_subbands",
+        "step_size",
+        "gamma",
+        "a",
+        "nyquist_len",
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": false,
+          "default": 5,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "n_subbands",
+          "required": false,
+          "default": 4,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 0.1,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "gamma",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "a",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "nyquist_len",
+          "required": false,
+          "default": 2,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.subband.dlcllms",
+      "qualname": "DLCLLMS"
+    },
+    "OLSBLMS": {
+      "family": "subband",
+      "supports_complex": false,
+      "has_kwargs": false,
+      "signature": "(self, n_subbands: 'int', analysis_filters: 'ArrayLike', synthesis_filters: 'ArrayLike', filter_order: 'int', step_size: 'float' = 0.1, gamma: 'float' = 0.01, a: 'float' = 0.01, decimation_factor: 'Optional[int]' = None, w_init: 'Optional[ArrayLike]' = None) -> 'None'",
+      "required_params": [
+        "n_subbands",
+        "analysis_filters",
+        "synthesis_filters",
+        "filter_order"
+      ],
+      "optional_params": [
+        "step_size",
+        "gamma",
+        "a",
+        "decimation_factor",
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "n_subbands",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "analysis_filters",
+          "required": true,
+          "default": null,
+          "annotation": "ArrayLike",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "synthesis_filters",
+          "required": true,
+          "default": null,
+          "annotation": "ArrayLike",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "filter_order",
+          "required": true,
+          "default": null,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 0.1,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "gamma",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "a",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "decimation_factor",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[int]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[ArrayLike]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.subband.olsblms",
+      "qualname": "OLSBLMS"
+    },
+    "AffineProjectionCM": {
+      "family": "blind",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int' = 5, step_size: 'float' = 0.1, memory_length: 'int' = 2, gamma: 'float' = 1e-06, w_init: 'Optional[Union[np.ndarray, list]]' = None) -> 'None'",
+      "required_params": [],
+      "optional_params": [
+        "filter_order",
+        "step_size",
+        "memory_length",
+        "gamma",
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": false,
+          "default": 5,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 0.1,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "memory_length",
+          "required": false,
+          "default": 2,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "gamma",
+          "required": false,
+          "default": 1e-06,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[Union[np.ndarray, list]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.blind.affine_projection_cm",
+      "qualname": "AffineProjectionCM"
+    },
+    "CMA": {
+      "family": "blind",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int' = 5, step_size: 'float' = 0.01, w_init: 'Optional[Union[np.ndarray, list]]' = None) -> 'None'",
+      "required_params": [],
+      "optional_params": [
+        "filter_order",
+        "step_size",
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": false,
+          "default": 5,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[Union[np.ndarray, list]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.blind.constant_modulus",
+      "qualname": "CMA"
+    },
+    "Godard": {
+      "family": "blind",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int' = 5, step_size: 'float' = 0.01, p_exponent: 'int' = 2, q_exponent: 'int' = 2, w_init: 'Optional[Union[np.ndarray, list]]' = None) -> 'None'",
+      "required_params": [],
+      "optional_params": [
+        "filter_order",
+        "step_size",
+        "p_exponent",
+        "q_exponent",
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": false,
+          "default": 5,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "p_exponent",
+          "required": false,
+          "default": 2,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "q_exponent",
+          "required": false,
+          "default": 2,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[Union[np.ndarray, list]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.blind.godard",
+      "qualname": "Godard"
+    },
+    "Sato": {
+      "family": "blind",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, filter_order: 'int' = 5, step_size: 'float' = 0.01, w_init: 'Optional[Union[np.ndarray, list]]' = None) -> 'None'",
+      "required_params": [],
+      "optional_params": [
+        "filter_order",
+        "step_size",
+        "w_init"
+      ],
+      "params": [
+        {
+          "name": "filter_order",
+          "required": false,
+          "default": 5,
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "step_size",
+          "required": false,
+          "default": 0.01,
+          "annotation": "float",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "w_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[Union[np.ndarray, list]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.blind.sato",
+      "qualname": "Sato"
+    },
+    "Kalman": {
+      "family": "kalman",
+      "supports_complex": true,
+      "has_kwargs": false,
+      "signature": "(self, A: 'Union[np.ndarray, Sequence[np.ndarray]]', C_T: 'Union[np.ndarray, Sequence[np.ndarray]]', Rn: 'Union[np.ndarray, Sequence[np.ndarray]]', Rn1: 'Union[np.ndarray, Sequence[np.ndarray]]', B: 'Optional[Union[np.ndarray, Sequence[np.ndarray]]]' = None, x_init: 'Optional[np.ndarray]' = None, Re_init: 'Optional[np.ndarray]' = None) -> 'None'",
+      "required_params": [
+        "A",
+        "C_T",
+        "Rn",
+        "Rn1"
+      ],
+      "optional_params": [
+        "B",
+        "x_init",
+        "Re_init"
+      ],
+      "params": [
+        {
+          "name": "A",
+          "required": true,
+          "default": null,
+          "annotation": "Union[np.ndarray, Sequence[np.ndarray]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "C_T",
+          "required": true,
+          "default": null,
+          "annotation": "Union[np.ndarray, Sequence[np.ndarray]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "Rn",
+          "required": true,
+          "default": null,
+          "annotation": "Union[np.ndarray, Sequence[np.ndarray]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "Rn1",
+          "required": true,
+          "default": null,
+          "annotation": "Union[np.ndarray, Sequence[np.ndarray]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "B",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[Union[np.ndarray, Sequence[np.ndarray]]]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "x_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[np.ndarray]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        },
+        {
+          "name": "Re_init",
+          "required": false,
+          "default": null,
+          "annotation": "Optional[np.ndarray]",
+          "kind": "POSITIONAL_OR_KEYWORD"
+        }
+      ],
+      "module": "pydaptivefiltering.kalman.kalman",
+      "qualname": "Kalman"
+    }
+  }
+}

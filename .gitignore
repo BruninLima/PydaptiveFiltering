@@ -9,7 +9,7 @@ bkp
 dist
 .m
 _tests
-benchmarks
+bench_reports
 auto_examples
 auto_reports
 _old_Python_Scripts
