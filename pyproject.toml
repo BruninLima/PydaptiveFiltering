@@ -43,3 +43,7 @@ packages = { find = { include = ["pydaptivefiltering", "pydaptivefiltering.*"] }
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
+
+[project.optional-dependencies]
+examples = ["matplotlib", "scipy"]
+dev = ["pytest"]
