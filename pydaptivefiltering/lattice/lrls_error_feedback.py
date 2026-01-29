@@ -17,12 +17,10 @@ from __future__ import annotations
 
 import numpy as np
 from time import time
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 
 from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate_input
-
-ArrayLike = Union[np.ndarray, list]
-
+from pydaptivefiltering._utils.typing import ComplexArrayLike, ArrayLike
 
 class LRLSErrorFeedback(AdaptiveFilter):
     """
@@ -54,7 +52,7 @@ class LRLSErrorFeedback(AdaptiveFilter):
     epsilon : float, optional
         Positive initialization/regularization constant for forward and backward
         energies. Default is 0.1.
-    w_init : array_like of complex, optional
+    w_init : ComplexArrayLike, optional
         Optional initial ladder coefficients of length ``M+1``. If None, initializes
         with zeros.
     safe_eps : float, optional
@@ -98,27 +96,27 @@ class LRLSErrorFeedback(AdaptiveFilter):
     n_sections: int
     safe_eps: float
 
-    delta: np.ndarray
-    xi_f: np.ndarray
-    xi_b: np.ndarray
-    error_b_prev: np.ndarray
+    delta: ArrayLike
+    xi_f: ArrayLike
+    xi_b: ArrayLike
+    error_b_prev: ArrayLike
 
-    v: np.ndarray
-    delta_v: np.ndarray
+    v: ArrayLike
+    delta_v: ArrayLike
 
     def __init__(
         self,
         filter_order: int,
         lambda_factor: float = 0.99,
         epsilon: float = 0.1,
-        w_init: Optional[Union[np.ndarray, list]] = None,
+        w_init: Optional[ComplexArrayLike] = None,
         safe_eps: float = 1e-12,
     ) -> None:
         """
         Parameters
         ----------
         filter_order:
-            Lattice order M (number of sections). Ladder has M+1 coefficients.
+            Lattice order M (number of sections). The ladder has M+1 coefficients.
         lambda_factor:
             Forgetting factor λ.
         epsilon:
@@ -161,8 +159,8 @@ class LRLSErrorFeedback(AdaptiveFilter):
     @validate_input
     def optimize(
         self,
-        input_signal: np.ndarray,
-        desired_signal: np.ndarray,
+        input_signal: ArrayLike,
+        desired_signal: ArrayLike,
         verbose: bool = False,
         return_internal_states: bool = False,
     ) -> OptimizationResult:

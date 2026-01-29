@@ -20,8 +20,7 @@ from typing import Optional, Union, Dict, Any
 import numpy as np
 
 from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult
-
-ArrayLike = Union[np.ndarray, list]
+from pydaptivefiltering._utils.typing import ArrayLike
 
 
 class ComplexRBF(AdaptiveFilter):

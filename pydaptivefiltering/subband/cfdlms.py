@@ -21,7 +21,7 @@ from typing import Any, Dict, Optional, Union
 
 from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate_input
 from pydaptivefiltering._utils.validation import ensure_real_signals
-
+from pydaptivefiltering._utils.typing import ArrayLike
 
 class CFDLMS(AdaptiveFilter):
     """
@@ -142,7 +142,7 @@ class CFDLMS(AdaptiveFilter):
         step_size: float = 0.1,
         gamma: float = 1e-2,
         smoothing: float = 0.01,
-        w_init: Optional[Union[np.ndarray, list]] = None,
+        w_init: Optional[ArrayLike] = None,
     ) -> None:
         if n_subbands <= 0:
             raise ValueError("n_subbands (M) must be a positive integer.")

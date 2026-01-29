@@ -15,14 +15,16 @@ from time import perf_counter
 import numpy as np
 
 import pydaptivefiltering as pdf
-from pydaptivefiltering._utils.system_id import (
+from pydaptivefiltering._utils.example_helper import (
     generate_sign_input,
     build_desired_from_fir,
     pack_theta_from_result,
+    )
+from pydaptivefiltering._utils.progress import (    
     ProgressConfig,
     report_progress,
-    plot_system_id_single_figure,
 )
+from pydaptivefiltering._utils.plotting import plot_system_id_single_figure
 
 def main(seed: int = 0, plot: bool = True):
     rng_master = np.random.default_rng(seed)

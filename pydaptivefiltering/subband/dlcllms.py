@@ -21,21 +21,8 @@ from typing import Any, Dict, Optional, Union
 
 from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate_input
 from pydaptivefiltering._utils.validation import ensure_real_signals
-
-
-ArrayLike = Union[np.ndarray, list]
-
-
-def _dft_matrix(M: int) -> np.ndarray:
-    """
-    Equivalent to MATLAB dftmtx(M):
-
-        F[m,n] = exp(-j*2*pi*m*n/M), for m,n = 0..M-1
-    """
-    m = np.arange(M, dtype=float)
-    n = np.arange(M, dtype=float)
-    return np.exp(-1j * 2.0 * np.pi * np.outer(m, n) / float(M))
-
+from pydaptivefiltering._utils.typing import ArrayLike
+from pydaptivefiltering._utils.linalg import dft_matrix
 
 def _design_polyphase_nyquist_bank(M: int, nfd: int) -> np.ndarray:
     """
@@ -154,7 +141,7 @@ class DLCLLMS(AdaptiveFilter):
         gamma: float = 1e-2,
         a: float = 1e-2,
         nyquist_len: int = 2,
-        w_init: Optional[Union[np.ndarray, list]] = None,
+        w_init: Optional[ArrayLike] = None,
     ) -> None:
         self.M: int = int(n_subbands)
         if self.M <= 0:
@@ -180,7 +167,7 @@ class DLCLLMS(AdaptiveFilter):
         self._P: int = int(self.Ed.shape[1])
         self._Dint: int = int((self._P - 1) // 2)
 
-        self.F: np.ndarray = _dft_matrix(self.M)
+        self.F: np.ndarray = dft_matrix(self.M)
 
         self.w_sb: np.ndarray = np.zeros((self.M, self.Nw + 1), dtype=complex)
         if w_init is not None:

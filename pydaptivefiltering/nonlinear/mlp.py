@@ -22,8 +22,8 @@ import numpy as np
 
 from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult
 from pydaptivefiltering._utils.validation import ensure_real_signals
+from pydaptivefiltering._utils.typing import ArrayLike
 
-ArrayLike = Union[np.ndarray, list]
 
 
 def _tanh(v: np.ndarray) -> np.ndarray:

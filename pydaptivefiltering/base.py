@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import functools
 import inspect
+import numpy as np
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Union, Callable
+from typing import Any, Dict, List, Optional, Callable
+from pydaptivefiltering._utils.typing import ArrayLike
 
-import numpy as np
 
-
-ArrayLike = Union[np.ndarray, Sequence[float], Sequence[complex]]
 
 
 @dataclass

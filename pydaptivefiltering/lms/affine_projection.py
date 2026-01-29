@@ -14,15 +14,12 @@
 
 from __future__ import annotations
 
-from time import perf_counter
-from typing import Optional, Union
-
 import numpy as np
-
+from time import perf_counter
+from typing import Optional
 from pydaptivefiltering.base import AdaptiveFilter, validate_input, OptimizationResult
+from pydaptivefiltering._utils.typing import ArrayLike
 
-
-ArrayLike = Union[np.ndarray, list]
 
 
 class AffineProjection(AdaptiveFilter):

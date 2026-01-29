@@ -21,15 +21,13 @@
 from __future__ import annotations
 
 from time import perf_counter
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 
 import numpy as np
 
 from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate_input
 from pydaptivefiltering._utils.validation import ensure_real_signals
-
-ArrayLike = Union[np.ndarray, list]
-
+from pydaptivefiltering._utils.typing import ArrayLike
 
 class QRRLS(AdaptiveFilter):
     """

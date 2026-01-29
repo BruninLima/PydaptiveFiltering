@@ -20,23 +20,13 @@ from typing import Any, Dict, Optional, Union
 
 from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate_input
 from pydaptivefiltering._utils.validation import ensure_real_signals
-
-
-ArrayLike = Union[np.ndarray, list]
-
-
-def _fir_filter_causal(h: np.ndarray, x: np.ndarray) -> np.ndarray:
-    """Causal FIR filtering via convolution, equivalent to MATLAB's filter(h,1,x)."""
-    h = np.asarray(h, dtype=float).reshape(-1)
-    x = np.asarray(x, dtype=float).reshape(-1)
-    y_full = np.convolve(x, h, mode="full")
-    return y_full[: x.size]
+from pydaptivefiltering._utils.typing import ArrayLike
+from pydaptivefiltering._utils.signal import fir_filter_causal
 
 
 def _decimate_by_L(x: np.ndarray, L: int) -> np.ndarray:
     """Decimate by L keeping samples 0, L, 2L, ... (MATLAB mod-index selection)."""
     return x[::L]
-
 
 def _upsample_by_L(x: np.ndarray, L: int, out_len: int) -> np.ndarray:
     """Zero-stuffing upsample: place x[k] at y[k*L], zeros elsewhere, truncated to out_len."""
@@ -85,7 +75,7 @@ class OLSBLMS(AdaptiveFilter):
           - Update a smoothed subband energy estimate:
                 sig_ol[m] = (1-a) sig_ol[m] + a * x_sb[m,k]^2
           - Normalized LMS-like step:
-                mu_m = (2*step) / (gamma + (Nw+1)*sig_ol[m])
+                mu_m = (step) / (gamma + (Nw+1)*sig_ol[m])
           - Coefficient update:
                 w_mat[m] <- w_mat[m] + mu_m * e_sb[m,k] * x_ol[m]
 
@@ -161,15 +151,15 @@ class OLSBLMS(AdaptiveFilter):
         gamma: float = 1e-2,
         a: float = 0.01,
         decimation_factor: Optional[int] = None,
-        w_init: Optional[Union[np.ndarray, list]] = None,
+        w_init: Optional[ArrayLike] = None,
     ) -> None:
         self.M = int(n_subbands)
         if self.M <= 0:
             raise ValueError("n_subbands must be a positive integer.")
 
         self.Nw = int(filter_order)
-        if self.Nw <= 0:
-            raise ValueError("filter_order must be a positive integer.")
+        if self.Nw < 0:
+            raise ValueError("filter_order must be a Non-negative integer.")
 
         self.step_size = float(step_size)
         self.gamma = float(gamma)
@@ -228,7 +218,7 @@ class OLSBLMS(AdaptiveFilter):
             analysis_filters=hk,
             synthesis_filters=fk,
             filter_order=order,
-            step=0.1,
+            step_size=0.1,
             gamma=1e-2,
             a=0.01,
             decimation_factor=1,
@@ -292,8 +282,8 @@ class OLSBLMS(AdaptiveFilter):
         xsb_list: list[np.ndarray] = []
         dsb_list: list[np.ndarray] = []
         for m in range(self.M):
-            xaux_x = _fir_filter_causal(self.hk[m, :], x)
-            xaux_d = _fir_filter_causal(self.hk[m, :], d)
+            xaux_x = fir_filter_causal(self.hk[m, :], x)
+            xaux_d = fir_filter_causal(self.hk[m, :], d)
             xsb_list.append(_decimate_by_L(xaux_x, self.L))
             dsb_list.append(_decimate_by_L(xaux_d, self.L))
 
@@ -338,7 +328,7 @@ class OLSBLMS(AdaptiveFilter):
 
                 sig_ol[m] = (1.0 - self.a) * sig_ol[m] + self.a * (xsb[m, k] ** 2)
 
-                mu_m = (2.0 * self.step_size) / (self.gamma + (self.Nw + 1) * sig_ol[m])
+                mu_m = (self.step_size) / (self.gamma + (self.Nw + 1) * sig_ol[m])
 
                 self.w_mat[m, :] = self.w_mat[m, :] + mu_m * e_sb[m, k] * x_ol[m, :]
 
@@ -349,7 +339,7 @@ class OLSBLMS(AdaptiveFilter):
         y_full = np.zeros((n_samples,), dtype=float)
         for m in range(self.M):
             y_up = _upsample_by_L(y_sb[m, :], self.L, n_samples)
-            y_full += _fir_filter_causal(self.fk[m, :], y_up)
+            y_full += fir_filter_causal(self.fk[m, :], y_up)
 
         e_full = d - y_full
 

@@ -15,13 +15,12 @@
 from __future__ import annotations
 
 from time import perf_counter
-from typing import Optional, Union, Dict, Any
+from typing import Optional, Dict, Any
 
 import numpy as np
 
 from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate_input
-
-ArrayLike = Union[np.ndarray, list]
+from pydaptivefiltering._utils.typing import ArrayLike
 
 
 class SignData(AdaptiveFilter):

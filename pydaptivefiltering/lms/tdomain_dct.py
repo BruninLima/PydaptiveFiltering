@@ -16,15 +16,13 @@
 from __future__ import annotations
 
 from time import perf_counter
-from typing import Optional, Union, Dict, Any, List
+from typing import Optional, Dict, Any, List
 
 import numpy as np
 from scipy.fftpack import dct
 
 from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate_input
-
-ArrayLike = Union[np.ndarray, list]
-
+from pydaptivefiltering._utils.typing import ArrayLike
 
 class TDomainDCT(AdaptiveFilter):
     """

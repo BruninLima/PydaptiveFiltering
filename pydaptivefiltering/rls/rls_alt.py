@@ -17,13 +17,12 @@
 from __future__ import annotations
 
 from time import time
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 
 import numpy as np
 
 from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate_input
-
-ArrayLike = Union[np.ndarray, list]
+from pydaptivefiltering._utils.typing import ArrayLike
 
 
 class RLSAlt(AdaptiveFilter):

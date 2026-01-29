@@ -16,11 +16,11 @@ from __future__ import annotations
 import numpy as np
 
 import pydaptivefiltering as pdf
-from pydaptivefiltering._utils.subband_id import (
+from pydaptivefiltering._utils.example_helper import (
     SubbandIDConfig,
     run_subband_system_id,
-    plot_learning_curve,
 )
+from pydaptivefiltering._utils.plotting import plot_learning_curve
 
 def main(seed: int = 0, plot: bool = True):
     cfg = SubbandIDConfig(

@@ -20,9 +20,7 @@ from typing import Any, Dict, Optional, Union
 import numpy as np
 
 from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate_input
-
-ArrayLike = Union[np.ndarray, list]
-
+from pydaptivefiltering._utils.typing import ArrayLike
 
 class RLS(AdaptiveFilter):
     """

@@ -1,20 +1,88 @@
-# pydaptivefiltering/_utils/subband_id.py
-from __future__ import annotations
-import inspect
-from dataclasses import dataclass, field
-from time import perf_counter
-from typing import Callable, Dict, Optional, Any
 
 import numpy as np
+from typing import Tuple
+from time import perf_counter
+from dataclasses import dataclass, field
+import inspect
+from typing import Any, Callable, Dict  
+from pydaptivefiltering._utils.noise import wgn_complex, wgn_real
+from pydaptivefiltering._utils.signal import align_by_xcorr_and_gain
 
-import pydaptivefiltering as pdf  # só para typing/consistência (não é obrigatório)
+def generate_sign_input(rng: np.random.Generator, K: int) -> np.ndarray:
+    """Real sign(randn) like MATLAB."""
+    return np.sign(rng.standard_normal(K)).astype(float)
 
 
-__all__ = [
-    "SubbandIDConfig",
-    "run_subband_system_id",
-    "plot_learning_curve",
-]
+def generate_qam4_input(rng: np.random.Generator, K: int) -> np.ndarray:
+    """4-QAM/QPSK with unit average power: {±1±j}/sqrt(2)."""
+    re = np.where(rng.standard_normal(K) >= 0, 1.0, -1.0)
+    im = np.where(rng.standard_normal(K) >= 0, 1.0, -1.0)
+    return (re + 1j * im).astype(np.complex128) / np.sqrt(2.0)
+
+def build_desired_from_fir(
+    x: np.ndarray,
+    Wo: np.ndarray,
+    sigma_n2: float,
+    rng: np.random.Generator,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    d = conv(x, Wo)[:K] + n
+    Returns (d, n) with same length as x.
+    """
+    K = int(x.size)
+    Wo = np.asarray(Wo)
+    d_clean = np.convolve(x, Wo, mode="full")[:K]
+
+    if np.iscomplexobj(d_clean) or np.iscomplexobj(Wo) or np.iscomplexobj(x):
+        n = wgn_complex(rng, (K,), sigma_n2)
+        d = d_clean.astype(np.complex128) + n
+    else:
+        n = wgn_real(rng, (K,), sigma_n2)
+        d = d_clean.astype(float) + n
+
+    return d, n
+
+def _coeff_hist_to_array(coeff_hist, n_coeffs: int, K: int, dtype) -> np.ndarray:
+    """
+    Normalize coefficient history to shape (n_coeffs, K+1).
+    Base class sometimes stores list of vectors, sometimes ndarray.
+    """
+    ch = np.asarray(coeff_hist)
+    if ch.ndim == 2 and ch.shape[1] == n_coeffs:
+        T = ch.shape[0]
+        out = np.zeros((n_coeffs, K + 1), dtype=dtype)
+        T_use = min(T, K + 1)
+        out[:, :T_use] = ch[:T_use, :].T
+        return out
+
+    if ch.ndim == 2 and ch.shape[0] == n_coeffs:
+        T = ch.shape[1]
+        out = np.zeros((n_coeffs, K + 1), dtype=dtype)
+        T_use = min(T, K + 1)
+        out[:, :T_use] = ch[:, :T_use]
+        return out
+
+    try:
+        out = np.zeros((n_coeffs, K + 1), dtype=dtype)
+        T_use = min(len(coeff_hist), K + 1)
+        for t in range(T_use):
+            out[:, t] = np.asarray(coeff_hist[t]).ravel()[:n_coeffs]
+        return out
+    except Exception as e:
+        raise ValueError(f"Unsupported coefficient history format: {type(coeff_hist)}") from e
+
+def pack_theta_from_result(res, w_last: np.ndarray, n_coeffs: int, K: int) -> np.ndarray:
+    """
+    Returns theta trajectory with shape (n_coeffs, K+1).
+    Uses res.coefficients history if present; ensures last column = w_last.
+    """
+    dtype = np.result_type(w_last)
+    theta = _coeff_hist_to_array(res.coefficients, n_coeffs=n_coeffs, K=K, dtype=dtype)
+    theta[:, -1] = np.asarray(w_last).ravel()[:n_coeffs]
+    return theta
+
+
+
 
 
 @dataclass
@@ -30,17 +98,14 @@ class SubbandIDConfig:
     K: int = 4096
     sigma_n2: float = 1e-3
 
-    # ✅ FIX: mutable default -> default_factory
     Wo: np.ndarray = field(default_factory=lambda: np.array([0.32, -0.30, 0.50, 0.20], dtype=float))
 
-    # Progress/report settings
     verbose_progress: bool = True
     print_every: int = 5
     tail_window: int = 200
 
 
 def _generate_real_input(rng: np.random.Generator, K: int) -> np.ndarray:
-    # sinal excitante estável p/ identificação: branco gaussiano
     return rng.standard_normal(K).astype(float)
 
 
@@ -152,16 +217,29 @@ def run_subband_system_id(
 
         res = flt.optimize(x, d, **opt_kwargs)
 
-        e = np.asarray(res.errors).ravel()
-        if e.size < K_eff:
-            # Alguns blocos podem retornar exatamente K_eff, outros podem retornar menor
-            # se a implementação define n_iters diferente. Truncamos p/ alinhar.
-            e = np.pad(e, (0, K_eff - e.size), mode="constant")
-        else:
-            e = e[:K_eff]
+        # --- aligned MSE (use outputs, not res.errors) ---
+        y = np.asarray(res.outputs).ravel()[:K_eff]
+        d0 = np.asarray(d).ravel()[:K_eff]
 
-        mse = (np.abs(e) ** 2).astype(float, copy=False)
-        mse_mat[:, l] = mse
+        al = align_by_xcorr_and_gain(
+            y=y,
+            d=d0,
+            max_lag=256,
+            remove_mean=True,
+            fit_gain=True,
+        )
+        e_al = al["d_aligned"] - al["y_aligned"]
+        mse_valid = (e_al ** 2).astype(float, copy=False)
+
+        mse_col = np.empty((K_eff,), dtype=float)
+
+        if mse_valid.size == 0:
+            mse_col[:] = 0.0
+        else:
+            mse_col[: mse_valid.size] = mse_valid
+            mse_col[mse_valid.size :] = mse_valid[-1] 
+
+        mse_mat[:, l] = mse_col
         msemin_mat[:, l] = (np.abs(n[:K_eff]) ** 2).astype(float, copy=False)
 
         _report_progress(
@@ -169,7 +247,7 @@ def run_subband_system_id(
             l=l,
             ensemble=ensemble,
             t0=t0,
-            mse_col=mse,
+            mse_col=mse_col,
             cfg=cfg,
         )
 
@@ -184,20 +262,3 @@ def run_subband_system_id(
     }
 
 
-def plot_learning_curve(MSE_av: np.ndarray, MSEmin_av: Optional[np.ndarray] = None, title: str = "") -> None:
-    import matplotlib.pyplot as plt
-
-    MSE_av = np.asarray(MSE_av, dtype=float).ravel()
-    x = np.arange(1, MSE_av.size + 1)
-
-    plt.figure()
-    plt.semilogy(x, np.abs(MSE_av))
-    if MSEmin_av is not None:
-        MSEmin_av = np.asarray(MSEmin_av, dtype=float).ravel()
-        plt.semilogy(x, np.abs(MSEmin_av))
-        plt.legend(["MSE", "Noise floor"])
-    plt.grid(True)
-    plt.title(title or "Learning curve")
-    plt.xlabel("n")
-    plt.ylabel("MSE")
-    plt.show()

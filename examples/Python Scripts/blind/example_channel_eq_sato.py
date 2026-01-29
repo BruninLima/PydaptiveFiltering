@@ -25,14 +25,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import pydaptivefiltering as pdf
-from pydaptivefiltering._utils.equalization import (
+from pydaptivefiltering._utils.comm import (
     qam4_constellation_unit_var,
+    simulate_constellations,
+)
+from pydaptivefiltering._utils.channel import (
     wiener_equalizer,
     generate_channel_data,
-    simulate_constellations,
-    ProgressConfig,
-    report_progress,
 )
+from pydaptivefiltering._utils.progress import (
+    ProgressConfigChannel,
+    report_progressChannel,
+) 
 
 def main(seed: int = 0, plot: bool = True):
     rng = np.random.default_rng(seed)
@@ -51,7 +55,7 @@ def main(seed: int = 0, plot: bool = True):
 
     MSE = np.zeros((K - delay, ensemble), dtype=np.float64)
 
-    cfg = ProgressConfig(verbose_progress=True, print_every=10, tail_window=200, optimize_verbose_first=True)
+    cfg = ProgressConfigChannel(verbose_progress=True, print_every=10, tail_window=200, optimize_verbose_first=True)
 
     t0 = perf_counter()
     for l in range(ensemble):
@@ -69,7 +73,7 @@ def main(seed: int = 0, plot: bool = True):
         MSE[:, l] = (np.abs(e) ** 2)
         W[:, -1, l] = flt.w
 
-        report_progress(
+        report_progressChannel(
             l=l,
             ensemble=ensemble,
             t0=t0,

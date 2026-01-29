@@ -19,8 +19,7 @@ from time import perf_counter
 from typing import Any, Dict, Optional, Union
 
 from pydaptivefiltering.base import AdaptiveFilter, OptimizationResult, validate_input
-
-ArrayLike = Union[np.ndarray, list]
+from pydaptivefiltering._utils.typing import ArrayLike
 
 
 class NormalizedLRLS(AdaptiveFilter):
@@ -112,7 +111,7 @@ class NormalizedLRLS(AdaptiveFilter):
         filter_order: int,
         lambda_factor: float = 0.99,
         epsilon: float = 1e-6,
-        w_init: Optional[Union[np.ndarray, list]] = None,
+        w_init: Optional[ArrayLike] = None,
         denom_floor: float = 1e-12,
     ) -> None:
         """
