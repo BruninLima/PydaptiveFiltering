@@ -196,25 +196,25 @@ def align_by_xcorr_and_gain(
     else:
         y0, d0 = y, d
 
-    # Search lag in [-max_lag, +max_lag] maximizing normalized correlation
+    max_lag = int(min(max_lag, max(0, n - 1)))
+
     best_lag = 0
     best_score = -np.inf
-
-    # precompute norms for speed
     eps = 1e-12
 
     for lag in range(-max_lag, max_lag + 1):
         if lag >= 0:
-            # compare d[t] with y[t-lag] => y starts at 0, d starts at lag
             yy = y0[: n - lag]
             dd = d0[lag: n]
         else:
-            # lag < 0 => y advanced: compare d[t] with y[t-lag] => y starts at -lag
             yy = y0[-lag: n]
             dd = d0[: n + lag]
 
-        if len(yy) < 8:
+        m = min(len(yy), len(dd))
+        if m < 8:
             continue
+        yy = yy[:m]
+        dd = dd[:m]
 
         num = float(np.dot(dd, yy))
         den = float(np.linalg.norm(dd) * np.linalg.norm(yy) + eps)
