@@ -1,23 +1,17 @@
 # pydaptivefiltering/_utils/subband_id.py
 from __future__ import annotations
-
-from dataclasses import dataclass
+import inspect
+from dataclasses import dataclass, field
 from time import perf_counter
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Callable, Dict, Optional, Any
 
 import numpy as np
 
-from pydaptivefiltering._utils.system_id import (
-    generate_sign_input,
-    build_desired_from_fir,
-    ProgressConfig,
-    report_progress,
-)
+import pydaptivefiltering as pdf  # só para typing/consistência (não é obrigatório)
 
 
 __all__ = [
     "SubbandIDConfig",
-    "choose_subband_lengths",
     "run_subband_system_id",
     "plot_learning_curve",
 ]
@@ -25,31 +19,70 @@ __all__ = [
 
 @dataclass
 class SubbandIDConfig:
+    """
+    Harness config for subband/block system identification examples.
+
+    Notes
+    -----
+    - Wo MUST NOT be a mutable default (np.ndarray). Use default_factory.
+    """
     ensemble: int = 50
     K: int = 4096
     sigma_n2: float = 1e-3
-    Wo: np.ndarray = np.array([0.32, -0.30, 0.50, 0.20], dtype=float)
 
-    # progress
-    progress: ProgressConfig = ProgressConfig(
-        verbose_progress=True, print_every=10, tail_window=400
-    )
+    # ✅ FIX: mutable default -> default_factory
+    Wo: np.ndarray = field(default_factory=lambda: np.array([0.32, -0.30, 0.50, 0.20], dtype=float))
+
+    # Progress/report settings
+    verbose_progress: bool = True
+    print_every: int = 5
+    tail_window: int = 200
 
 
-def choose_subband_lengths(K: int, L: int) -> int:
+def _generate_real_input(rng: np.random.Generator, K: int) -> np.ndarray:
+    # sinal excitante estável p/ identificação: branco gaussiano
+    return rng.standard_normal(K).astype(float)
+
+
+def _build_desired_from_fir_real(
+    x: np.ndarray,
+    Wo: np.ndarray,
+    sigma_n2: float,
+    rng: np.random.Generator,
+) -> tuple[np.ndarray, np.ndarray]:
     """
-    Ensure K is a multiple of L (block advance). This avoids off-by-one slicing
-    headaches in subband/block algorithms.
+    d = FIR(Wo) * x + n  (real)
+    Convenção: Wo tem tamanho N (N taps). Saída por convolução causal.
     """
-    K = int(K)
-    L = int(L)
-    if L <= 0:
-        raise ValueError("L must be > 0.")
-    return (K // L) * L
+    Wo = np.asarray(Wo, dtype=float).ravel()
+    x = np.asarray(x, dtype=float).ravel()
+
+    y_clean = np.convolve(x, Wo, mode="full")[: x.size]
+    n = rng.normal(0.0, np.sqrt(float(sigma_n2)), size=x.size).astype(float)
+    d = y_clean + n
+    return d, n
+
+
+def _report_progress(
+    algo_tag: str,
+    l: int,
+    ensemble: int,
+    t0: float,
+    mse_col: np.ndarray,
+    cfg: SubbandIDConfig,
+) -> None:
+    if not cfg.verbose_progress:
+        return
+    if (l + 1) % int(cfg.print_every) != 0 and (l + 1) != ensemble:
+        return
+
+    tail = int(min(cfg.tail_window, mse_col.size))
+    tail_mse = float(np.mean(mse_col[-tail:])) if tail > 0 else float(np.mean(mse_col))
+    elapsed = perf_counter() - t0
+    print(f"[subband/{algo_tag}] {l+1:>4}/{ensemble} | tail_mse={tail_mse:.3e} | elapsed={elapsed:.2f}s")
 
 
 def run_subband_system_id(
-    *,
     make_filter: Callable[[], Any],
     L: int,
     cfg: SubbandIDConfig,
@@ -57,113 +90,114 @@ def run_subband_system_id(
     verbose_first: bool = True,
 ) -> Dict[str, Any]:
     """
-    Generic harness for subband/block algorithms that follow:
-      res = flt.optimize(x_real, d_real)
+    Run ensemble-averaged subband/block system ID.
 
     Parameters
     ----------
     make_filter:
-        Callable that returns a *new* filter instance (e.g. lambda: pdf.CFDLMS(...)).
+        Callable that returns a *fresh* filter object with .optimize(x, d).
+        The filter is expected to produce L samples per iteration in outputs/errors.
     L:
-        Block advance (decimation) used by the algorithm (samples produced per iter).
-        Used to choose K as multiple of L and to interpret output length.
+        Block advance / decimation (samples per iteration).
     cfg:
-        SubbandIDConfig with ensemble/K/sigma/Wo/progress.
+        SubbandIDConfig.
     seed:
-        Seed for reproducibility.
+        RNG seed.
     verbose_first:
-        Pass verbose=True only for first realization (helpful for CI logs).
+        If True, pass verbose=True only on the first realization (if optimize supports it).
 
     Returns
     -------
     dict with:
       - Wo
-      - K_eff
-      - MSE_av
-      - MSEmin_av
-      - MSE (K_eff, ensemble)
-      - MSEmin (K_eff, ensemble)
-      - total_time_s
+      - MSE_av: (K_eff,) ensemble-averaged output error power
+      - MSEmin_av: (K_eff,) noise power baseline
+      - K_eff: effective length used (multiple of L)
     """
-    rng_master = np.random.default_rng(int(seed))
+    rng_master = np.random.default_rng(seed)
 
-    L = int(L)
-    K = choose_subband_lengths(int(cfg.K), L)
-    Wo = np.asarray(cfg.Wo, dtype=float).ravel()
-    sigma_n2 = float(cfg.sigma_n2)
     ensemble = int(cfg.ensemble)
-    progress_cfg = cfg.progress
+    K = int(cfg.K)
+    L = int(L)
+    if L <= 0:
+        raise ValueError("L must be a positive integer.")
 
-    MSE = np.zeros((K, ensemble), dtype=float)
-    MSEmin = np.zeros((K, ensemble), dtype=float)
+    # K_eff: múltiplo de L (evita blocos parciais)
+    K_eff = (K // L) * L
+    if K_eff <= 0:
+        raise ValueError(f"K too small for L. Got K={K}, L={L} => K_eff={K_eff}.")
+
+    mse_mat = np.zeros((K_eff, ensemble), dtype=float)
+    msemin_mat = np.zeros((K_eff, ensemble), dtype=float)
 
     t0 = perf_counter()
 
     for l in range(ensemble):
-        t_real0 = perf_counter()
         rng = np.random.default_rng(int(rng_master.integers(0, 2**32 - 1)))
 
-        x = generate_sign_input(rng, K).astype(float)
-        d, n = build_desired_from_fir(x, Wo, sigma_n2, rng)
-        d = np.asarray(d, dtype=float).ravel()
-        n = np.asarray(n, dtype=float).ravel()
+        x = _generate_real_input(rng, K_eff)
+        d, n = _build_desired_from_fir_real(x, cfg.Wo, cfg.sigma_n2, rng)
 
         flt = make_filter()
-        res = flt.optimize(x, d, verbose=(verbose_first and l == 0))
 
-        e = np.asarray(res.errors).ravel().astype(float)
-        K_eff = int(min(K, e.size))
+        # verbose only on first run if optimize supports it
+        opt_kwargs = {}
+        if verbose_first and l == 0:
+            try:
+                sig = inspect.signature(flt.optimize)
+                if "verbose" in sig.parameters:
+                    opt_kwargs["verbose"] = True
+            except Exception:
+                pass
 
-        # store only effective region
-        MSE[:K_eff, l] = e[:K_eff] ** 2
-        MSEmin[:K_eff, l] = n[:K_eff] ** 2
+        res = flt.optimize(x, d, **opt_kwargs)
 
-        report_progress(
+        e = np.asarray(res.errors).ravel()
+        if e.size < K_eff:
+            # Alguns blocos podem retornar exatamente K_eff, outros podem retornar menor
+            # se a implementação define n_iters diferente. Truncamos p/ alinhar.
+            e = np.pad(e, (0, K_eff - e.size), mode="constant")
+        else:
+            e = e[:K_eff]
+
+        mse = (np.abs(e) ** 2).astype(float, copy=False)
+        mse_mat[:, l] = mse
+        msemin_mat[:, l] = (np.abs(n[:K_eff]) ** 2).astype(float, copy=False)
+
+        _report_progress(
             algo_tag=type(flt).__name__,
-            l=l, ensemble=ensemble, t0=t0, t_real0=t_real0,
-            mse_col=MSE[:K_eff, l], cfg=progress_cfg,
+            l=l,
+            ensemble=ensemble,
+            t0=t0,
+            mse_col=mse,
+            cfg=cfg,
         )
 
-    total_time_s = float(perf_counter() - t0)
-    K_eff_final = int(MSE.shape[0])
-
-    MSE_av = np.mean(MSE, axis=1)
-    MSEmin_av = np.mean(MSEmin, axis=1)
+    MSE_av = np.mean(mse_mat, axis=1)
+    MSEmin_av = np.mean(msemin_mat, axis=1)
 
     return {
-        "Wo": Wo,
-        "K_eff": K_eff_final,
-        "MSE": MSE,
-        "MSEmin": MSEmin,
+        "Wo": np.asarray(cfg.Wo, dtype=float).copy(),
         "MSE_av": MSE_av,
         "MSEmin_av": MSEmin_av,
-        "total_time_s": total_time_s,
+        "K_eff": int(K_eff),
     }
 
 
-def plot_learning_curve(
-    MSE_av: np.ndarray,
-    MSEmin_av: Optional[np.ndarray] = None,
-    title: str = "Learning curve",
-) -> None:
-    """
-    Lightweight plot utility for subband examples (no theta plot).
-    Import matplotlib lazily so tests can run headless without matplotlib if desired.
-    """
+def plot_learning_curve(MSE_av: np.ndarray, MSEmin_av: Optional[np.ndarray] = None, title: str = "") -> None:
     import matplotlib.pyplot as plt
 
-    mse = np.asarray(MSE_av, dtype=float).ravel()
-    x = np.arange(1, mse.size + 1)
+    MSE_av = np.asarray(MSE_av, dtype=float).ravel()
+    x = np.arange(1, MSE_av.size + 1)
 
-    plt.figure(figsize=(10, 4))
-    plt.semilogy(x, np.maximum(mse, 1e-20), label="MSE")
+    plt.figure()
+    plt.semilogy(x, np.abs(MSE_av))
     if MSEmin_av is not None:
-        msemin = np.asarray(MSEmin_av, dtype=float).ravel()
-        plt.semilogy(x, np.maximum(msemin, 1e-20), label="MSEmin")
+        MSEmin_av = np.asarray(MSEmin_av, dtype=float).ravel()
+        plt.semilogy(x, np.abs(MSEmin_av))
+        plt.legend(["MSE", "Noise floor"])
     plt.grid(True)
-    plt.title(title)
+    plt.title(title or "Learning curve")
     plt.xlabel("n")
     plt.ylabel("MSE")
-    plt.legend()
-    plt.tight_layout()
     plt.show()
