@@ -223,22 +223,16 @@ print(f"Innovation std: {innov.std():.3f}")
 |---|---|---|
 | `lms/` (LMS family) | `LMS`, `NLMS`, `AffineProjection`, `SignData`, `SignError`, `DualSign`, `LMSNewton`, `Power2ErrorLMS`, `TDomainLMS`, `TDomainDCT`, `TDomainDFT` | Real/Complex |
 | `rls/` (RLS family) | `RLS`, `RLSAlt` | Complex |
-| `set_membership/` (Set-membership) | `SMNLMS`, `SMBNLMS`, `SMAffineProjection`, `SimplifiedSMAP`, `SimplifiedSMPUAP` | Complex |
-| `lattice/` (Lattice-based RLS) | `LRLSPosteriori`, `LRLSErrorFeedback`, `LRLSPriori`, `NormalizedLRLS` | Real/Complex |
-| `fast_rls/` (Fast Transversal RLS) | `FastRLS`, `StabFastRLS` | Complex |
+| `set_membership/` (Set-membership) | `SMNLMS`, `SMBNLMS`, `SMAffineProjection`, `SimplifiedSMAP`, `SimplifiedSMPUAP` | Real/Complex |
+| `lattice/` (Lattice-based RLS) | `LRLSPosteriori`, `LRLSErrorFeedback`, `LRLSPriori`, `NormalizedLRLS` | Complex |
+| `fast_rls/` (Fast Transversal RLS) | `FastRLS`, `StabFastRLS` | Real |
 | `qr_decomposition/` (QR-RLS) | `QRRLS` | Real |
-| `iir/` (Adaptive IIR) | `ErrorEquation`, `GaussNewton`, `GaussNewtonGradient`, `RLSIIR`, `SteiglitzMcBride` | Real/Complex |
+| `iir/` (Adaptive IIR) | `ErrorEquation`, `GaussNewton`, `GaussNewtonGradient`, `RLSIIR`, `SteiglitzMcBride` | Real |
 | `nonlinear/` (Nonlinear models) | `VolterraLMS`, `VolterraRLS`, `BilinearRLS`, `RBF`, `ComplexRBF`, `MultilayerPerceptron` | Real/Complex |
 | `subband/` (Subband) | `OLSBLMS`, `DLCLLMS`, `CFDLMS` | Real |
 | `blind/` (Blind equalization) | `CMA`, `Godard`, `Sato`, `AffineProjectionCM` | Complex |
-| `kalman/` (Kalman) | `Kalman` | Real |
+| `kalman/` (Kalman) | `Kalman` | Complex |
 | `base/` (Core API) | `AdaptiveFilter` | N/A |
----
-
-### Known limitations (this release)
-
-- I need to populate the python examples.
-- TODO: Implement whats new on the v5 of the Matlab Toolbox
 ---
 
 ## Notebooks

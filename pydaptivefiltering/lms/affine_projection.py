@@ -190,7 +190,7 @@ class AffineProjection(AdaptiveFilter):
             except np.linalg.LinAlgError:
                 u = np.linalg.pinv(corr_matrix) @ E_vector
 
-            self.w = self.w + self.step_size * (X_matrix.conj().T @ u)
+            self.w = self.w + self.step_size * (X_matrix.T @ u.conj())
             self._record_history()
 
         runtime_s: float = perf_counter() - tic

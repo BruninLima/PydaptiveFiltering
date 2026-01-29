@@ -10,3 +10,7 @@ dist
 .m
 _tests
 benchmarks
+gen_examples.py
+auto_examples
+auto_report.py
+auto_reports

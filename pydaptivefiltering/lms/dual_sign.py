@@ -43,7 +43,7 @@ class DualSign(AdaptiveFilter):
         Threshold ``rho`` applied to ``|e[k]|`` to select the gain level.
     gamma : float
         Gain multiplier applied when ``|e[k]| > rho`` (typically ``gamma > 1``).
-    step : float, optional
+    step_size : float, optional
         Adaptation step size ``mu``. Default is 1e-2.
     w_init : array_like of float, optional
         Initial coefficient vector ``w(0)`` with shape ``(M + 1,)``. If None,
@@ -106,7 +106,7 @@ class DualSign(AdaptiveFilter):
         filter_order: int,
         rho: float,
         gamma: float,
-        step: float = 1e-2,
+        step_size: float = 1e-2,
         w_init: Optional[ArrayLike] = None,
         *,
         safe_eps: float = 1e-12,
@@ -114,7 +114,7 @@ class DualSign(AdaptiveFilter):
         super().__init__(filter_order=int(filter_order), w_init=w_init)
         self.rho = float(rho)
         self.gamma = float(gamma)
-        self.step_size = float(step)
+        self.step_size = float(step_size)
         self._safe_eps = float(safe_eps)
 
     @validate_input

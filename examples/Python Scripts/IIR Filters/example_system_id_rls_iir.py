@@ -1,18 +1,18 @@
-# examples/example_systemID_error_equation.py
+# examples/example_systemID_rls_iir.py
 #################################################################################
 #                        Example: System Identification                         #
 #################################################################################
 #                                                                               #
 #  In this example we have a typical system identification scenario. We want    #
 # to estimate the filter coefficients of an unknown system given by Wo. In      #
-# order to accomplish this task we use an adaptive filter with the same         #
-# number of coefficients as the unkown system. The procedure is:                #
+# order to accomplish this task we use an adaptive IIR filter (OE criterion).   #
+# The procedure is:                                                             #
 # 1)  Excitate both filters (the unknown and the adaptive) with the signal x.   #
-#   Here, x is sign(randn), with variance ~1.                                   #
+#   Here, x is sign(randn) (MATLAB example), with variance ~1.                  #
 # 2)  Generate desired signal, d = Wo' x + n, with noise power sigma_n2.        #
-# 3)  Choose an adaptive filtering algorithm.                                   #
+# 3)  Choose an adaptive filtering algorithm to govern coefficient updating.    #
 #                                                                               #
-#     Adaptive Algorithm used here: ErrorEquation                               #
+#     Adaptive Algorithm used here: RLSIIR                                       #
 #                                                                               #
 #################################################################################
 
@@ -44,26 +44,26 @@ def main(seed: int = 0, plot: bool = True):
     H = np.array([0.32 + 0.21j, -0.3 + 0.7j, 0.5 - 0.8j, 0.2 + 0.5j], dtype=np.complex128)
     Wo = np.real(H).astype(float)  # unknown system (FIR, real)
 
-    sigma_n2 = 0.001
+    sigma_n2 = 0.04
 
-    # MATLAB: M=3 (numerator order), N=2 (denominator order)
+    # MATLAB naming:
+    #   M = 3 (numerator order), N = 2 (denominator order)
     M = 3
     N = 2
 
     lambda_ = 0.97
-    delta = 1e-5  # in your implementation -> epsilon
+    delta = 1e-2  # initialization regularization (matches your RLSIIR.delta)
 
-    if not hasattr(pdf, "ErrorEquation"):
-        raise RuntimeError("pydaptivefiltering does not expose 'ErrorEquation'.")
+    if not hasattr(pdf, "RLSIIR"):
+        raise RuntimeError("pydaptivefiltering does not expose 'RLSIIR'.")
 
     # ----------------------------
     # Memory allocation
     # ----------------------------
-    n_coeffs = N + (M + 1)
+    n_coeffs = N + (M + 1)  # poles + (zeros+1)
     theta = np.zeros((n_coeffs, K + 1, ensemble), dtype=float)
 
     MSE = np.zeros((K, ensemble), dtype=float)
-    MSEE = np.zeros((K, ensemble), dtype=float)
     MSEmin = np.zeros((K, ensemble), dtype=float)
 
     cfg = ProgressConfig(verbose_progress=True, print_every=10, tail_window=50)
@@ -76,37 +76,34 @@ def main(seed: int = 0, plot: bool = True):
     for l in range(ensemble):
         t_real0 = perf_counter()
 
-        seed_l = int(rng_master.integers(0, 2**32 - 1))
-        rng = np.random.default_rng(seed_l)
+        rng = np.random.default_rng(int(rng_master.integers(0, 2**32 - 1)))
 
         # real-only signals
         x = generate_sign_input(rng, K)
         d, n = build_desired_from_fir(x, Wo, sigma_n2, rng)
 
-        ee = pdf.ErrorEquation(
+        rlsiir = pdf.RLSIIR(
             zeros_order=M,
             poles_order=N,
             forgetting_factor=lambda_,
-            epsilon=delta,   # MATLAB delta
+            delta=delta,
         )
 
-        res = ee.optimize(x, d, verbose=(l == 0), return_internal_states=False)
+        res = rlsiir.optimize(x, d, verbose=(l == 0), return_internal_states=False)
 
         e = np.asarray(res.errors).ravel()
-        ee_aux = np.asarray(res.extra.get("auxiliary_errors", np.zeros_like(e))).ravel()
-
         MSE[:, l] = (np.abs(e) ** 2)
-        MSEE[:, l] = (np.abs(ee_aux) ** 2)
         MSEmin[:, l] = (np.abs(n) ** 2)
 
         theta[:, :, l] = pack_theta_from_result(
             res=res,
-            w_last=ee.w,
+            w_last=rlsiir.w,
             n_coeffs=n_coeffs,
             K=K,
         )
 
         report_progress(
+            algo_tag="RLSIIR",
             l=l,
             ensemble=ensemble,
             t0=t0,
@@ -116,14 +113,16 @@ def main(seed: int = 0, plot: bool = True):
         )
 
     total_time = perf_counter() - t0
-    print(f"[Example/ErrorEquation] Total ensemble time: {total_time:.2f} s ({total_time/ensemble:.3f} s/realization)")
+    print(
+        f"[Example/RLSIIR] Total ensemble time: {total_time:.2f} s "
+        f"({total_time/ensemble:.3f} s/realization)"
+    )
 
     # ----------------------------
     # Averaging (MATLAB)
     # ----------------------------
-    theta_av = np.mean(theta, axis=2)   # (n_coeffs, K+1)
+    theta_av = np.mean(theta, axis=2)  # (n_coeffs, K+1)
     MSE_av = np.mean(MSE, axis=1)
-    MSEE_av = np.mean(MSEE, axis=1)
     MSEmin_av = np.mean(MSEmin, axis=1)
 
     # Print final coefficients like MATLAB
@@ -137,21 +136,23 @@ def main(seed: int = 0, plot: bool = True):
     print("Unknown system (FIR) Wo:")
     print(Wo)
 
+    # ----------------------------
+    # Plot (single window)
+    # ----------------------------
     if plot:
         plot_system_id_single_figure(
             MSE_av=MSE_av,
-            MSEE_av=MSEE_av,
+            MSEE_av=None,
             MSEmin_av=MSEmin_av,
             theta_av=theta_av,
             poles_order=N,
-            title_prefix="ErrorEquation",
+            title_prefix="RLSIIR",
         )
 
     return {
         "Wo": Wo,
         "theta_av": theta_av,
         "MSE_av": MSE_av,
-        "MSEE_av": MSEE_av,
         "MSEmin_av": MSEmin_av,
     }
 

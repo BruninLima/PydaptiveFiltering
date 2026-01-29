@@ -38,14 +38,14 @@ class LMSNewton(AdaptiveFilter):
     ----------
     filter_order : int
         Adaptive FIR filter order ``M``. The number of coefficients is ``M + 1``.
-    alpha : float
+    forgetting_factor : float
         Forgetting factor ``alpha`` used in the inverse-correlation recursion,
-        with ``0 < alpha < 1``. Values closer to 1 yield smoother tracking; smaller
+        with ``0 < forgetting_factor < 1``. Values closer to 1 yield smoother tracking; smaller
         values adapt faster.
     initial_inv_rx : array_like of complex
         Initial inverse correlation matrix ``P(0)`` with shape ``(M + 1, M + 1)``.
         Typical choices are scaled identities, e.g. ``delta^{-1} I``.
-    step : float, optional
+    step_size : float, optional
         Adaptation step size ``mu``. Default is 1e-2.
     w_init : array_like of complex, optional
         Initial coefficient vector ``w(0)`` with shape ``(M + 1,)``. If None,
@@ -80,13 +80,13 @@ class LMSNewton(AdaptiveFilter):
         the denominator is
 
         .. math::
-            \\mathrm{denom}_k = \\frac{1-\\alpha}{\\alpha} + \\phi_k,
+            \\mathrm{denom}_k = \\frac{1-\\text{forgetting_factor}}{\\text{forgetting_factor}} + \\phi_k,
 
         and the update used here is
 
         .. math::
             P[k+1] =
-            \\frac{1}{1-\\alpha}
+            \\frac{1}{1-\\text{forgetting_factor}}
             \\left(
                 P[k] - \\frac{p_k p_k^H}{\\mathrm{denom}_k}
             \\right).
@@ -109,14 +109,14 @@ class LMSNewton(AdaptiveFilter):
 
     supports_complex: bool = True
 
-    alpha: float
+    forgetting_factor: float
     step_size: float
     inv_rx: np.ndarray
 
     def __init__(
         self,
         filter_order: int,
-        alpha: float,
+        forgetting_factor: float,
         initial_inv_rx: np.ndarray,
         step_size: float = 1e-2,
         w_init: Optional[ArrayLike] = None,
@@ -125,9 +125,9 @@ class LMSNewton(AdaptiveFilter):
     ) -> None:
         super().__init__(filter_order=int(filter_order), w_init=w_init)
 
-        self.alpha = float(alpha)
-        if not (0.0 < self.alpha < 1.0):
-            raise ValueError(f"alpha must satisfy 0 < alpha < 1. Got alpha={self.alpha}.")
+        self.forgetting_factor = float(forgetting_factor)
+        if not (0.0 < self.forgetting_factor < 1.0):
+            raise ValueError(f"forgetting_factor must satisfy 0 < forgetting_factor < 1. Got forgetting_factor={self.forgetting_factor}.")
 
         P0 = np.asarray(initial_inv_rx, dtype=complex)
         n_taps = int(filter_order) + 1
@@ -199,11 +199,11 @@ class LMSNewton(AdaptiveFilter):
             Px: np.ndarray = self.inv_rx @ x_col
             phi: complex = (x_col.conj().T @ Px).item()
 
-            denom: complex = ((1.0 - self.alpha) / self.alpha) + phi
+            denom: complex = ((1.0 - self.forgetting_factor) / self.forgetting_factor) + phi
             if abs(denom) < self._safe_eps:
                 denom = denom + (self._safe_eps + 0.0j)
 
-            self.inv_rx = (self.inv_rx - (Px @ Px.conj().T) / denom) / (1.0 - self.alpha)
+            self.inv_rx = (self.inv_rx - (Px @ Px.conj().T) / denom) / (1.0 - self.forgetting_factor)
 
             self.w = self.w + self.step_size * np.conj(e_k) * Px.ravel()
 

@@ -290,17 +290,13 @@ class ComplexRBF(AdaptiveFilter):
             e_k = d[k] - y_k 
             errors[k] = e_k
 
+            self.w = self.w + (2.0 * self.uw) * f * np.conj(e_k)
             
-            phi = np.real(e_k * w_old)    
+            phi = np.real(e_k * w_old)
+
             
             denom_sigma = np.maximum(self.sigma**3, eps)
-            grad_sigma = (
-                (4.0 * self.us)
-                * f
-                * phi
-                * dis_sq
-                / denom_sigma
-            )
+            grad_sigma = (4.0 * self.us) * f * phi * dis_sq / denom_sigma
             self.sigma = np.maximum(self.sigma + grad_sigma, eps)
 
             denom_c = np.maximum(self.sigma**2, eps)
