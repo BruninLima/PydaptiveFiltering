@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install -U pip
+          # Instala a lib em modo editável
+          python -m pip install -e .
+          # Se você tiver extras:
+          # python -m pip install -e ".[dev]"
+          # python -m pip install -e ".[examples]"
+
+      - name: Run unit tests
+        env:
+          MPLBACKEND: Agg
+        run: |
+          python -m pytest -q
+
+      - name: Generate auto examples
+        env:
+          MPLBACKEND: Agg
+        run: |
+          # ajuste o path conforme onde está seu script
+          python scripts/gen_examples.py
+
+      - name: Run examples report (smoke)
+        env:
+          MPLBACKEND: Agg
+          # deixa leve no CI
+          PYDAF_ENSEMBLE: "3"
+          PYDAF_K: "256"
+          PYDAF_VERBOSE_PROGRESS: "0"
+          PYDAF_VERBOSE_FIRST: "0"
+          # opcional: rode só system_id
+          # PYDAF_ONLY_SCENARIO: "system_id"
+        run: |
+          python scripts/run_examples_report.py
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto_reports_py${{ matrix.python-version }}
+          path: auto_reports/
