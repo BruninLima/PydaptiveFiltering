@@ -72,7 +72,7 @@ PARAM_DEFAULTS: Dict[str, Any] = {
     # Steps comuns
     "step_size": 1e-2,
     "mu": 1e-2,
-    "gamma": 1e-6,  # (levemente maior p/ estabilidade)
+    "gamma": 1e-6,  
 
     # Transform-domain
     "alpha": 0.99,
@@ -106,7 +106,7 @@ PARAM_DEFAULTS: Dict[str, Any] = {
     "smoothing": 0.05,
 }
 
-# --------- Defaults por algoritmo (TUNADOS p/ evitar MSE explodindo) ---------
+# --------- Defaults por algoritmo -----------
 DEFAULT_KWARGS: Dict[str, Dict[str, Any]] = {
     "LMS": {"step_size": 0.05},
     "NLMS": {"step_size": 0.6, "epsilon": 1e-2},
@@ -120,24 +120,24 @@ DEFAULT_KWARGS: Dict[str, Dict[str, Any]] = {
     # DualSign
     "DualSign": {"rho": 0.5, "gamma": 2.0, "step_size": 1e-2},
 
-    # >>> Ajuste importante — LMSNewton precisa delta grande e mu pequeno
+    
     "LMSNewton": {"forgetting_factor": 0.01, "step_size": 5e-2},
 
     "Power2ErrorLMS": {"bd": 8, "tau": 0.25, "step_size": 1e-2},
 
-    # Transform-domain: mantém alpha alto, mas gamma e step mais conservadores
+    # Transform-domain
     "TDomainDCT": {"gamma": 1e-3, "alpha": 0.99, "initial_power": 1.0, "step_size": 5e-3},
     "TDomainDFT": {"gamma": 1e-3, "alpha": 0.99, "initial_power": 1.0, "step_size": 5e-3},
     "TDomainLMS": {"gamma": 1e-3, "alpha": 0.99, "initial_power": 1.0, "step_size": 5e-3},
 
-    # IIR: Gauss-Newton é super sensível — use step bem menor + damping maior
+    # IIR
     "SteiglitzMcBride": {"zeros_order": 2, "poles_order": 2, "step_size": 5e-4},
     "GaussNewton": {"zeros_order": 2, "poles_order": 2, "step_size": 2e-4, "gamma": 1e-2},
     "GaussNewtonGradient": {"zeros_order": 2, "poles_order": 2, "step_size": 5e-4, "gamma": 1e-3},
     "ErrorEquation": {"zeros_order": 2, "poles_order": 2, "step_size": 1e-3, "gamma": 1e-3},
     "RLSIIR": {"zeros_order": 2, "poles_order": 2, "forgetting_factor": 0.995, "epsilon": 1.0},
 
-    # Set-membership: deixa mais conservador p/ MSE menor
+    # Set-membership
     "SMAffineProjection": {"gamma_bar": 0.05, "gamma": 1e-4, "L": 2, "gamma_bar_vector": 1.0},
     "SimplifiedSMPUAP": {"gamma_bar": 1.0, "gamma": 1e-3, "L": 2},
 
@@ -317,7 +317,6 @@ def _subband_kwargs_and_precode(algo_name: str, cls) -> tuple[Dict[str, Any], st
     has_var_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values())
 
     # defaults "gerais" para subband
-    # (vamos ajustar dinamicamente conforme signature)
     base = dict(SUBBAND_EXAMPLE_DEFAULTS)
 
     pre_code = ""
@@ -354,7 +353,6 @@ def _subband_kwargs_and_precode(algo_name: str, cls) -> tuple[Dict[str, Any], st
         kwargs["decimation"] = int(base.get("decimation", 32))
     if "decimation_factor" in params:
         # OLSBLMS usa decimation_factor e default L=M (pode ficar pesado)
-        # vamos forçar L=2 quando usarmos banco Haar 2-canais, senão usa base.
         kwargs["decimation_factor"] = int(base.get("decimation_factor", base.get("decimation", 32)))
     if "L" in params and "L" not in kwargs:
         kwargs["L"] = int(base.get("decimation", 32))
@@ -373,7 +371,7 @@ def _subband_kwargs_and_precode(algo_name: str, cls) -> tuple[Dict[str, Any], st
 
         # força L=2 onde aplicável
         if "decimation" in params:
-            kwargs["decimation"] = 1  # (CFDLMS não usa filterbank, mas se aparecer não faz mal)
+            kwargs["decimation"] = 1  
         if "decimation_factor" in params:
             kwargs["decimation_factor"] = 2
         if "L" in params:
@@ -1088,7 +1086,7 @@ def main(out_root: str = "auto_examples", seed: int = 0) -> None:
             print(f"[gen_examples] wrote {out_path}")
             continue
 
-        # -------- Kalman: você fará manualmente --------
+        # -------- Kalman --------
         out_path = out_dir / f"example_system_id_{snake}.py"
         if family == "kalman":
             print(f"[gen_examples] skipped (manual) {algo_name}")
