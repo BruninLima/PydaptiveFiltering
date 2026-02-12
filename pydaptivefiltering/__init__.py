@@ -12,6 +12,7 @@ from .nonlinear import *
 from .subband import *
 from .blind import *
 from .kalman import *
+from .defaults import *
 __version__ = "1.0.0"
 __author__ = "BruninLima"
 
@@ -28,7 +29,9 @@ __all__ = ["AdaptiveFilter",
     "CFDLMS", "DLCLLMS", "OLSBLMS",
     "AffineProjectionCM", "CMA", "Godard", "Sato",
     "Kalman",
-    "info"]
+    "info",
+    "DefaultsError","available_profiles","available_algorithms", "get_default_params",  "resolve_params",
+    ]
 
 
 def info():

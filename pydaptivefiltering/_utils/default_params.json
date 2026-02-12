@@ -1,0 +1,86 @@
+{
+  "meta": {
+    "source_csv": "C:\\Users\\bruno\\Documents\\DSc\\codes\\PydaptiveFiltering\\bench_reports\\bench_confirm_global_1770932950.csv",
+    "generated_at_unix": 1770933003,
+    "speed_mse_tol": 0.03,
+    "balanced_mse_tol": 0.015,
+    "min_runs": 1
+  },
+  "profiles": {
+    "speed": {
+      "AffineProjection": {
+        "L": 2,
+        "gamma": 0.0001,
+        "step_size": 0.01
+      },
+      "FastRLS": {
+        "epsilon": 0.1,
+        "forgetting_factor": 0.99
+      },
+      "LMS": {
+        "step_size": 0.02
+      },
+      "NLMS": {
+        "step_size": 0.2
+      },
+      "RLS": {
+        "delta": 1.0,
+        "forgetting_factor": 0.99
+      },
+      "RLSAlt": {
+        "delta": 1.0,
+        "forgetting_factor": 0.99
+      }
+    },
+    "balanced": {
+      "AffineProjection": {
+        "L": 2,
+        "gamma": 0.0001,
+        "step_size": 0.01
+      },
+      "FastRLS": {
+        "epsilon": 0.1,
+        "forgetting_factor": 0.995
+      },
+      "LMS": {
+        "step_size": 0.02
+      },
+      "NLMS": {
+        "step_size": 0.2
+      },
+      "RLS": {
+        "delta": 1.0,
+        "forgetting_factor": 0.995
+      },
+      "RLSAlt": {
+        "delta": 1.0,
+        "forgetting_factor": 0.995
+      }
+    },
+    "accuracy": {
+      "AffineProjection": {
+        "L": 2,
+        "gamma": 0.0001,
+        "step_size": 0.01
+      },
+      "FastRLS": {
+        "epsilon": 0.1,
+        "forgetting_factor": 0.995
+      },
+      "LMS": {
+        "step_size": 0.02
+      },
+      "NLMS": {
+        "step_size": 0.2
+      },
+      "RLS": {
+        "delta": 1.0,
+        "forgetting_factor": 0.995
+      },
+      "RLSAlt": {
+        "delta": 1.0,
+        "forgetting_factor": 0.995
+      }
+    }
+  }
+}
