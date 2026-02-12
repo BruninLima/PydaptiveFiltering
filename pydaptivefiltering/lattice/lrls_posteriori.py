@@ -150,14 +150,18 @@ class LRLSPosteriori(AdaptiveFilter):
         self.w_history = []
         self._record_history()
 
+
     @validate_input
     def optimize(
-        self,
-        input_signal: np.ndarray,
-        desired_signal: np.ndarray,
-        verbose: bool = False,
-        return_internal_states: bool = False,
-    ) -> OptimizationResult:
+    self,
+    input_signal: np.ndarray,
+    desired_signal: np.ndarray,
+    verbose: bool = False,
+    return_internal_states: bool = False,
+    store_history: bool = True,
+    history_stride: int = 1,
+) -> OptimizationResult:
+        
         """
         Executes LRLS adaptation (a posteriori form) over paired sequences ``x[k]`` and ``d[k]``.
 
@@ -200,86 +204,111 @@ class LRLSPosteriori(AdaptiveFilter):
         delta_v : ndarray of complex, shape ``(M+1,)``
             Final ladder delta state used to compute ``v``.
         """
+        
         t0 = perf_counter()
 
         x_in = np.asarray(input_signal, dtype=complex).ravel()
         d_in = np.asarray(desired_signal, dtype=complex).ravel()
 
         n_samples = int(d_in.size)
-        outputs = np.zeros(n_samples, dtype=complex)
-        errors  = np.zeros(n_samples, dtype=complex)
+        outputs = np.empty(n_samples, dtype=complex)
+        errors = np.empty(n_samples, dtype=complex)
+
+        M = self.n_sections
+        lam = self.lam
+        tiny = self._tiny
+        xi_floor = self._xi_floor
+
+        delta = self.delta
+        xi_f = self.xi_f
+        xi_b = self.xi_b
+        delta_v = self.delta_v
+        v = self.v
+
+        err_b_prev = self.error_b_prev.copy()
+        err_b_curr = np.zeros(M + 1, dtype=complex)
+
+        hs = 1 if history_stride is None or history_stride < 1 else int(history_stride)
 
         for k in range(n_samples):
-            err_f = complex(x_in[k])
+            xk = x_in[k]
+            err_f = xk
 
-            curr_err_b = np.zeros(self.n_sections + 1, dtype=complex)
-            curr_err_b[0] = x_in[k]
+            err_b_curr.fill(0.0)
+            err_b_curr[0] = xk
 
-            energy_x = float(np.real(err_f * np.conj(err_f)))
-            self.xi_f[0] = max(self.lam * self.xi_f[0] + energy_x, self._xi_floor)
-            self.xi_b[0] = self.xi_f[0]
+            energy_x = err_f.real * err_f.real + err_f.imag * err_f.imag
+            xi_f0 = lam * xi_f[0] + energy_x
+            if xi_f0 < xi_floor:
+                xi_f0 = xi_floor
+            xi_f[0] = xi_f0
+            xi_b[0] = xi_f0
 
             gamma_m = 1.0
 
-            for m in range(self.n_sections):
-                denom_g = max(gamma_m, self._tiny)
+            for m in range(M):
+                denom_g = gamma_m if gamma_m > tiny else tiny
 
-                self.delta[m] = (
-                    self.lam * self.delta[m]
-                    + (self.error_b_prev[m] * np.conj(err_f)) / denom_g
-                )
+                ebpm = err_b_prev[m]
+                dm = lam * delta[m] + (ebpm * np.conj(err_f)) / denom_g
+                delta[m] = dm
 
-                kappa_f = np.conj(self.delta[m]) / (self.xi_b[m] + self._tiny)
-                kappa_b = self.delta[m] / (self.xi_f[m] + self._tiny)
+                denom_xib = xi_b[m] + tiny
+                denom_xif = xi_f[m] + tiny
 
-                new_err_f = err_f - kappa_f * self.error_b_prev[m]
-                curr_err_b[m + 1] = self.error_b_prev[m] - kappa_b * err_f
+                kappa_f = np.conj(dm) / denom_xib
+                kappa_b = dm / denom_xif
 
-                self.xi_f[m + 1] = max(
-                    self.lam * self.xi_f[m + 1]
-                    + float(np.real(new_err_f * np.conj(new_err_f))) / denom_g,
-                    self._xi_floor,
-                )
-                self.xi_b[m + 1] = max(
-                    self.lam * self.xi_b[m + 1]
-                    + float(np.real(curr_err_b[m + 1] * np.conj(curr_err_b[m + 1]))) / denom_g,
-                    self._xi_floor,
-                )
+                new_err_f = err_f - kappa_f * ebpm
+                eb_next = ebpm - kappa_b * err_f
+                err_b_curr[m + 1] = eb_next
 
-                denom_xib = self.xi_b[m] + self._tiny
-                energy_b_curr = float(np.real(curr_err_b[m] * np.conj(curr_err_b[m])))
+                e_nf = new_err_f.real * new_err_f.real + new_err_f.imag * new_err_f.imag
+                e_bn = eb_next.real * eb_next.real + eb_next.imag * eb_next.imag
+
+                xif_next = lam * xi_f[m + 1] + e_nf / denom_g
+                xib_next = lam * xi_b[m + 1] + e_bn / denom_g
+                xi_f[m + 1] = xif_next if xif_next > xi_floor else xi_floor
+                xi_b[m + 1] = xib_next if xib_next > xi_floor else xi_floor
+
+                ebm = err_b_curr[m]
+                energy_b_curr = ebm.real * ebm.real + ebm.imag * ebm.imag
                 gamma_m_next = gamma_m - (energy_b_curr / denom_xib)
+                gamma_m = gamma_m_next if gamma_m_next > tiny else tiny
 
-                gamma_m = max(gamma_m_next, self._tiny)
                 err_f = new_err_f
 
-            e_post = complex(d_in[k])
+            e_post = d_in[k]
             gamma_ladder = 1.0
 
-            for m in range(self.n_sections + 1):
-                denom_gl = max(gamma_ladder, self._tiny)
+            for m in range(M + 1):
+                denom_gl = gamma_ladder if gamma_ladder > tiny else tiny
+                cbm = err_b_curr[m]
 
-                self.delta_v[m] = (
-                    self.lam * self.delta_v[m]
-                    + (curr_err_b[m] * np.conj(e_post)) / denom_gl
-                )
+                dvm = lam * delta_v[m] + (cbm * np.conj(e_post)) / denom_gl
+                delta_v[m] = dvm
 
-                self.v[m] = self.delta_v[m] / (self.xi_b[m] + self._tiny)
+                denom_xib_m = xi_b[m] + tiny
+                vm = dvm / denom_xib_m
+                v[m] = vm
 
-                e_post = e_post - np.conj(self.v[m]) * curr_err_b[m]
+                e_post = e_post - np.conj(vm) * cbm
 
-                denom_xib_m = self.xi_b[m] + self._tiny
-                energy_b_l = float(np.real(curr_err_b[m] * np.conj(curr_err_b[m])))
+                energy_b_l = cbm.real * cbm.real + cbm.imag * cbm.imag
                 gamma_ladder_next = gamma_ladder - (energy_b_l / denom_xib_m)
-                gamma_ladder = max(gamma_ladder_next, self._tiny)
+                gamma_ladder = gamma_ladder_next if gamma_ladder_next > tiny else tiny
 
             outputs[k] = d_in[k] - e_post
             errors[k] = e_post
 
-            self.error_b_prev = curr_err_b.copy()
+            err_b_prev, err_b_curr = err_b_curr, err_b_prev
 
-            self.w = self.v.copy()
-            self._record_history()
+            self.w[...] = v
+
+            if store_history and (k % hs == 0):
+                self._record_history()
+
+        self.error_b_prev[...] = err_b_prev
 
         runtime_s = float(perf_counter() - t0)
         if verbose:
@@ -288,12 +317,11 @@ class LRLSPosteriori(AdaptiveFilter):
         extra: Optional[Dict[str, Any]] = None
         if return_internal_states:
             extra = {
-                "xi_f": self.xi_f.copy(),
-                "xi_b": self.xi_b.copy(),
-                "delta": self.delta.copy(),
-                "delta_v": self.delta_v.copy(),
+                "xi_f": xi_f.copy(),
+                "xi_b": xi_b.copy(),
+                "delta": delta.copy(),
+                "delta_v": delta_v.copy(),
             }
-
         return self._pack_results(
             outputs=outputs,
             errors=errors,
