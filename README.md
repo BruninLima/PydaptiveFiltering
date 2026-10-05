@@ -18,7 +18,7 @@
 </p>
 
 
-## 📌 Table of Contents
+##  Table of Contents
 * [Installation](#install-instructions)
 * [Usage Examples](#implementation-and-examples)
 * [Algorithms & Progress](#algorithms-overview)
@@ -237,11 +237,11 @@ print(f"Innovation std: {innov.std():.3f}")
 
 ## Notebooks
 
-- 🧪 Examples and notebooks: [Notebooks](examples/Jupyter%20Notebooks/)
+-  Examples and notebooks: [Notebooks](examples/Jupyter%20Notebooks/)
 
 ---
 
-## 📝 License
+##  License
 
 This project is under the license found at [LICENSE](LICENSE.md).
 
