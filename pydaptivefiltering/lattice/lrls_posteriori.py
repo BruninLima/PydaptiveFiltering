@@ -133,6 +133,7 @@ class LRLSPosteriori(AdaptiveFilter):
         self.xi_f = np.ones(self.n_sections + 1, dtype=float) * self.epsilon
         self.xi_b = np.ones(self.n_sections + 1, dtype=float) * self.epsilon
         self.error_b_prev = np.zeros(self.n_sections + 1, dtype=complex)
+        self.gamma = np.ones(self.n_sections + 1, dtype=float)
 
         if w_init is not None:
             v0 = np.asarray(w_init, dtype=complex).reshape(-1)
@@ -210,68 +211,59 @@ class LRLSPosteriori(AdaptiveFilter):
         errors  = np.zeros(n_samples, dtype=complex)
 
         for k in range(n_samples):
+            # Values from time k-1 needed by the order recursions.
+            xi_b_prev = self.xi_b.copy()
+            gamma_prev = self.gamma.copy()
+
             err_f = complex(x_in[k])
 
             curr_err_b = np.zeros(self.n_sections + 1, dtype=complex)
             curr_err_b[0] = x_in[k]
 
+            gamma = np.ones(self.n_sections + 1, dtype=float)
+
             energy_x = float(np.real(err_f * np.conj(err_f)))
             self.xi_f[0] = max(self.lam * self.xi_f[0] + energy_x, self._xi_floor)
             self.xi_b[0] = self.xi_f[0]
 
-            gamma_m = 1.0
-
             for m in range(self.n_sections):
-                denom_g = max(gamma_m, self._tiny)
-
                 self.delta[m] = (
                     self.lam * self.delta[m]
-                    + (self.error_b_prev[m] * np.conj(err_f)) / denom_g
+                    + (self.error_b_prev[m] * np.conj(err_f)) / max(gamma_prev[m], self._tiny)
                 )
 
-                kappa_f = np.conj(self.delta[m]) / (self.xi_b[m] + self._tiny)
-                kappa_b = self.delta[m] / (self.xi_f[m] + self._tiny)
-
-                new_err_f = err_f - kappa_f * self.error_b_prev[m]
-                curr_err_b[m + 1] = self.error_b_prev[m] - kappa_b * err_f
-
-                self.xi_f[m + 1] = max(
-                    self.lam * self.xi_f[m + 1]
-                    + float(np.real(new_err_f * np.conj(new_err_f))) / denom_g,
-                    self._xi_floor,
-                )
-                self.xi_b[m + 1] = max(
-                    self.lam * self.xi_b[m + 1]
-                    + float(np.real(curr_err_b[m + 1] * np.conj(curr_err_b[m + 1]))) / denom_g,
-                    self._xi_floor,
-                )
-
-                denom_xib = self.xi_b[m] + self._tiny
                 energy_b_curr = float(np.real(curr_err_b[m] * np.conj(curr_err_b[m])))
-                gamma_m_next = gamma_m - (energy_b_curr / denom_xib)
+                gamma[m + 1] = max(gamma[m] - energy_b_curr / (self.xi_b[m] + self._tiny), self._tiny)
 
-                gamma_m = max(gamma_m_next, self._tiny)
+                kappa_b = self.delta[m] / (self.xi_f[m] + self._tiny)
+                kappa_f = np.conj(self.delta[m]) / (xi_b_prev[m] + self._tiny)
+
+                curr_err_b[m + 1] = self.error_b_prev[m] - kappa_b * err_f
+                new_err_f = err_f - kappa_f * self.error_b_prev[m]
+
+                delta_sq = float(np.real(self.delta[m] * np.conj(self.delta[m])))
+                self.xi_b[m + 1] = max(
+                    xi_b_prev[m] - delta_sq / (self.xi_f[m] + self._tiny), self._xi_floor
+                )
+                self.xi_f[m + 1] = max(
+                    self.xi_f[m] - delta_sq / (xi_b_prev[m] + self._tiny), self._xi_floor
+                )
+
                 err_f = new_err_f
 
             e_post = complex(d_in[k])
-            gamma_ladder = 1.0
 
             for m in range(self.n_sections + 1):
-                denom_gl = max(gamma_ladder, self._tiny)
-
                 self.delta_v[m] = (
                     self.lam * self.delta_v[m]
-                    + (curr_err_b[m] * np.conj(e_post)) / denom_gl
+                    + (curr_err_b[m] * np.conj(e_post)) / max(gamma[m], self._tiny)
                 )
 
                 self.v[m] = self.delta_v[m] / (self.xi_b[m] + self._tiny)
 
                 e_post = e_post - np.conj(self.v[m]) * curr_err_b[m]
 
-                denom_xib_m = self.xi_b[m] + self._tiny
-                energy_b_l = float(np.real(curr_err_b[m] * np.conj(curr_err_b[m])))
-                gamma_ladder_next = gamma_ladder - (energy_b_l / denom_xib_m)
-                gamma_ladder = max(gamma_ladder_next, self._tiny)
+            self.gamma = gamma
 
             outputs[k] = d_in[k] - e_post
             errors[k] = e_post

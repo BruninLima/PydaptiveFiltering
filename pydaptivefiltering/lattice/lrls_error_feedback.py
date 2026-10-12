@@ -65,23 +65,18 @@ class LRLSErrorFeedback(AdaptiveFilter):
     ~~~~~~~~~~~~~~~~~~~~~~
     This class operates on complex-valued sequences. For lattice order ``M``:
 
-    - ``delta`` and ``delta_v`` have shape ``(M+1,)``
-    - ``xi_f`` and ``xi_b`` have shape ``(M+2,)`` (energies per section plus guard)
-    - ``error_b_prev`` has shape ``(M+2,)`` and stores the previous backward-error
-      vector used for the error-feedback recursion.
-    - At each time k, the ladder regressor is the backward-error vector
-      ``curr_b[:M+1]``.
+    - ``kappa_f`` and ``kappa_b`` have shape ``(M,)`` (reflection coefficients,
+      updated directly through error feedback)
+    - ``xi_f``, ``xi_b`` and ``gamma`` have shape ``(M+1,)``
+    - ``error_b_prev`` has shape ``(M+1,)`` and stores the previous a posteriori
+      backward-error vector.
 
     Output computation
     ~~~~~~~~~~~~~~~~~~
-    The estimated output is formed as a ladder combination:
-
-    .. math::
-        y(k) = \\mathbf{v}^H(k)\\, \\mathbf{b}(k),
-
-    where :math:`\\mathbf{b}(k)` corresponds to ``curr_b[:M+1]`` and
-    :math:`\\mathbf{v}(k)` is the ladder coefficient vector ``self.v``.
-    The reported error is the output error :math:`e(k)=d(k)-y(k)`.
+    The ladder starts from ``e = d(k)`` and, for each order ``m``, updates
+    ``v_m`` by error feedback and removes ``v_m^*(k) b_m(k)`` from ``e``.
+    The final value is the a posteriori error, returned in ``errors[k]``;
+    ``outputs[k] = d[k] - errors[k]``.
 
     References
     ----------
@@ -96,13 +91,13 @@ class LRLSErrorFeedback(AdaptiveFilter):
     n_sections: int
     safe_eps: float
 
-    delta: ArrayLike
+    kappa_f: ArrayLike
+    kappa_b: ArrayLike
     xi_f: ArrayLike
     xi_b: ArrayLike
     error_b_prev: ArrayLike
 
     v: ArrayLike
-    delta_v: ArrayLike
 
     def __init__(
         self,
@@ -133,12 +128,14 @@ class LRLSErrorFeedback(AdaptiveFilter):
         self.n_sections = int(filter_order)
         self.safe_eps = float(safe_eps)
 
-        self.delta = np.zeros(self.n_sections + 1, dtype=complex)
+        self.kappa_f = np.zeros(self.n_sections, dtype=complex)
+        self.kappa_b = np.zeros(self.n_sections, dtype=complex)
 
-        self.xi_f = np.ones(self.n_sections + 2, dtype=float) * self.epsilon
-        self.xi_b = np.ones(self.n_sections + 2, dtype=float) * self.epsilon
+        self.xi_f = np.ones(self.n_sections + 1, dtype=float) * self.epsilon
+        self.xi_b = np.ones(self.n_sections + 1, dtype=float) * self.epsilon
 
-        self.error_b_prev = np.zeros(self.n_sections + 2, dtype=complex)
+        self.error_b_prev = np.zeros(self.n_sections + 1, dtype=complex)
+        self.gamma = np.ones(self.n_sections + 1, dtype=float)
 
         if w_init is not None:
             v0 = np.asarray(w_init, dtype=complex).ravel()
@@ -149,8 +146,6 @@ class LRLSErrorFeedback(AdaptiveFilter):
             self.v = v0
         else:
             self.v = np.zeros(self.n_sections + 1, dtype=complex)
-
-        self.delta_v = np.zeros(self.n_sections + 1, dtype=complex)
 
         self.w = self.v.copy()
         self.w_history = []
@@ -184,26 +179,24 @@ class LRLSErrorFeedback(AdaptiveFilter):
         OptimizationResult
             Result object with fields:
             - outputs : ndarray of complex, shape ``(N,)``
-                Estimated output sequence ``y[k]``.
+                Estimated output sequence ``y[k] = d[k] - e[k]``.
             - errors : ndarray of complex, shape ``(N,)``
-                Output error sequence ``e[k] = d[k] - y[k]``.
+                A posteriori error sequence ``e[k]``.
             - coefficients : ndarray
                 Ladder coefficient history (mirrors ``self.v`` via ``self.w``).
             - error_type : str
-                Set to ``"output_error"``.
+                Set to ``"a_posteriori"``.
             - extra : dict, optional
                 Present only if ``return_internal_states=True`` (see below).
 
         Extra (when return_internal_states=True)
         --------------------------------------
-        xi_f : ndarray of float, shape ``(M+2,)``
+        xi_f : ndarray of float, shape ``(M+1,)``
             Final forward prediction-error energies.
-        xi_b : ndarray of float, shape ``(M+2,)``
+        xi_b : ndarray of float, shape ``(M+1,)``
             Final backward prediction-error energies.
-        delta : ndarray of complex, shape ``(M+1,)``
-            Final lattice delta (reflection-like) state.
-        delta_v : ndarray of complex, shape ``(M+1,)``
-            Final ladder delta state used to compute ``v``.
+        kappa_f, kappa_b : ndarray of complex, shape ``(M,)``
+            Final forward/backward reflection coefficients.
         """
         tic: float = time()
 
@@ -217,66 +210,54 @@ class LRLSErrorFeedback(AdaptiveFilter):
         eps = self.safe_eps
 
         for k in range(n_samples):
+            # Values from time k-1 needed by the error-feedback recursions.
+            xi_b_prev = self.xi_b.copy()
+            gamma_prev = self.gamma.copy()
+
             err_f = complex(x_in[k])
 
-            curr_b = np.zeros(self.n_sections + 2, dtype=complex)
+            curr_b = np.zeros(self.n_sections + 1, dtype=complex)
             curr_b[0] = x_in[k]
 
-            energy_x = float(np.real(x_in[k] * np.conj(x_in[k])))
-            self.xi_f[0] = self.lam * self.xi_f[0] + energy_x
-            self.xi_b[0] = self.xi_f[0]
-
-            g = 1.0
+            gamma = np.ones(self.n_sections + 1, dtype=float)
 
             for m in range(self.n_sections + 1):
-                denom_g = max(g, eps)
+                g_prev = max(gamma_prev[m], eps)
+                self.xi_f[m] = self.lam * self.xi_f[m] + float(np.real(err_f * np.conj(err_f))) / g_prev
+                energy_b = float(np.real(curr_b[m] * np.conj(curr_b[m])))
+                self.xi_b[m] = self.lam * self.xi_b[m] + energy_b / max(gamma[m], eps)
 
-                self.delta[m] = (
-                    self.lam * self.delta[m]
-                    + (self.error_b_prev[m] * np.conj(err_f)) / denom_g
+                if m == self.n_sections:
+                    break
+
+                gamma[m + 1] = max(gamma[m] - energy_b / (self.xi_b[m] + eps), eps)
+
+                b_prev = self.error_b_prev[m]
+
+                # Error-feedback updates of the reflection coefficients.
+                self.kappa_b[m] = self.kappa_b[m] + (
+                    np.conj(err_f) * (b_prev - self.kappa_b[m] * err_f)
+                ) / (g_prev * self.xi_f[m] + eps)
+                self.kappa_f[m] = self.kappa_f[m] + (
+                    np.conj(b_prev) * (err_f - self.kappa_f[m] * b_prev)
+                ) / (g_prev * xi_b_prev[m] + eps)
+
+                curr_b[m + 1] = b_prev - self.kappa_b[m] * err_f
+                err_f = err_f - self.kappa_f[m] * b_prev
+
+            # Ladder stage (error feedback), producing the a posteriori error.
+            e_k = complex(d_in[k])
+            for m in range(self.n_sections + 1):
+                e_prior = e_k - np.conj(self.v[m]) * curr_b[m]
+                self.v[m] = self.v[m] + curr_b[m] * np.conj(e_prior) / (
+                    max(gamma[m], eps) * self.xi_b[m] + eps
                 )
+                e_k = e_k - np.conj(self.v[m]) * curr_b[m]
 
-                kappa_f = np.conj(self.delta[m]) / (self.xi_b[m] + eps)
-                kappa_b = self.delta[m] / (self.xi_f[m] + eps)
-
-                new_err_f = err_f - kappa_f * self.error_b_prev[m]
-                curr_b[m + 1] = self.error_b_prev[m] - kappa_b * err_f
-
-                self.xi_f[m + 1] = (
-                    self.lam * self.xi_f[m + 1]
-                    + float(np.real(new_err_f * np.conj(new_err_f))) / denom_g
-                )
-                self.xi_b[m + 1] = (
-                    self.lam * self.xi_b[m + 1]
-                    + float(np.real(curr_b[m + 1] * np.conj(curr_b[m + 1]))) / denom_g
-                )
-
-                energy_b_curr = float(np.real(curr_b[m] * np.conj(curr_b[m])))
-                g = g - (energy_b_curr / (self.xi_b[m] + eps))
-                g = max(g, eps)
-
-                err_f = new_err_f
-
-            y_k = complex(np.vdot(self.v, curr_b[: self.n_sections + 1]))
-            outputs[k] = y_k
-            e_k = complex(d_in[k] - y_k)
+            outputs[k] = d_in[k] - e_k
             errors[k] = e_k
 
-            g_ladder = 1.0
-            for m in range(self.n_sections + 1):
-                denom_gl = max(g_ladder, eps)
-
-                self.delta_v[m] = (
-                    self.lam * self.delta_v[m]
-                    + (curr_b[m] * np.conj(d_in[k])) / denom_gl
-                )
-
-                self.v[m] = self.delta_v[m] / (self.xi_b[m] + eps)
-
-                energy_b = float(np.real(curr_b[m] * np.conj(curr_b[m])))
-                g_ladder = g_ladder - (energy_b / (self.xi_b[m] + eps))
-                g_ladder = max(g_ladder, eps)
-
+            self.gamma = gamma
             self.error_b_prev = curr_b
 
             self.w = self.v.copy()
@@ -291,15 +272,15 @@ class LRLSErrorFeedback(AdaptiveFilter):
             extra = {
                 "xi_f": self.xi_f.copy(),
                 "xi_b": self.xi_b.copy(),
-                "delta": self.delta.copy(),
-                "delta_v": self.delta_v.copy(),
+                "kappa_f": self.kappa_f.copy(),
+                "kappa_b": self.kappa_b.copy(),
             }
 
         return self._pack_results(
             outputs=outputs,
             errors=errors,
             runtime_s=runtime_s,
-            error_type="output_error",
+            error_type="a_posteriori",
             extra=extra,
         )
 # EOF

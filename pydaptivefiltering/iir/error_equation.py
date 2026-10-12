@@ -56,7 +56,7 @@ class ErrorEquation(AdaptiveFilter):
     w_init : array_like of float, optional
         Optional initial coefficient vector. If provided, it should have shape
         ``(M + N + 1,)`` following the parameter order described below. If None,
-        the implementation initializes with zeros (and ignores ``w_init``).
+        the implementation initializes with zeros.
 
     Notes
     -----
@@ -140,7 +140,14 @@ class ErrorEquation(AdaptiveFilter):
         self.epsilon = float(epsilon)
 
         self.n_coeffs = int(self.poles_order + self.zeros_order + 1)
-        self.w = np.zeros(self.n_coeffs, dtype=np.float64)
+        if w_init is None:
+            self.w = np.zeros(self.n_coeffs, dtype=np.float64)
+        else:
+            self.w = np.asarray(w_init, dtype=np.float64).ravel().copy()
+            if self.w.size != self.n_coeffs:
+                raise ValueError(f"w_init must have length {self.n_coeffs}, got {self.w.size}.")
+        self.w_history = []
+        self._record_history()
 
         self.Sd = (1.0 / self.epsilon) * np.eye(self.n_coeffs, dtype=np.float64)
 

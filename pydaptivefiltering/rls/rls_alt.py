@@ -218,6 +218,9 @@ class RLSAlt(AdaptiveFilter):
             self.w = self.w + np.conj(e_k) * g
 
             self.S_d = (self.S_d - np.outer(g, np.conj(psi))) / self.forgetting_factor
+            # Re-impose Hermitian symmetry: round-off in the antisymmetric part
+            # otherwise grows like forgetting_factor**(-k) and makes RLS diverge.
+            self.S_d = 0.5 * (self.S_d + self.S_d.conj().T)
 
             if return_internal_states:
                 yk_post = complex(np.vdot(self.w, self.regressor))

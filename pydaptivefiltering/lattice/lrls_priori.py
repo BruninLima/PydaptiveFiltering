@@ -78,16 +78,12 @@ class LRLSPriori(AdaptiveFilter):
     correlated with the backward-error vector:
 
     .. math::
-        \\alpha_e \\leftarrow \\alpha_e - v_m^*(k)\\, b_m(k),
+        \\alpha_e \\leftarrow \\alpha_e - v_m^*(k-1)\\, b_m(k),
 
-    where :math:`b_m(k)` are the backward errors (``alpha_b[m]``). The final
-    value is then scaled by the final lattice normalization factor ``gamma``:
-
-    .. math::
-        e_{pri}(k) = \\gamma(k)\\, \\alpha_e(k).
-
-    This scaled error is returned in ``errors[k]``, and the output estimate is
-    returned as ``outputs[k] = d[k] - e_pri[k]``.
+    where :math:`b_m(k)` are the a priori backward errors (``alpha_b[m]``).
+    The final value is the a priori error ``e_pri(k)``, returned in
+    ``errors[k]``; the output estimate is ``outputs[k] = d[k] - e_pri[k]``.
+    (The a posteriori error is ``gamma_{M+1}(k) * e_pri(k)``.)
 
     References
     ----------
@@ -130,6 +126,9 @@ class LRLSPriori(AdaptiveFilter):
         self.xi_f = np.ones(self.n_sections + 1, dtype=float) * self.epsilon
         self.xi_b = np.ones(self.n_sections + 1, dtype=float) * self.epsilon
         self.error_b_prev = np.zeros(self.n_sections + 1, dtype=complex)
+        self.gamma = np.ones(self.n_sections + 1, dtype=float)
+        self.kappa_f = np.zeros(self.n_sections, dtype=complex)
+        self.kappa_b = np.zeros(self.n_sections, dtype=complex)
 
         if w_init is not None:
             v0 = np.asarray(w_init, dtype=complex).reshape(-1)
@@ -179,8 +178,7 @@ class LRLSPriori(AdaptiveFilter):
                 Estimated output sequence. In this implementation:
                 ``outputs[k] = d[k] - e_pri[k]``.
             - errors : ndarray of complex, shape ``(N,)``
-                A priori ladder error scaled by the final lattice normalization
-                factor: ``e_pri[k] = gamma[k] * alpha_e[k]``.
+                A priori ladder error ``e_pri[k]``.
             - coefficients : ndarray
                 Ladder coefficient history (mirrors ``self.v`` via ``self.w``).
             - error_type : str
@@ -211,59 +209,48 @@ class LRLSPriori(AdaptiveFilter):
         errors = np.zeros(n_samples, dtype=complex)
 
         for k in range(n_samples):
+            # Values from time k-1 needed by the order recursions.
+            xi_b_prev = self.xi_b.copy()
+            gamma_prev = self.gamma.copy()
+
             alpha_f = complex(x_in[k])
 
             alpha_b = np.zeros(self.n_sections + 1, dtype=complex)
             alpha_b[0] = x_in[k]
 
-            gamma = 1.0
-            gamma_orders = np.ones(self.n_sections + 1, dtype=float)
+            gamma = np.ones(self.n_sections + 1, dtype=float)
+
+            energy_x = float(np.real(alpha_f * np.conj(alpha_f)))
+            self.xi_f[0] = self.lam * self.xi_f[0] + energy_x
+            self.xi_b[0] = self.xi_f[0]
 
             # -------------------------
             # Lattice stage (a priori)
             # -------------------------
             for m in range(self.n_sections):
-                gamma_orders[m] = gamma
-                denom_g = max(gamma, self._tiny)
+                # A priori errors use the reflection coefficients from time k-1.
+                alpha_f_next = alpha_f - self.kappa_f[m] * self.error_b_prev[m]
+                alpha_b[m + 1] = self.error_b_prev[m] - self.kappa_b[m] * alpha_f
 
                 self.delta[m] = (
                     self.lam * self.delta[m]
-                    + (self.error_b_prev[m] * np.conj(alpha_f)) / denom_g
+                    + gamma_prev[m] * self.error_b_prev[m] * np.conj(alpha_f)
                 )
 
-                kappa_f = np.conj(self.delta[m]) / (self.xi_b[m] + self._tiny)
-                kappa_b = self.delta[m] / (self.xi_f[m] + self._tiny)
-
-                alpha_f_next = alpha_f - kappa_f * self.error_b_prev[m]
-                alpha_b[m + 1] = self.error_b_prev[m] - kappa_b * alpha_f
-
-                # Energy updates (kept as in your code, with safe denominators)
-                self.xi_f[m] = (
-                    self.lam * self.xi_f[m]
-                    + float(np.real(alpha_f * np.conj(alpha_f))) / denom_g
-                )
-                self.xi_b[m] = (
-                    self.lam * self.xi_b[m]
-                    + float(np.real(alpha_b[m] * np.conj(alpha_b[m]))) / denom_g
+                energy_b = float(np.real(alpha_b[m] * np.conj(alpha_b[m])))
+                gamma[m + 1] = max(
+                    gamma[m] - gamma[m] ** 2 * energy_b / (self.xi_b[m] + self._tiny),
+                    self._tiny,
                 )
 
-                denom_xib = self.xi_b[m] + self._tiny
-                gamma_next = gamma - (
-                    float(np.real(alpha_b[m] * np.conj(alpha_b[m]))) / denom_xib
-                )
-                gamma = max(gamma_next, self._tiny)
+                self.kappa_b[m] = self.delta[m] / (self.xi_f[m] + self._tiny)
+                self.kappa_f[m] = np.conj(self.delta[m]) / (xi_b_prev[m] + self._tiny)
+
+                delta_sq = float(np.real(self.delta[m] * np.conj(self.delta[m])))
+                self.xi_b[m + 1] = max(xi_b_prev[m] - delta_sq / (self.xi_f[m] + self._tiny), self._tiny)
+                self.xi_f[m + 1] = max(self.xi_f[m] - delta_sq / (xi_b_prev[m] + self._tiny), self._tiny)
+
                 alpha_f = alpha_f_next
-
-            gamma_orders[self.n_sections] = gamma
-            self.xi_f[self.n_sections] = (
-                self.lam * self.xi_f[self.n_sections]
-                + float(np.real(alpha_f * np.conj(alpha_f))) / max(gamma, self._tiny)
-            )
-            self.xi_b[self.n_sections] = (
-                self.lam * self.xi_b[self.n_sections]
-                + float(np.real(alpha_b[self.n_sections] * np.conj(alpha_b[self.n_sections])))
-                / max(gamma, self._tiny)
-            )
 
             # -------------------------
             # Ladder stage (a priori)
@@ -271,17 +258,19 @@ class LRLSPriori(AdaptiveFilter):
             alpha_e = complex(d_in[k])
 
             for m in range(self.n_sections + 1):
-                denom_go = max(gamma_orders[m], self._tiny)
-
                 self.delta_v[m] = (
                     self.lam * self.delta_v[m]
-                    + (alpha_b[m] * np.conj(alpha_e)) / denom_go
+                    + gamma[m] * alpha_b[m] * np.conj(alpha_e)
                 )
 
-                self.v[m] = self.delta_v[m] / (self.xi_b[m] + self._tiny)
+                # A priori error uses the ladder coefficient from time k-1.
                 alpha_e = alpha_e - np.conj(self.v[m]) * alpha_b[m]
 
-            e_k = alpha_e * gamma
+                self.v[m] = self.delta_v[m] / (self.xi_b[m] + self._tiny)
+
+            self.gamma = gamma
+
+            e_k = alpha_e
             errors[k] = e_k
             outputs[k] = d_in[k] - e_k
 

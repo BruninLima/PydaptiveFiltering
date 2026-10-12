@@ -310,6 +310,8 @@ class VolterraRLS(AdaptiveFilter):
             self.w = self.w + k_gain * e_k
 
             self.P = (self.P - np.outer(k_gain, Pu)) / self.lam
+            # Re-impose symmetry to keep round-off from growing like lam**(-k).
+            self.P = 0.5 * (self.P + self.P.T)
 
             yk_post = float(np.dot(self.w, u))
             ek_post = float(d[k] - yk_post)

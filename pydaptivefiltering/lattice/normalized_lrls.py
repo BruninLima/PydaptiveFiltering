@@ -40,7 +40,7 @@ class NormalizedLRLS(AdaptiveFilter):
     2) **Estimation stage (normalized ladder, length M+1)**:
        Updates normalized coefficients ``rho_v`` and produces a normalized
        a posteriori error ``bar_e``. The returned error is the *de-normalized*
-       error ``e = bar_e * xi_half``.
+       a posteriori error (see "Output and error returned").
 
     Library conventions
     -------------------
@@ -73,8 +73,8 @@ class NormalizedLRLS(AdaptiveFilter):
     ~~~~~~~~~~~~~~~~~~~~
     The implementation uses the following normalized quantities:
 
-    - ``xi_half``: square-root energy tracker (scalar). It normalizes the input/output
-      so that normalized errors stay bounded.
+    - ``xi_half``: square-root input energy tracker (scalar), normalizes ``x``.
+    - ``xi_d_half``: square-root desired-signal energy tracker (scalar), normalizes ``d``.
     - ``bar_f``: normalized forward error for the current section.
     - ``bar_b_prev`` / ``bar_b_curr``: normalized backward error vectors, shape ``(M+1,)``.
     - ``bar_e``: normalized a posteriori error in the estimation stage.
@@ -92,7 +92,7 @@ class NormalizedLRLS(AdaptiveFilter):
     ~~~~~~~~~~~~~~~~~~~~~~~~~
     The filter returns the de-normalized a posteriori error:
 
-    ``errors[k] = bar_e[k] * xi_half[k]``
+    ``errors[k] = bar_e[k] * xi_d_half[k] * prod_m sqrt((1-|bar_b_m|^2)(1-|rho_v_m|^2))``
 
     and the output estimate:
 
@@ -149,6 +149,7 @@ class NormalizedLRLS(AdaptiveFilter):
 
         self.bar_b_prev = np.zeros(self.n_sections + 1, dtype=complex)
         self.xi_half = float(np.sqrt(self.epsilon))
+        self.xi_d_half = float(np.sqrt(self.epsilon))
 
         self.w = self.rho_v.copy()
         self.w_history = []
@@ -190,7 +191,7 @@ class NormalizedLRLS(AdaptiveFilter):
             outputs : ndarray of complex, shape ``(N,)``
                 Estimated output sequence ``y[k] = d[k] - e_post[k]``.
             errors : ndarray of complex, shape ``(N,)``
-                De-normalized a posteriori error ``e_post[k] = bar_e[k] * xi_half[k]``.
+                De-normalized a posteriori error ``e_post[k]``.
             coefficients : ndarray
                 History of ``rho_v`` (mirrors ``self.rho_v`` via ``self.w``).
             error_type : str
@@ -205,7 +206,9 @@ class NormalizedLRLS(AdaptiveFilter):
         rho_v : ndarray of complex, shape ``(M+1,)``
             Final normalized estimation-stage coefficients.
         xi_half : float
-            Final square-root energy tracker used for normalization.
+            Final square-root input energy.
+        xi_d_half : float
+            Final square-root desired-signal energy.
         """
         t0 = perf_counter()
 
@@ -218,20 +221,15 @@ class NormalizedLRLS(AdaptiveFilter):
         outputs = np.zeros(n_samples, dtype=complex)
         errors = np.zeros(n_samples, dtype=complex)
 
-        sqrt_lam = float(np.sqrt(self.lam))
+        def clip_unit(z: complex) -> complex:
+            # Normalized quantities must satisfy |z| < 1; enforce it against round-off.
+            a = abs(z)
+            return z / (a + self.epsilon) if a >= 1.0 else z
 
         for k in range(n_samples):
-            # Update xi_half (sqrt energy)
-            xi_sq = float(self.xi_half**2)
-            xi_sq = float(self.lam * xi_sq + (np.abs(x_in[k]) ** 2))
-            self.xi_half = self._safe_sqrt(xi_sq)
-
-            denom_x = float(self.xi_half + self.epsilon)
-            bar_f = x_in[k] / denom_x
-
-            abs_bf = np.abs(bar_f)
-            if abs_bf > 1.0:
-                bar_f = bar_f / abs_bf
+            # Input energy: xi_f0(k) = lambda * xi_f0(k-1) + |x(k)|^2
+            self.xi_half = self._safe_sqrt(self.lam * self.xi_half**2 + abs(x_in[k]) ** 2)
+            bar_f = clip_unit(x_in[k] / max(self.xi_half, self._tiny))
 
             bar_b_curr = np.zeros(self.n_sections + 1, dtype=complex)
             bar_b_curr[0] = bar_f
@@ -240,56 +238,48 @@ class NormalizedLRLS(AdaptiveFilter):
             # Prediction stage
             # -------------------------
             for m in range(self.n_sections):
-                cos_f = self._safe_sqrt(1.0 - (np.abs(bar_f) ** 2))
-                cos_b_prev = self._safe_sqrt(1.0 - (np.abs(self.bar_b_prev[m]) ** 2))
+                cos_f = self._safe_sqrt(1.0 - abs(bar_f) ** 2)
+                cos_b_prev = self._safe_sqrt(1.0 - abs(self.bar_b_prev[m]) ** 2)
 
-                self.rho[m] = (
-                    (sqrt_lam * cos_f * cos_b_prev * self.rho[m])
-                    + (np.conj(bar_f) * self.bar_b_prev[m])
+                self.rho[m] = clip_unit(
+                    cos_f * cos_b_prev * self.rho[m] + self.bar_b_prev[m] * np.conj(bar_f)
                 )
 
-                abs_rho = np.abs(self.rho[m])
-                if abs_rho >= 1.0:
-                    self.rho[m] = self.rho[m] / (abs_rho + self.epsilon)
+                cos_rho = self._safe_sqrt(1.0 - abs(self.rho[m]) ** 2)
 
-                cos_rho = self._safe_sqrt(1.0 - (np.abs(self.rho[m]) ** 2))
+                denom_f = max(cos_rho * cos_b_prev, self._tiny)
+                denom_b = max(cos_rho * cos_f, self._tiny)
 
-                denom_f = float((cos_rho * cos_b_prev) + self.epsilon)
-                denom_b = float((cos_rho * cos_f) + self.epsilon)
+                f_next = (bar_f - np.conj(self.rho[m]) * self.bar_b_prev[m]) / denom_f
+                b_next = (self.bar_b_prev[m] - self.rho[m] * bar_f) / denom_b
 
-                f_next = (bar_f - self.rho[m] * self.bar_b_prev[m]) / denom_f
-                b_next = (self.bar_b_prev[m] - np.conj(self.rho[m]) * bar_f) / denom_b
-
-                bar_f = f_next
-                bar_b_curr[m + 1] = b_next
+                bar_f = clip_unit(f_next)
+                bar_b_curr[m + 1] = clip_unit(b_next)
 
             # -------------------------
             # Estimation stage
             # -------------------------
-            bar_e = d_in[k] / float(self.xi_half + self.epsilon)
-            abs_be = np.abs(bar_e)
-            if abs_be > 1.0:
-                bar_e = bar_e / abs_be
+            # Desired-signal energy: xi_d(k) = lambda * xi_d(k-1) + |d(k)|^2
+            self.xi_d_half = self._safe_sqrt(self.lam * self.xi_d_half**2 + abs(d_in[k]) ** 2)
+            bar_e = clip_unit(d_in[k] / max(self.xi_d_half, self._tiny))
+            # sqrt(gamma_i(k) * xi_e,i(k)) used to de-normalize the final error.
+            err_scale = self.xi_d_half
 
             for m in range(self.n_sections + 1):
-                cos_e = self._safe_sqrt(1.0 - (np.abs(bar_e) ** 2))
-                cos_b = self._safe_sqrt(1.0 - (np.abs(bar_b_curr[m]) ** 2))
+                cos_e = self._safe_sqrt(1.0 - abs(bar_e) ** 2)
+                cos_b = self._safe_sqrt(1.0 - abs(bar_b_curr[m]) ** 2)
 
-                self.rho_v[m] = (
-                    (sqrt_lam * cos_e * cos_b * self.rho_v[m])
-                    + (np.conj(bar_e) * bar_b_curr[m])
+                self.rho_v[m] = clip_unit(
+                    cos_e * cos_b * self.rho_v[m] + bar_b_curr[m] * np.conj(bar_e)
                 )
 
-                abs_rv = np.abs(self.rho_v[m])
-                if abs_rv >= 1.0:
-                    self.rho_v[m] = self.rho_v[m] / (abs_rv + self.epsilon)
+                cos_rho_v = self._safe_sqrt(1.0 - abs(self.rho_v[m]) ** 2)
 
-                cos_rho_v = self._safe_sqrt(1.0 - (np.abs(self.rho_v[m]) ** 2))
+                denom_e = max(cos_rho_v * cos_b, self._tiny)
+                bar_e = clip_unit((bar_e - np.conj(self.rho_v[m]) * bar_b_curr[m]) / denom_e)
+                err_scale *= cos_rho_v * cos_b
 
-                denom_e = float((cos_rho_v * cos_b) + self.epsilon)
-                bar_e = (bar_e - self.rho_v[m] * bar_b_curr[m]) / denom_e
-
-            errors[k] = bar_e * self.xi_half
+            errors[k] = bar_e * err_scale
             outputs[k] = d_in[k] - errors[k]
 
             self.bar_b_prev = bar_b_curr.copy()
@@ -307,6 +297,7 @@ class NormalizedLRLS(AdaptiveFilter):
                 "rho": self.rho.copy(),
                 "rho_v": self.rho_v.copy(),
                 "xi_half": self.xi_half,
+                "xi_d_half": self.xi_d_half,
             }
 
         return self._pack_results(

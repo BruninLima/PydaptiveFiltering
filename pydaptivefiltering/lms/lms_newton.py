@@ -39,8 +39,9 @@ class LMSNewton(AdaptiveFilter):
         Adaptive FIR filter order ``M``. The number of coefficients is ``M + 1``.
     forgetting_factor : float
         Forgetting factor ``alpha`` used in the inverse-correlation recursion,
-        with ``0 < forgetting_factor < 1``. Values closer to 1 yield smoother tracking; smaller
-        values adapt faster.
+        with ``0 < forgetting_factor < 1``. The correlation estimate is
+        ``R[k] = alpha x_k x_k^H + (1 - alpha) R[k-1]``, so smaller values give a
+        longer memory (smoother estimate) and larger values adapt faster.
     initial_inv_rx : array_like of complex
         Initial inverse correlation matrix ``P(0)`` with shape ``(M + 1, M + 1)``.
         Typical choices are scaled identities, e.g. ``delta^{-1} I``.
@@ -204,7 +205,7 @@ class LMSNewton(AdaptiveFilter):
 
             self.inv_rx = (self.inv_rx - (Px @ Px.conj().T) / denom) / (1.0 - self.forgetting_factor)
 
-            self.w = self.w + self.step_size * np.conj(e_k) * Px.ravel()
+            self.w = self.w + self.step_size * np.conj(e_k) * (self.inv_rx @ x_k)
 
             self._record_history()
 

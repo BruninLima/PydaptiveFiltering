@@ -185,7 +185,7 @@ class CFDLMS(AdaptiveFilter):
         self.uu: np.ndarray = np.zeros((self.M, self.Nw + 1), dtype=np.complex128)
         self.sig: np.ndarray = np.zeros(self.M, dtype=np.float64)
 
-        self.w = self.ww.reshape(-1).astype(float, copy=False)
+        self.w = np.real(self.ww.reshape(-1)).astype(float, copy=False)
         self.w_history = []
         self._record_history()
 
@@ -221,7 +221,7 @@ class CFDLMS(AdaptiveFilter):
         self.sig = np.zeros(self.M, dtype=np.float64)
 
         self.ww_history = []
-        self.w = self.ww.reshape(-1).astype(float, copy=False)
+        self.w = np.real(self.ww.reshape(-1)).astype(float, copy=False)
         self.w_history = []
         self._record_history()
 

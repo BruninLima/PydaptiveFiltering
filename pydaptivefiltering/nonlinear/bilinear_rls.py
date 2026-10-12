@@ -202,6 +202,8 @@ class BilinearRLS(AdaptiveFilter):
             last_k = k_gain
 
             self.P = (self.P - np.outer(k_gain, Pu)) / self.lambda_factor
+            # Re-impose symmetry to keep round-off from growing like lambda**(-k).
+            self.P = 0.5 * (self.P + self.P.T)
 
             self.w = self.w + k_gain * e_k
             self._record_history()

@@ -39,7 +39,7 @@ def check_stability(w, N):
     Retorna True se estável, False se instável.
     """
     if N == 0: return True 
-    _, a = coefficients_to_ba(w, 0, N) 
+    _, a = coefficients_to_ba(w, N)
     poles = np.roots(a)
     return np.all(np.abs(poles) < 1.0)
 
