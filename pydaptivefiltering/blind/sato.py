@@ -30,8 +30,8 @@ class Sato(AdaptiveFilter):
     by pulling the output toward a fixed magnitude level through the complex
     sign function, using a dispersion constant ``zeta``.
 
-    This implementation follows Diniz (Alg. 13.3) and estimates ``zeta`` from
-    the *input sequence* via sample moments.
+    This implementation follows Diniz (Alg. 13.3). Unless ``dispersion_constant``
+    is given, ``zeta`` is estimated from the *input sequence* via sample moments.
 
     Parameters
     ----------
@@ -43,6 +43,11 @@ class Sato(AdaptiveFilter):
     w_init : array_like of complex, optional
         Initial coefficient vector ``w(0)`` with shape ``(M + 1,)``. If None,
         initializes with zeros.
+    dispersion_constant : float, optional
+        Dispersion constant ``zeta`` of the transmitted constellation (e.g.
+        ``1.0`` for unit-power QPSK). If None (default), it is estimated from
+        the received input, which is biased by the channel and scales the
+        equalizer output accordingly.
 
     Notes
     -----
@@ -73,8 +78,8 @@ class Sato(AdaptiveFilter):
 
     Dispersion constant
     ~~~~~~~~~~~~~~~~~~~
-    In this implementation, the dispersion constant is estimated from the input
-    using sample moments:
+    Unless ``dispersion_constant`` is given, it is estimated from the received
+    input using sample moments:
 
     .. math::
         \\zeta \\approx \\frac{\\mathbb{E}[|x|^2]}{\\mathbb{E}[|x|]}
@@ -103,8 +108,11 @@ class Sato(AdaptiveFilter):
         filter_order: int = 5,
         step_size: float = 0.01,
         w_init: Optional[Union[np.ndarray, list]] = None,
+        *,
+        dispersion_constant: Optional[float] = None,
     ) -> None:
         super().__init__(filter_order, w_init=w_init)
+        self.dispersion_constant = None if dispersion_constant is None else float(dispersion_constant)
         self.step_size = float(step_size)
         self.n_coeffs = int(filter_order + 1)
 
@@ -159,7 +167,10 @@ class Sato(AdaptiveFilter):
 
         num: float = float(np.mean(np.abs(x) ** 2))
         den: float = float(np.mean(np.abs(x)))
-        dispersion_constant: float = float(num / (den + safe_eps)) if den > safe_eps else 0.0
+        if self.dispersion_constant is not None:
+            dispersion_constant: float = self.dispersion_constant
+        else:
+            dispersion_constant = float(num / (den + safe_eps)) if den > safe_eps else 0.0
 
         outputs: np.ndarray = np.zeros(n_samples, dtype=complex)
         errors: np.ndarray = np.zeros(n_samples, dtype=complex)

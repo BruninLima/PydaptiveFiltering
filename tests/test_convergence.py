@@ -72,3 +72,37 @@ def test_iir_filters_honor_w_init(cls):
     f = cls(1, 1, w_init=w0)
     np.testing.assert_allclose(f.w, w0)
     np.testing.assert_allclose(f.w_history[0], w0)
+
+
+def test_gauss_newton_default_step_converges():
+    from scipy.signal import lfilter
+
+    rng = np.random.default_rng(3)
+    x = 0.5 * rng.standard_normal(15000)
+    d = lfilter([1.0, 0.5], [1.0, -0.6], x) + NOISE_STD * rng.standard_normal(x.size)
+    res = pdf.GaussNewton(1, 1).optimize(x, d)
+    assert np.mean(res.errors[-3000:] ** 2) < 5 * NOISE_STD**2
+
+
+def test_dlcllms_default_converges():
+    x, d = _system_id_data(20000)
+    res = pdf.DLCLLMS(3, 4).optimize(x, d)
+    assert np.mean(np.abs(res.errors[-2000:]) ** 2) < 5 * NOISE_STD**2
+
+
+def test_fast_rls_warns_instead_of_crashing():
+    x, d = _system_id_data(20000)
+    with pytest.warns(RuntimeWarning, match="StabFastRLS"):
+        res = pdf.FastRLS(3, 0.98, 0.1).optimize(x, d)
+    assert res.errors.shape == (20000,)
+
+
+@pytest.mark.parametrize("cls", [pdf.CMA, pdf.Godard, pdf.Sato])
+def test_blind_dispersion_constant_sets_output_level(cls):
+    rng = np.random.default_rng(4)
+    n = 30000
+    s = (rng.choice([-1, 1], n) + 1j * rng.choice([-1, 1], n)) / np.sqrt(2)
+    x = np.convolve(s, [1.0, 0.3 + 0.2j, -0.1])[:n]
+    f = cls(5, 1e-3, w_init=np.r_[1.0, 0, 0, 0, 0, 0], dispersion_constant=1.0)
+    res = f.optimize(x)
+    assert abs(np.mean(np.abs(res.outputs[-3000:]) ** 2) - 1.0) < 0.05

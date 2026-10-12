@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 from time import time
 from typing import Any, Dict, Optional, Union
@@ -34,6 +36,11 @@ class FastRLS(AdaptiveFilter):
     This implementation follows Diniz (Alg. 8.1) and maintains internal state
     for forward and backward predictors, as well as the conversion (likelihood)
     variable :math:`\\gamma(k)` that maps a priori to a posteriori quantities.
+
+    Like all non-stabilized fast transversal RLS algorithms, it is numerically
+    unstable for ``forgetting_factor < 1`` and can diverge on long runs. A
+    ``RuntimeWarning`` is issued when the conversion factor leaves ``(0, 1]``;
+    use :class:`StabFastRLS` for long or continuous operation.
 
     Parameters
     ----------
@@ -193,6 +200,7 @@ class FastRLS(AdaptiveFilter):
 
         lam = float(self.forgetting_factor)
         eps = float(self._safe_eps)
+        warned = False
 
         for k in range(n_samples):
             regressor: np.ndarray = x_padded[k : k + m_plus_1 + 1][::-1]
@@ -218,6 +226,17 @@ class FastRLS(AdaptiveFilter):
             if abs(den_g) < eps:
                 den_g = np.copysign(eps, den_g if den_g != 0 else 1.0)
             gamma_n_plus_1: float = float((lam * xi_min_f_prev * gamma_n) / den_g)
+            if not (0.0 < gamma_n_plus_1 <= 1.0 + 1e-9):
+                if not warned:
+                    warnings.warn(
+                        f"FastRLS became numerically unstable at sample {k} "
+                        "(conversion factor left (0, 1]); consider StabFastRLS.",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
+                    warned = True
+                if abs(gamma_n_plus_1) < eps:
+                    gamma_n_plus_1 = eps
 
             e_b_priori: np.complex128 = lam * xi_min_b * phi_hat_n_plus_1[-1]
 

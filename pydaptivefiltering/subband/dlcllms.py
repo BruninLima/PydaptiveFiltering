@@ -116,8 +116,10 @@ class DLCLLMS(AdaptiveFilter):
         Regularization constant in the normalized step denominator (>0 recommended).
     a : float, default=1e-2
         Exponential smoothing factor for subband power sig in (0,1].
-    nyquist_len : int, default=2
+    nyquist_len : int, optional
         Length Nfd of the Nyquist (fractional-delay) prototype used to build Ed.
+        If None (default), uses ``2 * n_subbands``; much shorter prototypes
+        (e.g. 2, or ``n_subbands``) can stall or diverge.
     w_init : array_like, optional
         Initial subband coefficient matrix. Can be either:
           - shape (M, Nw+1), or
@@ -140,7 +142,7 @@ class DLCLLMS(AdaptiveFilter):
         step_size: float = 0.1,
         gamma: float = 1e-2,
         a: float = 1e-2,
-        nyquist_len: int = 2,
+        nyquist_len: Optional[int] = None,
         w_init: Optional[ArrayLike] = None,
     ) -> None:
         self.M: int = int(n_subbands)
@@ -155,7 +157,7 @@ class DLCLLMS(AdaptiveFilter):
         self.gamma: float = float(gamma)
         self.a: float = float(a)
 
-        self.nyquist_len: int = int(nyquist_len)
+        self.nyquist_len: int = 2 * self.M if nyquist_len is None else int(nyquist_len)
         if self.nyquist_len <= 0:
             raise ValueError("nyquist_len must be a positive integer.")
 

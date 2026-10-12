@@ -55,7 +55,8 @@ class GaussNewton(AdaptiveFilter):
         matrix ``Sd``. Must satisfy ``0 < alpha < 1``. Smaller values yield
         slower adaptation of ``Sd`` (more memory). Default is 0.05.
     step_size : float, optional
-        Step size applied to the Gauss-Newton direction. Default is 1.0.
+        Step size applied to the Gauss-Newton direction. Default is 0.1
+        (a full step of 1.0 typically diverges).
     delta : float, optional
         Positive regularization parameter for initializing ``Sd`` as
         :math:`S(0) = \\delta^{-1} I`. Default is 1e-3.
@@ -141,7 +142,7 @@ class GaussNewton(AdaptiveFilter):
         zeros_order: int,
         poles_order: int,
         alpha: float = 0.05,
-        step_size: float = 1.0,
+        step_size: float = 0.1,
         delta: float = 1e-3,
         w_init: Optional[Union[np.ndarray, list]] = None,
     ) -> None:

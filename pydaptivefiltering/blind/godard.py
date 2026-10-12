@@ -47,6 +47,11 @@ class Godard(AdaptiveFilter):
     w_init : array_like of complex, optional
         Initial coefficient vector ``w(0)`` with shape ``(M + 1,)``. If None,
         initializes with zeros.
+    dispersion_constant : float, optional
+        Dispersion constant ``R_q`` of the transmitted constellation (e.g.
+        ``1.0`` for unit-power QPSK). If None (default), it is estimated from
+        the received input, which is biased by the channel and scales the
+        equalizer output accordingly.
 
     Notes
     -----
@@ -61,8 +66,8 @@ class Godard(AdaptiveFilter):
     .. math::
         e(k) = |y(k)|^q - R_q.
 
-    In this implementation, the dispersion constant is estimated from the input
-    using sample moments:
+    Unless ``dispersion_constant`` is given, it is estimated from the received
+    input using sample moments:
 
     .. math::
         R_q \\approx \\frac{\\mathbb{E}[|x|^{2q}]}{\\mathbb{E}[|x|^q]}
@@ -106,8 +111,11 @@ class Godard(AdaptiveFilter):
         p_exponent: int = 2,
         q_exponent: int = 2,
         w_init: Optional[Union[np.ndarray, list]] = None,
+        *,
+        dispersion_constant: Optional[float] = None,
     ) -> None:
         super().__init__(filter_order, w_init=w_init)
+        self.dispersion_constant = None if dispersion_constant is None else float(dispersion_constant)
         self.step_size = float(step_size)
         self.p = int(p_exponent)
         self.q = int(q_exponent)
@@ -163,7 +171,10 @@ class Godard(AdaptiveFilter):
 
         num: float = float(np.mean(np.abs(x) ** (2 * self.q)))
         den: float = float(np.mean(np.abs(x) ** self.q))
-        desired_level: float = float(num / (den + safe_eps)) if den > safe_eps else 0.0
+        if self.dispersion_constant is not None:
+            desired_level: float = self.dispersion_constant
+        else:
+            desired_level = float(num / (den + safe_eps)) if den > safe_eps else 0.0
 
         outputs: np.ndarray = np.zeros(n_samples, dtype=complex)
         errors: np.ndarray = np.zeros(n_samples, dtype=float)

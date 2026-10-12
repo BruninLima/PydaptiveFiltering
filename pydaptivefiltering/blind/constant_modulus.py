@@ -42,6 +42,11 @@ class CMA(AdaptiveFilter):
     w_init : array_like of complex, optional
         Initial coefficient vector ``w(0)`` with shape ``(M + 1,)``. If None,
         initializes with zeros.
+    dispersion_constant : float, optional
+        Dispersion constant ``R2`` of the transmitted constellation (e.g.
+        ``1.0`` for unit-power QPSK). If None (default), it is estimated from
+        the received input, which is biased by the channel and scales the
+        equalizer output accordingly.
 
     Notes
     -----
@@ -82,8 +87,8 @@ class CMA(AdaptiveFilter):
 
     In practice, when the source ``s(k)`` is not available (blind setting),
     ``R2`` is typically chosen from prior knowledge of the modulation or
-    estimated from a proxy sequence. If this implementation estimates ``R2``
-    from data, it should specify which sequence is used (e.g., input vs output).
+    estimated from a proxy sequence. Pass it as ``dispersion_constant``; if
+    omitted, this implementation estimates it from the received input ``x``.
 
     References
     ----------
@@ -99,8 +104,11 @@ class CMA(AdaptiveFilter):
         filter_order: int = 5,
         step_size: float = 0.01,
         w_init: Optional[Union[np.ndarray, list]] = None,
+        *,
+        dispersion_constant: Optional[float] = None,
     ) -> None:
         super().__init__(filter_order, w_init=w_init)
+        self.dispersion_constant = None if dispersion_constant is None else float(dispersion_constant)
         self.step_size = float(step_size)
         self.n_coeffs = int(filter_order + 1)
 
@@ -156,7 +164,9 @@ class CMA(AdaptiveFilter):
         errors: np.ndarray = np.zeros(n_samples, dtype=float)
         
         denom: float = float(np.mean(np.abs(x) ** 2))
-        if denom < safe_eps:
+        if self.dispersion_constant is not None:
+            desired_level = self.dispersion_constant
+        elif denom < safe_eps:
             desired_level: float = 0.0
         else:
             desired_level = float(np.mean(np.abs(x) ** 4) / (denom + safe_eps))
