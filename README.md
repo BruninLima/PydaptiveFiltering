@@ -19,10 +19,10 @@
 
 
 ##  Table of Contents
-* [Installation](#install-instructions)
+* [Installation](#install)
 * [Usage Examples](#implementation-and-examples)
 * [Algorithms & Progress](#algorithms-overview)
-* [License](#-license)
+* [License](#license)
 
 ---
 
@@ -34,8 +34,8 @@ pip install pydaptivefiltering
 
 ### Requirements
 
-- Python **3.10+** (tested on <!-- PYTHON_VERSION_TESTED e.g. 3.12 -->)
-- NumPy, SciPy
+- Python **3.10+** (tested on 3.13)
+- NumPy (2.1+), SciPy, Matplotlib
 
 ---
 
@@ -47,13 +47,15 @@ All algorithms follow the same pattern:
 2. Run `optimize(input_signal, desired_signal)`
 3. Inspect `outputs`, `errors`, `coefficients`, and optional `extra`
 
-Returned dictionary keys:
+`optimize` returns an `OptimizationResult` with the attributes:
 - `outputs`: model output
 - `errors`: error sequence (see `error_type`)
 - `coefficients`: coefficient history (snapshots over time)
-- `runtime_s`: runtime in seconds
-- `error_type`: `"a_priori"`, `"a_posteriori"`, or `"output_error"`
+- `algorithm`: algorithm name
+- `runtime_ms`: runtime in milliseconds
+- `error_type`: e.g. `"a_priori"`, `"a_posteriori"`, `"output_error"` (blind and Kalman filters use their own tags)
 - `extra`: optional internal states (when enabled)
+- `mse()`: instantaneous squared error
 
 
 ### System identification (Complex example with RLS):
@@ -127,6 +129,8 @@ plt.ylabel("Squared Error (dB)")
 plt.show()
 ```
 
+The plots below come from the analogous RBF network example (`pdf.RBF`):
+
 <p align="center">
   <img src="docs/assets/rbf_mse.png" alt="RBF learning curve" width="800">
 </p>
@@ -140,7 +144,7 @@ plt.show()
 
 ### Example: [Kalman Filter Tracking (Constant-Velocity with Maneuvers)](examples/Jupyter%20Notebooks/Kalman%20Filter/Kalman.ipynb)
 
-arget-tracking example using a 2-state constant-velocity (CV) Kalman filter (position/velocity). The target performs piecewise acceleration maneuvers, 
+Target-tracking example using a 2-state constant-velocity (CV) Kalman filter (position/velocity). The target performs piecewise acceleration maneuvers, 
 while we measure position only with additive noise; the filter estimates both position and velocity from the noisy measurements.
 
 ```python
@@ -222,10 +226,10 @@ print(f"Innovation std: {innov.std():.3f}")
 | Module / Category | Exported classes (examples) | Data type |
 |---|---|---|
 | `lms/` (LMS family) | `LMS`, `NLMS`, `AffineProjection`, `SignData`, `SignError`, `DualSign`, `LMSNewton`, `Power2ErrorLMS`, `TDomainLMS`, `TDomainDCT`, `TDomainDFT` | Real/Complex |
-| `rls/` (RLS family) | `RLS`, `RLSAlt` | Complex |
+| `rls/` (RLS family) | `RLS`, `RLSAlt` | Real/Complex |
 | `set_membership/` (Set-membership) | `SMNLMS`, `SMBNLMS`, `SMAffineProjection`, `SimplifiedSMAP`, `SimplifiedSMPUAP` | Real/Complex |
-| `lattice/` (Lattice-based RLS) | `LRLSPosteriori`, `LRLSErrorFeedback`, `LRLSPriori`, `NormalizedLRLS` | Complex |
-| `fast_rls/` (Fast Transversal RLS) | `FastRLS`, `StabFastRLS` | Real |
+| `lattice/` (Lattice-based RLS) | `LRLSPosteriori`, `LRLSErrorFeedback`, `LRLSPriori`, `NormalizedLRLS` | Real/Complex |
+| `fast_rls/` (Fast Transversal RLS) | `FastRLS` (Real/Complex), `StabFastRLS` (Real) | see column 2 |
 | `qr_decomposition/` (QR-RLS) | `QRRLS` | Real |
 | `iir/` (Adaptive IIR) | `ErrorEquation`, `GaussNewton`, `GaussNewtonGradient`, `RLSIIR`, `SteiglitzMcBride` | Real |
 | `nonlinear/` (Nonlinear models) | `VolterraLMS`, `VolterraRLS`, `BilinearRLS`, `RBF`, `ComplexRBF`, `MultilayerPerceptron` | Real/Complex |
@@ -233,6 +237,9 @@ print(f"Innovation std: {innov.std():.3f}")
 | `blind/` (Blind equalization) | `CMA`, `Godard`, `Sato`, `AffineProjectionCM` | Complex |
 | `kalman/` (Kalman) | `Kalman` | Complex |
 | `base/` (Core API) | `AdaptiveFilter` | N/A |
+
+> `FastRLS` is numerically unstable for long runs with a forgetting factor below 1 (it warns when this happens); prefer `StabFastRLS` for continuous operation. The blind equalizers (`CMA`, `Godard`, `Sato`) accept `dispersion_constant=` for the transmitted constellation; otherwise it is estimated from the received signal.
+
 ---
 
 ## Notebooks
